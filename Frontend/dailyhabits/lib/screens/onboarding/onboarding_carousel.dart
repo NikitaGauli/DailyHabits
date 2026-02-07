@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
 import 'package:dailyhabits/screens/onboarding/widgets/onboarding_page.dart';
 import 'package:dailyhabits/screens/onboarding/widgets/page_indicator.dart';
+import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// ---------------------------------------------------------------------------
@@ -26,7 +27,7 @@ class _OnboardingCarouselState extends State<OnboardingCarousel> {
       gradient: LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFFC855F7), Color(0xFFE91E8C)],
+        colors: [AppColors.secondaryBg, AppColors.primaryBg],
       ),
       imagePath: 'assets/images/onboarding_habits.png',
       title: 'Build Better Habits',
@@ -39,7 +40,7 @@ class _OnboardingCarouselState extends State<OnboardingCarousel> {
       gradient: LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFF06B6D4), Color(0xFF3B82F6)],
+        colors: [AppColors.lightSurfaceVariant, AppColors.darkBg],
       ),
       imagePath: 'assets/images/onboarding_progress.png',
       title: 'Track Your Progress',
@@ -50,7 +51,7 @@ class _OnboardingCarouselState extends State<OnboardingCarousel> {
       gradient: LinearGradient(
         begin: Alignment.topCenter,
         end: Alignment.bottomCenter,
-        colors: [Color(0xFFA855F7), Color(0xFF9333EA)],
+        colors: [AppColors.lightSurface, AppColors.darkSurface],
       ),
       imagePath: 'assets/images/onboarding_motivated.png',
       title: 'Stay Motivated',
@@ -174,8 +175,8 @@ class _PrimaryActionButton extends StatelessWidget {
       child: ElevatedButton(
         onPressed: onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFFA855F7),
+          backgroundColor: context.colors.card,
+          foregroundColor: context.colors.accent,
           elevation: 0,
           shadowColor: Colors.transparent,
           shape: RoundedRectangleBorder(

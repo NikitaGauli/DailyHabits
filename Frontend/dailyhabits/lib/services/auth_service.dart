@@ -1,25 +1,13 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:dailyhabits/services/api_config.dart';
 
 class AuthService {
-  // Platform-aware Base URL
-  static String get baseUrl {
-    if (kIsWeb) {
-      return 'http://127.0.0.1:8000/api/auth';
-    } else if (defaultTargetPlatform == TargetPlatform.android) {
-      // Use 10.0.2.2 for Android Emulator, or local IP for physical device
-      // Ideally this matches the network_security_config.xml
-      // Returning the local IP you found earlier as it's safe for physical & emulator (usually)
-      // But 10.0.2.2 is safer for emulator specifically if local IP changes.
-      // Let's stick to the local IP for consistency with your recent success,
-      // but strictly speaking 10.0.2.2 is the emulator standard.
-      // If you are running on Emulator, use 10.0.2.2. If physical, use 192.168...
-      return 'http://192.168.100.105:8000/api/auth';
-    }
-    return 'http://127.0.0.1:8000/api/auth';
-  }
+  /// Centralized base URL from ApiConfig
+  static String get baseUrl => '${ApiConfig.baseUrl}/auth';
 
   static const String _tokenKey = 'auth_token';
   static const String _userKey = 'user_data';
@@ -31,29 +19,37 @@ class AuthService {
 
   /// Attempt to login with email and password
   Future<Map<String, dynamic>> login(String email, String password) async {
+    final url = '$baseUrl/login/';
+    debugPrint('AUTH ➜ POST $url');
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/login/'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'email': email, 'password': password}),
-      );
+      final response = await http
+          .post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({'email': email, 'password': password}),
+          )
+          .timeout(ApiConfig.timeout);
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 200) {
-        // Login successful
         await _saveAuthData(data);
         return {'success': true, 'data': data};
       } else {
-        // Login failed
         return {
           'success': false,
           'message': data['detail'] ?? data['message'] ?? 'Login failed',
         };
       }
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message':
+            'Server is not responding. Make sure the backend is running on port ${ApiConfig.timeout.inSeconds}s.',
+      };
     } catch (e) {
       debugPrint('LOGIN ERROR: $e');
-      return {'success': false, 'message': 'Connection error: $e'};
+      return {'success': false, 'message': _friendlyError(e)};
     }
   }
 
@@ -63,42 +59,45 @@ class AuthService {
     String name,
     String password,
   ) async {
+    final url = '$baseUrl/register/';
+    debugPrint('AUTH ➜ POST $url');
     try {
-      final response = await http.post(
-        Uri.parse('$baseUrl/register/'),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'email': email,
-          'name': name,
-          'password': password,
-          'password2': password, // Required by backend serializer
-        }),
-      );
+      final response = await http
+          .post(
+            Uri.parse(url),
+            headers: {'Content-Type': 'application/json'},
+            body: jsonEncode({
+              'email': email,
+              'name': name,
+              'password': password,
+              'password2': password,
+            }),
+          )
+          .timeout(ApiConfig.timeout);
 
       final data = jsonDecode(response.body);
 
       if (response.statusCode == 201) {
-        // Registration successful
         await _saveAuthData(data);
         return {'success': true, 'data': data};
       } else {
-        // Registration failed
         return {'success': false, 'message': _extractErrorMessage(data)};
       }
+    } on TimeoutException {
+      return {
+        'success': false,
+        'message':
+            'Server is not responding. Make sure the backend is running.',
+      };
     } catch (e) {
       debugPrint('REGISTER ERROR: $e');
-      return {'success': false, 'message': 'Connection error: $e'};
+      return {'success': false, 'message': _friendlyError(e)};
     }
   }
 
   /// Logout the user
   Future<void> logout() async {
     final prefs = await SharedPreferences.getInstance();
-
-    // Optional: Call backend logout endpoint if needed
-    // String? token = prefs.getString(_tokenKey);
-    // if (token != null) { ... }
-
     await prefs.remove(_tokenKey);
     await prefs.remove(_userKey);
   }
@@ -125,16 +124,18 @@ class AuthService {
     return null;
   }
 
-  // Helper to save token and user data
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /// Save token and user data from API response
   Future<void> _saveAuthData(Map<String, dynamic> data) async {
     final prefs = await SharedPreferences.getInstance();
 
-    // Adjust these keys based on your actual API response structure
-    // Assuming structure like: { 'access': 'token...', 'user': { ... } }
+    // Backend returns 'token' key (JWT access token)
     if (data.containsKey('access')) {
       await prefs.setString(_tokenKey, data['access']);
     } else if (data.containsKey('token')) {
-      // Fallback if key is 'token'
       await prefs.setString(_tokenKey, data['token']);
     }
 
@@ -143,25 +144,79 @@ class AuthService {
     }
   }
 
-  // Helper to extract error message from DRF validation errors
+  /// Extract user-friendly error from DRF validation errors
   String _extractErrorMessage(dynamic data) {
     if (data is String) return data;
 
     if (data is Map<String, dynamic>) {
-      if (data.containsKey('detail')) return data['detail'];
+      // First check if there are field-level errors from DRF
+      if (data.containsKey('errors') && data['errors'] is Map) {
+        final messages = <String>[];
+        (data['errors'] as Map).forEach((key, value) {
+          final label = _fieldLabel(key.toString());
+          if (value is List) {
+            for (final v in value) {
+              messages.add('$label: $v');
+            }
+          } else {
+            messages.add('$label: $value');
+          }
+        });
+        if (messages.isNotEmpty) return messages.join('\n');
+      }
 
-      // If it's field errors, join them
+      if (data.containsKey('detail')) return data['detail'].toString();
+      if (data.containsKey('message') && data['message'] != 'Registration failed' && data['message'] != 'Invalid data') {
+        return data['message'].toString();
+      }
+
+      // Fallback: parse top-level field errors
       final messages = <String>[];
       data.forEach((key, value) {
+        if (key == 'success' || key == 'message' || key == 'errors') return;
+        final label = _fieldLabel(key);
         if (value is List) {
-          messages.add('$key: ${value.join(", ")}');
-        } else {
-          messages.add('$key: $value');
+          for (final v in value) {
+            messages.add('$label: $v');
+          }
+        } else if (value is String) {
+          messages.add('$label: $value');
         }
       });
       if (messages.isNotEmpty) return messages.join('\n');
     }
 
     return 'An unknown error occurred';
+  }
+
+  String _fieldLabel(String key) {
+    const labels = {
+      'email': 'Email',
+      'password': 'Password',
+      'password2': 'Confirm password',
+      'name': 'Name',
+      'non_field_errors': 'Error',
+      'detail': 'Error',
+    };
+    return labels[key] ?? key;
+  }
+
+  /// Convert raw exceptions into user-friendly messages
+  String _friendlyError(Object e) {
+    final msg = e.toString().toLowerCase();
+    if (msg.contains('failed to fetch') ||
+        msg.contains('clientexception') ||
+        msg.contains('connection refused') ||
+        msg.contains('socketexception') ||
+        msg.contains('no host specified') ||
+        msg.contains('network is unreachable')) {
+      return 'Cannot reach the server.\n'
+          'Please make sure the Django backend is running:\n'
+          'python manage.py runserver';
+    }
+    if (msg.contains('handshake') || msg.contains('certificate')) {
+      return 'SSL error – the backend should use http://, not https://.';
+    }
+    return 'Connection error. Please check your network.';
   }
 }

@@ -1,11 +1,12 @@
 import 'package:flutter/material.dart';
+import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:dailyhabits/models/habit.dart';
 
 /// A premium bottom sheet for creating or editing a habit.
 /// Features a glass-morphism style, icon picker, color picker, and smooth animations.
 class CreateEditHabitSheet extends StatefulWidget {
   final Habit? habit;
-  final Function(Habit) onSave;
+  final Future<void> Function(Habit) onSave;
 
   const CreateEditHabitSheet({super.key, this.habit, required this.onSave});
 
@@ -16,12 +17,13 @@ class CreateEditHabitSheet extends StatefulWidget {
 class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _titleController;
+  late TextEditingController _descriptionController;
   late TextEditingController _timeController;
   late String _category;
   late IconData _selectedIcon;
   late Color _selectedColor;
+  late String _frequency;
 
-  // Preset categories
   final List<String> _categories = [
     'Mindfulness',
     'Health',
@@ -32,18 +34,16 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
     'Social',
   ];
 
-  // Preset colors
   final List<Color> _colors = [
-    const Color(0xFFF59E0B), // Amber
-    const Color(0xFF8B5CF6), // Violet
-    const Color(0xFF3B82F6), // Blue
-    const Color(0xFF10B981), // Emerald
-    const Color(0xFFEC4899), // Pink
-    const Color(0xFFEF4444), // Red
-    const Color(0xFF06B6D4), // Cyan
+    AppColors.accentTertiary,
+    AppColors.accent,
+    AppColors.info,
+    AppColors.success,
+    AppColors.accentSecondary,
+    AppColors.alert,
+    const Color(0xFF06B6D4),
   ];
 
-  // Preset icons
   final List<IconData> _icons = [
     Icons.self_improvement,
     Icons.book,
@@ -61,41 +61,64 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
   void initState() {
     super.initState();
     _titleController = TextEditingController(text: widget.habit?.title ?? '');
+    _descriptionController = TextEditingController(
+      text: widget.habit?.description ?? '',
+    );
     _timeController = TextEditingController(text: widget.habit?.time ?? '');
     _category = widget.habit?.category ?? _categories.first;
     _selectedIcon = widget.habit?.icon ?? _icons.first;
     _selectedColor = widget.habit?.color ?? _colors.first;
+    _frequency = widget.habit?.frequency ?? 'daily';
   }
 
   @override
   void dispose() {
     _titleController.dispose();
+    _descriptionController.dispose();
     _timeController.dispose();
     super.dispose();
   }
 
-  void _handleSubmit() {
+  Future<void> _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
       final newHabit = Habit(
         id: widget.habit?.id ?? '', // ID handled by backend for creates
         title: _titleController.text.trim(),
+        description: _descriptionController.text.trim(),
         time: _timeController.text.trim(),
         category: _category,
         icon: _selectedIcon,
         color: _selectedColor,
         isCompleted: widget.habit?.isCompleted ?? false,
+        frequency: _frequency,
+        startDate: widget.habit?.startDate ?? DateTime.now(),
       );
-      widget.onSave(newHabit);
-      Navigator.pop(context);
+
+      try {
+        await widget.onSave(newHabit);
+        if (mounted) {
+          Navigator.pop(context);
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Could not save habit. Try again.'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      }
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     // Glassy dark theme background
     return Container(
-      decoration: const BoxDecoration(
-        color: Color(0xFF1F1F35),
+      decoration: BoxDecoration(
+        color: tc.bg,
         borderRadius: BorderRadius.only(
           topLeft: Radius.circular(32),
           topRight: Radius.circular(32),
@@ -127,9 +150,9 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
               ),
               const SizedBox(height: 24),
               Text(
-                widget.habit == null ? 'Create New Habit' : 'Edit Habit',
-                style: const TextStyle(
-                  color: Colors.white,
+                widget.habit == null ? 'New Habit' : 'Edit Habit',
+                style: TextStyle(
+                  color: tc.textPrimary,
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                 ),
@@ -137,20 +160,75 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
               const SizedBox(height: 24),
 
               // Title Input
-              _buildLabel('Habit Title'),
+              _buildLabel('Title'),
               _buildTextField(
                 controller: _titleController,
-                hint: 'e.g., Read for 30 mins',
+                hint: 'e.g. Read for 30 minutes',
                 icon: Icons.edit_outlined,
               ),
 
               const SizedBox(height: 20),
 
+              // Description Input
+              _buildLabel('Description (optional)'),
+              _buildTextField(
+                controller: _descriptionController,
+                hint: 'Why does this habit matter to you?',
+                icon: Icons.description_outlined,
+                maxLines: 3,
+              ),
+
+              const SizedBox(height: 20),
+
+              // Frequency
+              _buildLabel('Frequency'),
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 4,
+                ),
+                decoration: BoxDecoration(
+                  color: tc.border.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(
+                    color: tc.border.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _frequency,
+                    dropdownColor: tc.surface,
+                    isExpanded: true,
+                    icon: Icon(
+                      Icons.keyboard_arrow_down,
+                      color: tc.textSecondary,
+                    ),
+                    style: TextStyle(color: tc.textPrimary, fontSize: 16),
+                    items: ['daily', 'weekly', 'custom'].map((String value) {
+                      return DropdownMenuItem<String>(
+                        value: value,
+                        child: Text(
+                          value[0].toUpperCase() + value.substring(1),
+                        ),
+                      );
+                    }).toList(),
+                    onChanged: (newValue) {
+                      setState(() => _frequency = newValue!);
+                    },
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              const SizedBox(height: 20),
+
               // Time Input
-              _buildLabel('Schedule / Time'),
+              _buildLabel('Time'),
               _buildTextField(
                 controller: _timeController,
-                hint: 'e.g., 8:00 AM',
+                hint: 'e.g. 8:00 AM',
                 icon: Icons.access_time,
               ),
 
@@ -164,22 +242,22 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
                   vertical: 4,
                 ),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.1),
+                  color: tc.border.withValues(alpha: 0.3),
                   borderRadius: BorderRadius.circular(16),
                   border: Border.all(
-                    color: Colors.white.withValues(alpha: 0.1),
+                    color: tc.border.withValues(alpha: 0.3),
                   ),
                 ),
                 child: DropdownButtonHideUnderline(
                   child: DropdownButton<String>(
                     value: _category,
-                    dropdownColor: const Color(0xFF2D2D44),
+                    dropdownColor: tc.surface,
                     isExpanded: true,
-                    icon: const Icon(
+                    icon: Icon(
                       Icons.keyboard_arrow_down,
-                      color: Colors.white70,
+                      color: tc.textSecondary,
                     ),
-                    style: const TextStyle(color: Colors.white, fontSize: 16),
+                    style: TextStyle(color: tc.textPrimary, fontSize: 16),
                     items: _categories.map((String value) {
                       return DropdownMenuItem<String>(
                         value: value,
@@ -215,15 +293,15 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
                         decoration: BoxDecoration(
                           color: isSelected
                               ? _selectedColor
-                              : Colors.white.withValues(alpha: 0.1),
+                              : tc.border.withValues(alpha: 0.3),
                           shape: BoxShape.circle,
                           border: isSelected
-                              ? Border.all(color: Colors.white, width: 2)
+                              ? Border.all(color: tc.textPrimary, width: 2)
                               : null,
                         ),
                         child: Icon(
                           icon,
-                          color: isSelected ? Colors.white : Colors.white54,
+                          color: isSelected ? tc.textPrimary : Colors.white54,
                           size: 24,
                         ),
                       ),
@@ -235,7 +313,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
               const SizedBox(height: 20),
 
               // Color Picker
-              _buildLabel('Theme Color'),
+              _buildLabel('Color'),
               SizedBox(
                 height: 50,
                 child: ListView.separated(
@@ -255,7 +333,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
                           color: color,
                           shape: BoxShape.circle,
                           border: isSelected
-                              ? Border.all(color: Colors.white, width: 2.5)
+                              ? Border.all(color: tc.textPrimary, width: 2.5)
                               : null,
                           boxShadow: isSelected
                               ? [
@@ -268,9 +346,9 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
                               : null,
                         ),
                         child: isSelected
-                            ? const Icon(
+                            ? Icon(
                                 Icons.check,
-                                color: Colors.white,
+                                color: tc.textPrimary,
                                 size: 20,
                               )
                             : null,
@@ -290,7 +368,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
                   onPressed: _handleSubmit,
                   style: ElevatedButton.styleFrom(
                     backgroundColor: _selectedColor,
-                    foregroundColor: Colors.white,
+                    foregroundColor: tc.textPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(16),
                     ),
@@ -298,7 +376,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
                     shadowColor: _selectedColor.withValues(alpha: 0.4),
                   ),
                   child: Text(
-                    widget.habit == null ? 'Create Habit' : 'Save Changes',
+                    widget.habit == null ? 'Add Habit' : 'Save Changes',
                     style: const TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
@@ -315,12 +393,13 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
   }
 
   Widget _buildLabel(String label) {
+    final tc = context.colors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 8),
       child: Text(
         label,
         style: TextStyle(
-          color: Colors.white.withValues(alpha: 0.7),
+          color: tc.textSecondary,
           fontSize: 14,
           fontWeight: FontWeight.w600,
         ),
@@ -332,24 +411,28 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
     required TextEditingController controller,
     required String hint,
     required IconData icon,
+    int maxLines = 1,
   }) {
+    final tc = context.colors;
     return TextFormField(
       controller: controller,
-      style: const TextStyle(color: Colors.white),
-      validator: (value) => value == null || value.isEmpty ? 'Required' : null,
+      style: TextStyle(color: tc.textPrimary),
+      maxLines: maxLines,
+      validator: (value) =>
+          maxLines == 1 && (value == null || value.isEmpty) ? 'Required' : null,
       decoration: InputDecoration(
         hintText: hint,
-        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.4)),
+        hintStyle: TextStyle(color: tc.textMuted),
         prefixIcon: Icon(icon, color: Colors.white.withValues(alpha: 0.5)),
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.1),
+        fillColor: tc.border.withValues(alpha: 0.3),
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(color: Colors.white.withValues(alpha: 0.1)),
+          borderSide: BorderSide(color: tc.border.withValues(alpha: 0.3)),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),

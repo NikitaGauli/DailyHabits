@@ -1,231 +1,259 @@
 import 'package:flutter/material.dart';
 import '../../models/habit.dart';
+import '../../services/habit_service.dart';
+import '../../services/auth_service.dart';
 import '../../models/reminder.dart';
 
-/// ===============================================================
-/// HomeController
-/// ===============================================================
-///
-/// Acts as the business logic and state manager for the Home Screen.
-///
-/// Responsibilities:
-/// - Manages user-related data (name, streak)
-/// - Handles habit list operations (add, update, delete, toggle)
-/// - Calculates daily progress and completion stats
-/// - Manages navigation state
-/// - Notifies UI when data changes
-///
-/// Architecture:
-/// - Follows MVVM / Controller-based approach
-/// - Uses ChangeNotifier for reactive UI updates
-///
-/// Used with:
-/// - Provider or ChangeNotifierProvider
-/// - HomePage UI widgets
-/// ===============================================================
 class HomeController extends ChangeNotifier {
-  /// ---------------------------------------------------------------
-  /// User Information
-  /// ---------------------------------------------------------------
-  String userName = "Nikita";
-  int currentStreak = 12;
-
-  /// ---------------------------------------------------------------
-  /// Progress Tracking
-  /// ---------------------------------------------------------------
+  String userName = "User";
+  int currentStreak = 0;
+  int bestStreak = 0;
   double todayProgress = 0.0;
   int completedHabits = 0;
   int totalHabits = 0;
-
-  /// ---------------------------------------------------------------
-  /// Bottom Navigation State
-  /// ---------------------------------------------------------------
   int selectedIndex = 0;
-
-  /// ---------------------------------------------------------------
-  /// Data Collections
-  /// ---------------------------------------------------------------
   List<Habit> todayHabits = [];
+  List<Habit> allHabits = [];
   List<Reminder> upcomingReminders = [];
+  Map<String, int> categoryMap = {};
+  String? selectedCategory;
 
-  /// ---------------------------------------------------------------
-  /// Constructor
-  /// ---------------------------------------------------------------
-  ///
-  /// Initializes the controller with sample data.
-  /// In production, this can be replaced with:
-  /// - API calls
-  /// - Local database retrieval
-  HomeController() {
-    _initializeSampleData();
+  final HabitService _habitService = HabitService();
+  final AuthService _authService = AuthService();
+
+  bool isLoading = true;
+  Map<String, dynamic> summary = {};
+
+  /// Filtered habits based on selected category
+  List<Habit> get filteredHabits {
+    if (selectedCategory == null || selectedCategory == 'All') {
+      return todayHabits;
+    }
+    return todayHabits.where((h) => h.category == selectedCategory).toList();
   }
 
-  /// ---------------------------------------------------------------
-  /// Initialize Sample Data
-  /// ---------------------------------------------------------------
-  ///
-  /// Temporary hardcoded data used for UI development
-  /// and testing purposes.
-  void _initializeSampleData() {
-    todayHabits = [
-      Habit(
-        id: '1',
-        title: 'Morning Meditation',
-        time: '6:00 AM',
-        category: 'Mindfulness',
-        icon: Icons.self_improvement,
-        color: const Color(0xFFF59E0B),
-        isCompleted: true,
-      ),
-      Habit(
-        id: '2',
-        title: 'Read for 30 minutes',
-        time: '7:30 AM',
-        category: 'Learning',
-        icon: Icons.menu_book,
-        color: const Color(0xFF8B5CF6),
-        isCompleted: true,
-      ),
-      Habit(
-        id: '3',
-        title: 'Drink 8 Glasses Water',
-        time: '8:00 AM',
-        category: 'Health',
-        icon: Icons.local_drink,
-        color: const Color(0xFF3B82F6),
-        isCompleted: false,
-      ),
-      Habit(
-        id: '4',
-        title: 'Exercise',
-        time: '6:30 PM',
-        category: 'Fitness',
-        icon: Icons.fitness_center,
-        color: const Color(0xFFEC4899),
-        isCompleted: false,
-      ),
-      Habit(
-        id: '5',
-        title: 'Journal',
-        time: '9:00 PM',
-        category: 'Mindfulness',
-        icon: Icons.edit_note,
-        color: const Color(0xFF8B5CF6),
-        isCompleted: false,
-      ),
-    ];
-
-    upcomingReminders = [
-      Reminder(
-        title: 'Drink Water',
-        time: 'In 15 minutes',
-        icon: Icons.local_drink,
-        color: const Color(0xFF3B82F6),
-      ),
-      Reminder(
-        title: 'Exercise',
-        time: 'In 2 hours',
-        icon: Icons.fitness_center,
-        color: const Color(0xFFEC4899),
-      ),
-      Reminder(
-        title: 'Journal',
-        time: 'At 9:00 PM',
-        icon: Icons.edit_note,
-        color: const Color(0xFF8B5CF6),
-      ),
-    ];
-
-    _updateProgress();
+  /// Category list for filter chips
+  List<String> get categories {
+    final cats = <String>['All'];
+    for (final h in todayHabits) {
+      if (!cats.contains(h.category)) cats.add(h.category);
+    }
+    return cats;
   }
 
-  /// ---------------------------------------------------------------
-  /// Toggle Habit Completion Status
-  /// ---------------------------------------------------------------
-  ///
-  /// Marks a habit as completed or incomplete
-  /// and recalculates progress.
-  void toggleHabit(int index) {
-    if (index >= 0 && index < todayHabits.length) {
-      todayHabits[index].isCompleted =
-          !todayHabits[index].isCompleted;
+  // NOTE: Do NOT call loadData() in the constructor.
+  // The controller is a singleton Provider created at app startup (main.dart),
+  // BEFORE any user is logged in. loadData() must only be called after
+  // the auth token is set — i.e. when HomePage.initState() fires.
+  HomeController();
+
+  void selectCategory(String? category) {
+    selectedCategory = category;
+    notifyListeners();
+  }
+
+  Future<void> loadData() async {
+    isLoading = true;
+    notifyListeners();
+    try {
+      final user = await _authService.getUser();
+      if (user != null && user['name'] != null) {
+        userName = user['name'];
+      }
+
+      // Fetch today's habits
+      final result = await _habitService.getTodayHabits();
+      todayHabits = (result['habits'] as List<dynamic>?)?.cast<Habit>() ?? [];
+      summary = result['summary'] ?? {};
+
+      // Also fetch all habits for the "All Habits" view
+      try {
+        allHabits = await _habitService.getHabits();
+      } catch (_) {
+        allHabits = todayHabits;
+      }
+
+      // Update local metrics
       _updateProgress();
+
+      // Update streak from summary
+      if (summary.containsKey('currentStreak')) {
+        currentStreak = summary['currentStreak'] is int
+            ? summary['currentStreak']
+            : (summary['currentStreak'] as num).toInt();
+      }
+      if (summary.containsKey('bestStreak')) {
+        bestStreak = summary['bestStreak'] is int
+            ? summary['bestStreak']
+            : (summary['bestStreak'] as num).toInt();
+      }
+      if (summary.containsKey('categories')) {
+        categoryMap = Map<String, int>.from(
+          (summary['categories'] as Map).map(
+            (k, v) => MapEntry(k.toString(), (v as num).toInt()),
+          ),
+        );
+      }
+
+      // Update upcoming reminders from habits
+      _updateReminders();
+    } catch (e) {
+      debugPrint('Error loading data: $e');
+    } finally {
+      isLoading = false;
       notifyListeners();
     }
   }
 
-  /// ---------------------------------------------------------------
-  /// Update Progress Metrics
-  /// ---------------------------------------------------------------
-  ///
-  /// Calculates:
-  /// - Total habits
-  /// - Completed habits
-  /// - Daily progress percentage
+  /// Toggle Habit Completion Status
+  Future<Map<String, dynamic>?> toggleHabitAsync(Habit habit) async {
+    try {
+      final response = await _habitService.toggleHabit(habit.id);
+
+      if (response['success'] == true) {
+        final isCompleted = response['isCompleted'] ?? false;
+        final streak = response['currentStreak'];
+
+        final index = todayHabits.indexWhere((h) => h.id == habit.id);
+        if (index != -1) {
+          todayHabits[index] = todayHabits[index].copyWith(
+            isCompleted: isCompleted,
+            completionState: isCompleted
+                ? CompletionState.completed
+                : CompletionState.pending,
+            currentStreak: streak,
+          );
+
+          _updateProgress();
+          notifyListeners();
+        }
+
+        return response;
+      }
+    } catch (e) {
+      debugPrint('Toggle error: $e');
+    }
+    return null;
+  }
+
+  /// Skip Habit
+  Future<void> skipHabitAsync(Habit habit, String reason) async {
+    try {
+      final success = await _habitService.skipHabit(habit.id, reason: reason);
+      if (success) {
+        await loadData();
+      }
+    } catch (e) {
+      debugPrint('Skip error: $e');
+    }
+  }
+
   void _updateProgress() {
     totalHabits = todayHabits.length;
-    completedHabits =
-        todayHabits.where((h) => h.isCompleted).length;
-    todayProgress =
-        totalHabits > 0 ? completedHabits / totalHabits : 0.0;
+    completedHabits = todayHabits.where((h) => h.isCompleted).length;
+    todayProgress = totalHabits > 0 ? completedHabits / totalHabits : 0.0;
   }
 
-  /// ---------------------------------------------------------------
-  /// Add New Habit
-  /// ---------------------------------------------------------------
-  ///
-  /// Adds a habit to today's list and updates progress.
-  void addHabit(Habit habit) {
-    todayHabits.add(habit);
-    _updateProgress();
-    notifyListeners();
+  void _updateReminders() {
+    upcomingReminders = [];
+    final now = DateTime.now();
+    final timeNow = TimeOfDay.fromDateTime(now);
+
+    for (var h in todayHabits) {
+      if (h.reminderEnabled && h.reminderTime != null && !h.isCompleted) {
+        final rTime = h.reminderTime!;
+        // Check if reminder is in the future today
+        if (rTime.hour > timeNow.hour ||
+            (rTime.hour == timeNow.hour && rTime.minute > timeNow.minute)) {
+          final hour = rTime.hourOfPeriod == 0 ? 12 : rTime.hourOfPeriod;
+          final period = rTime.period == DayPeriod.am ? 'AM' : 'PM';
+          final minute = rTime.minute.toString().padLeft(2, '0');
+
+          upcomingReminders.add(
+            Reminder(
+              title: h.title,
+              time: '$hour:$minute $period',
+              icon: h.icon,
+              color: h.color,
+            ),
+          );
+        }
+      }
+    }
+
+    // Sort reminders by time
+    upcomingReminders.sort((a, b) => a.time.compareTo(b.time));
   }
 
-  /// ---------------------------------------------------------------
-  /// Update Existing Habit
-  /// ---------------------------------------------------------------
-  ///
-  /// Replaces an existing habit using its unique ID.
-  void updateHabit(String id, Habit updatedHabit) {
-    final index = todayHabits.indexWhere((h) => h.id == id);
-    if (index != -1) {
-      todayHabits[index] = updatedHabit;
-      _updateProgress();
+  Future<void> addNewHabit(Habit habit) async {
+    try {
+      await _habitService.createHabit(habit);
+      await loadData();
+    } catch (e) {
+      debugPrint('Add error: $e');
+      rethrow; // Let the UI layer catch and display the error
+    } finally {
+      isLoading = false;
       notifyListeners();
     }
   }
 
-  /// ---------------------------------------------------------------
-  /// Delete Habit
-  /// ---------------------------------------------------------------
-  ///
-  /// Removes a habit permanently from the list.
-  void deleteHabit(String id) {
-    todayHabits.removeWhere((h) => h.id == id);
-    _updateProgress();
-    notifyListeners();
+  Future<void> updateExistingHabit(Habit updatedHabit) async {
+    try {
+      await _habitService.updateHabit(updatedHabit);
+      await loadData();
+    } catch (e) {
+      debugPrint('Update error: $e');
+      rethrow;
+    }
   }
 
-  /// ---------------------------------------------------------------
-  /// Change Bottom Navigation Index
-  /// ---------------------------------------------------------------
-  ///
-  /// Updates the selected navigation tab.
+  Future<void> removeHabit(String id) async {
+    try {
+      await _habitService.deleteHabit(id);
+      todayHabits.removeWhere((h) => h.id == id);
+      _updateProgress();
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Delete error: $e');
+    }
+  }
+
   void changeNavigationIndex(int index) {
     selectedIndex = index;
     notifyListeners();
   }
 
-  /// ---------------------------------------------------------------
-  /// Get Habit by ID
-  /// ---------------------------------------------------------------
-  ///
-  /// Returns a habit if found, otherwise null.
   Habit? getHabitById(String id) {
     try {
       return todayHabits.firstWhere((h) => h.id == id);
     } catch (_) {
       return null;
     }
+  }
+
+  /// Clear all in-memory state so the next login starts fresh.
+  void reset() {
+    userName = 'User';
+    currentStreak = 0;
+    bestStreak = 0;
+    todayProgress = 0.0;
+    completedHabits = 0;
+    totalHabits = 0;
+    selectedIndex = 0;
+    todayHabits = [];
+    allHabits = [];
+    upcomingReminders = [];
+    categoryMap = {};
+    selectedCategory = null;
+    summary = {};
+    isLoading = true;
+    // Do NOT call notifyListeners() here — logout() will handle navigation.
+  }
+
+  Future<void> logout() async {
+    reset();
+    await _authService.logout();
+    notifyListeners();
   }
 }

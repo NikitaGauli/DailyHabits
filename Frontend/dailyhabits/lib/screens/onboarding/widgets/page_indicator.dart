@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dailyhabits/theme/app_theme.dart';
 
 /// ---------------------------------------------------------------------------
 /// PageIndicator
@@ -54,6 +55,7 @@ class _IndicatorDot extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 350),
       curve: Curves.easeInOutCubic,
@@ -64,7 +66,7 @@ class _IndicatorDot extends StatelessWidget {
       height: 8,
 
       decoration: BoxDecoration(
-        color: isActive ? Colors.white : Colors.white.withValues(alpha: 0.4),
+        color: isActive ? tc.textPrimary : tc.textMuted,
         borderRadius: BorderRadius.circular(4),
       ),
     );

@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-
-/// ===============================================================
-/// AddHabitButtonWidget
+import 'package:dailyhabits/theme/app_theme.dart';
 /// ===============================================================
 ///
 /// A reusable button widget to trigger the action of adding a new habit.
@@ -30,6 +28,7 @@ class AddHabitButtonWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return Material(
       color: Colors.transparent,
       child: InkWell(
@@ -38,21 +37,21 @@ class AddHabitButtonWidget extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 16),
           decoration: BoxDecoration(
-            color: const Color(0xFF8B5CF6),
+            color: tc.accent,
             borderRadius: BorderRadius.circular(16),
             boxShadow: [
               BoxShadow(
-                color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+                color: tc.accent.withValues(alpha: 0.3),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
             ],
           ),
-          child: const Row(
+          child: Row(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
               Icon(Icons.add_circle_outline, color: Colors.white, size: 22),
-              SizedBox(width: 10),
+              const SizedBox(width: 10),
               Text(
                 'Add New Habit',
                 style: TextStyle(

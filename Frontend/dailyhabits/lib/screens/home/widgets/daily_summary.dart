@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-
-/// ===============================================================
-/// DailySummaryWidget
+import 'package:dailyhabits/theme/app_theme.dart';
 /// ===============================================================
 ///
 /// A widget that displays a summary of daily habit progress.
@@ -40,6 +38,7 @@ class DailySummaryWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     // Calculate remaining habits
     final remainingHabits = totalHabits - completedHabits;
 
@@ -47,10 +46,10 @@ class DailySummaryWidget extends StatelessWidget {
       margin: const EdgeInsets.all(20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: tc.surfaceVariant,
         borderRadius: BorderRadius.circular(20),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
+          color: tc.border.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -58,12 +57,12 @@ class DailySummaryWidget extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Header
-          const Text(
+          Text(
             'Daily Summary',
             style: TextStyle(
               fontSize: 18,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: tc.textPrimary,
             ),
           ),
           const SizedBox(height: 16),
@@ -75,7 +74,8 @@ class DailySummaryWidget extends StatelessWidget {
                   icon: Icons.check_circle,
                   label: 'Completed',
                   value: completedHabits.toString(),
-                  color: const Color(0xFF10B981),
+                  color: AppColors.success,
+                  tc: tc,
                 ),
               ),
               const SizedBox(width: 12),
@@ -84,7 +84,8 @@ class DailySummaryWidget extends StatelessWidget {
                   icon: Icons.pending_actions,
                   label: 'Remaining',
                   value: remainingHabits.toString(),
-                  color: const Color(0xFF8B5CF6),
+                  color: tc.accent,
+                  tc: tc,
                 ),
               ),
             ],
@@ -100,6 +101,7 @@ class DailySummaryWidget extends StatelessWidget {
     required String label,
     required String value,
     required Color color,
+    required ThemeColors tc,
   }) {
     return Container(
       padding: const EdgeInsets.all(16),
@@ -117,16 +119,16 @@ class DailySummaryWidget extends StatelessWidget {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w600,
-              color: Colors.white.withValues(alpha: 0.6),
+              color: tc.textSecondary,
             ),
           ),
           const SizedBox(height: 4),
           Text(
             value,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 24,
               fontWeight: FontWeight.w700,
-              color: Colors.white,
+              color: tc.textPrimary,
             ),
           ),
         ],

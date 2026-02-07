@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dailyhabits/theme/app_theme.dart';
 
 /// ---------------------------------------------------------------------------
 /// CalendarWidget
@@ -20,20 +21,21 @@ class CalendarWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return Padding(
       padding: const EdgeInsets.all(20),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          _buildTopHandle(),
+          _buildTopHandle(tc),
 
           const SizedBox(height: 16),
 
-          _buildMonthLabel(),
+          _buildMonthLabel(tc),
 
           const SizedBox(height: 16),
 
-          _buildCalendarGrid(),
+          _buildCalendarGrid(tc),
         ],
       ),
     );
@@ -45,12 +47,12 @@ class CalendarWidget extends StatelessWidget {
 
   /// Top handle indicator commonly used in modern card layouts.
   /// Provides subtle visual hierarchy and realism.
-  Widget _buildTopHandle() {
+  Widget _buildTopHandle(ThemeColors tc) {
     return Container(
       width: 40,
       height: 4,
       decoration: BoxDecoration(
-        color: Colors.black87,
+        color: tc.textPrimary,
         borderRadius: BorderRadius.circular(2),
       ),
     );
@@ -58,13 +60,13 @@ class CalendarWidget extends StatelessWidget {
 
   /// Displays the month label.
   /// Static by design to match prototype visuals.
-  Widget _buildMonthLabel() {
-    return const Text(
+  Widget _buildMonthLabel(ThemeColors tc) {
+    return Text(
       'Jun',
       style: TextStyle(
         fontSize: 24,
         fontWeight: FontWeight.w700,
-        color: Colors.black87,
+        color: tc.textPrimary,
         letterSpacing: -0.5,
       ),
     );
@@ -72,20 +74,20 @@ class CalendarWidget extends StatelessWidget {
 
   /// Builds the complete calendar layout including
   /// weekday headers and date cells.
-  Widget _buildCalendarGrid() {
+  Widget _buildCalendarGrid(ThemeColors tc) {
     return Column(
       children: [
-        _buildWeekdayHeader(),
+        _buildWeekdayHeader(tc),
 
         const SizedBox(height: 8),
 
-        _buildDateRows(),
+        _buildDateRows(tc),
       ],
     );
   }
 
   /// Weekday labels (Sun – Sat)
-  Widget _buildWeekdayHeader() {
+  Widget _buildWeekdayHeader(ThemeColors tc) {
     const weekdays = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
 
     return Row(
@@ -96,10 +98,10 @@ class CalendarWidget extends StatelessWidget {
               child: Text(
                 day,
                 textAlign: TextAlign.center,
-                style: const TextStyle(
+                style: TextStyle(
                   fontSize: 11,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black54,
+                  color: tc.textSecondary,
                   letterSpacing: 0.5,
                 ),
               ),
@@ -111,7 +113,7 @@ class CalendarWidget extends StatelessWidget {
 
   /// Calendar date rows (5 weeks).
   /// Generates a realistic month layout.
-  Widget _buildDateRows() {
+  Widget _buildDateRows(ThemeColors tc) {
     return Column(
       children: List.generate(
         5,
@@ -130,7 +132,7 @@ class CalendarWidget extends StatelessWidget {
               // Highlight sample completed days
               final bool isHighlighted = day == 15 || day == 22;
 
-              return _CalendarDayCell(day: day, isHighlighted: isHighlighted);
+              return _CalendarDayCell(day: day, isHighlighted: isHighlighted, tc: tc);
             }),
           ),
         ),
@@ -146,7 +148,7 @@ class CalendarWidget extends StatelessWidget {
 /// Highlighted days visually represent habit completion.
 /// ---------------------------------------------------------------------------
 class _CalendarDayCell extends StatelessWidget {
-  const _CalendarDayCell({required this.day, required this.isHighlighted});
+  const _CalendarDayCell({required this.day, required this.isHighlighted, required this.tc});
 
   /// Day number displayed in the cell
   final int day;
@@ -154,13 +156,16 @@ class _CalendarDayCell extends StatelessWidget {
   /// Whether this day is visually highlighted
   final bool isHighlighted;
 
+  /// Theme colors
+  final ThemeColors tc;
+
   @override
   Widget build(BuildContext context) {
     return Container(
       width: 28,
       height: 28,
       decoration: BoxDecoration(
-        color: isHighlighted ? Colors.black87 : Colors.transparent,
+        color: isHighlighted ? tc.textPrimary : Colors.transparent,
         borderRadius: BorderRadius.circular(6),
       ),
       child: Center(
@@ -169,7 +174,7 @@ class _CalendarDayCell extends StatelessWidget {
           style: TextStyle(
             fontSize: 12,
             fontWeight: isHighlighted ? FontWeight.w700 : FontWeight.w500,
-            color: isHighlighted ? Colors.white : Colors.black87,
+            color: isHighlighted ? tc.card : tc.textPrimary,
           ),
         ),
       ),

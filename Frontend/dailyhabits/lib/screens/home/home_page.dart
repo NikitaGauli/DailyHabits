@@ -1,9 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/models/habit.dart';
-import 'package:dailyhabits/services/habit_service.dart';
-import 'package:dailyhabits/services/auth_service.dart';
-import 'package:dailyhabits/screens/home/widgets/create_edit_habit_sheet.dart';
+import 'package:dailyhabits/widgets/home/create_edit_habit_sheet.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
+import 'package:dailyhabits/screens/analytics/analytics_screen.dart';
+import 'package:dailyhabits/screens/settings/settings_screen.dart';
+import 'package:dailyhabits/screens/community/community_screen.dart';
+import 'package:dailyhabits/screens/notifications/notification_screen.dart';
+import 'package:dailyhabits/screens/notifications/notification_controller.dart';
+import 'package:dailyhabits/screens/habits/habit_detail_screen.dart';
+import 'package:dailyhabits/theme/app_theme.dart';
+import 'package:provider/provider.dart';
+import 'home_controller.dart';
 
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
@@ -12,153 +19,58 @@ class HomePage extends StatefulWidget {
   State<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  final HabitService _habitService = HabitService();
-  final AuthService _authService = AuthService();
-
-  List<Habit> _habits = [];
-  bool _isLoading = true;
-  String _userName = 'Friend';
-
-  int _selectedIndex = 0;
+class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+  late AnimationController _greetingAnim;
+  late Animation<double> _greetingFade;
 
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _greetingAnim = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 800),
+    );
+    _greetingFade = CurvedAnimation(parent: _greetingAnim, curve: Curves.easeOut);
+    _greetingAnim.forward();
+
+    // Always reload data with the CURRENT user's token.
+    // This is critical for multi-user correctness: the HomeController is a
+    // singleton, so after login/signup/logout its in-memory state may belong
+    // to the previous user.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      context.read<HomeController>().loadData();
+      context.read<NotificationController>().refreshBadge();
+    });
   }
 
-  Future<void> _loadData() async {
-    try {
-      final user = await _authService.getUser();
-      final habits = await _habitService.getHabits();
-
-      if (mounted) {
-        setState(() {
-          if (user != null && user['name'] != null) {
-            _userName = user['name'];
-          }
-          _habits = habits;
-          _isLoading = false;
-        });
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isLoading = false);
-        // Silently fail or show minimal error
-      }
-    }
+  @override
+  void dispose() {
+    _greetingAnim.dispose();
+    super.dispose();
   }
 
-  // ---------------------------------------------------------------------------
-  // CRUD Operations
-  // ---------------------------------------------------------------------------
-
-  Future<void> _createHabit(Habit habit) async {
-    try {
-      final newHabit = await _habitService.createHabit(habit);
-      setState(() {
-        _habits.add(newHabit);
-      });
-      _showSuccess('Habit created!');
-    } catch (e) {
-      _showError('Failed to create habit');
-    }
-  }
-
-  Future<void> _updateHabit(Habit habit) async {
-    try {
-      final updatedHabit = await _habitService.updateHabit(habit);
-      setState(() {
-        final index = _habits.indexWhere((h) => h.id == updatedHabit.id);
-        if (index != -1) {
-          _habits[index] = updatedHabit;
-        }
-      });
-    } catch (e) {
-      _showError('Failed to update habit');
-    }
-  }
-
-  Future<void> _deleteHabit(String id) async {
-    try {
-      await _habitService.deleteHabit(id);
-      setState(() {
-        _habits.removeWhere((h) => h.id == id);
-      });
-      _showSuccess('Habit deleted');
-    } catch (e) {
-      _showError('Failed to delete habit');
-    }
-  }
-
-  Future<void> _toggleCompletion(Habit habit) async {
-    final updated = habit.copyWith(isCompleted: !habit.isCompleted);
-    // Optimistic update
-    final index = _habits.indexWhere((h) => h.id == habit.id);
-    if (index != -1) {
-      setState(() => _habits[index] = updated);
-    }
-
-    try {
-      await _habitService.updateHabit(updated);
-    } catch (e) {
-      // Revert
-      if (index != -1) {
-        setState(() => _habits[index] = habit);
-      }
-      _showError('Connection error');
-    }
-  }
-
-  // ---------------------------------------------------------------------------
-  // UI Helpers
-  // ---------------------------------------------------------------------------
-
-  void _showForm([Habit? habit]) {
+  void _showForm({Habit? habit, required HomeController controller}) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) => CreateEditHabitSheet(
         habit: habit,
-        onSave: (h) {
+        onSave: (h) async {
           if (habit == null) {
-            _createHabit(h);
+            await controller.addNewHabit(h);
           } else {
-            // Include original ID for updates
-            _updateHabit(h.copyWith(id: habit.id));
+            await controller.updateExistingHabit(h.copyWith(id: habit.id));
           }
         },
       ),
     );
   }
 
-  void _showSuccess(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: const Color(0xFF10B981),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _showError(String msg) {
-    if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(msg),
-        backgroundColor: const Color(0xFFEF4444),
-        behavior: SnackBarBehavior.floating,
-      ),
-    );
-  }
-
-  void _logout() async {
-    await _authService.logout();
+  void _logout(HomeController controller) async {
+    await controller.logout();
     if (mounted) {
+      context.read<NotificationController>().reset();
       Navigator.pushAndRemoveUntil(
         context,
         MaterialPageRoute(builder: (_) => const LoginScreen()),
@@ -169,270 +81,378 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
-    final completedCount = _habits.where((h) => h.isCompleted).length;
-    final totalCount = _habits.length;
-    final progress = totalCount == 0 ? 0.0 : completedCount / totalCount;
+    final tc = context.colors;
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF1A1A2E),
-      body: Stack(
-        children: [
-          // Background Gradient Ornaments
-          Positioned(
-            top: -100,
-            right: -100,
-            child: Container(
-              width: 300,
-              height: 300,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: const Color(0xFF7C3AED).withValues(alpha: 0.2),
-                    blurRadius: 100,
-                  ),
-                ],
+    return Consumer<HomeController>(
+      builder: (context, controller, child) {
+        if (controller.isLoading) {
+          return Scaffold(
+            backgroundColor: tc.bg,
+            body: Center(
+              child: CircularProgressIndicator(color: tc.primary),
+            ),
+          );
+        }
+
+        return Scaffold(
+          backgroundColor: tc.bg,
+          body: IndexedStack(
+            index: controller.selectedIndex,
+            children: [
+              _buildDashboard(controller),
+              const CommunityScreen(),
+              const NotificationScreen(),
+              const AnalyticsScreen(),
+              _buildProfile(controller),
+            ],
+          ),
+          floatingActionButton: controller.selectedIndex == 0
+              ? FloatingActionButton(
+                  onPressed: () => _showForm(controller: controller),
+                  backgroundColor: tc.primary,
+                  elevation: 4,
+                  child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+                )
+              : null,
+          bottomNavigationBar: _buildBottomNav(controller),
+        );
+      },
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  DASHBOARD (10/10 premium layout)
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildDashboard(HomeController controller) {
+    final tc = context.colors;
+
+    return SafeArea(
+      child: RefreshIndicator(
+        onRefresh: controller.loadData,
+        color: tc.primary,
+        backgroundColor: tc.surface,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+          physics: const AlwaysScrollableScrollPhysics(),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // ── 1. Header ──────────────────────────────
+              _buildGreetingHeader(controller),
+              const SizedBox(height: 20),
+
+              // ── 2. Hero Progress Card ──────────────────
+              _buildHeroProgressCard(controller),
+              const SizedBox(height: 20),
+
+              // ── 3. Quick Stats Row ─────────────────────
+              _buildQuickStatsRow(controller),
+              const SizedBox(height: 24),
+
+              // ── 4. Category Filter Chips ───────────────
+              if (controller.todayHabits.length > 1)
+                _buildCategoryChips(controller),
+              if (controller.todayHabits.length > 1)
+                const SizedBox(height: 20),
+
+              // ── 5. Section Header ──────────────────────
+              _buildSectionHeader(
+                title: 'Today',
+                count: controller.filteredHabits.length,
+                onAdd: () => _showForm(controller: controller),
               ),
+              const SizedBox(height: 12),
+
+              // ── 6. Habit Cards ─────────────────────────
+              if (controller.filteredHabits.isEmpty)
+                _buildEmptyState()
+              else
+                ListView.separated(
+                  shrinkWrap: true,
+                  padding: EdgeInsets.zero,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: controller.filteredHabits.length,
+                  separatorBuilder: (_, _) => const SizedBox(height: 10),
+                  itemBuilder: (context, index) {
+                    final habit = controller.filteredHabits[index];
+                    return _buildHabitCard(habit, controller);
+                  },
+                ),
+
+              // ── 7. Upcoming Reminders ──────────────────
+              if (controller.upcomingReminders.isNotEmpty) ...[
+                const SizedBox(height: 28),
+                _buildSectionHeader(title: 'Coming Up'),
+                const SizedBox(height: 12),
+                _buildRemindersList(controller),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // ─── 1. GREETING HEADER ───────────────────────────────────────────────────
+
+  Widget _buildGreetingHeader(HomeController controller) {
+    final tc = context.colors;
+    final hour = DateTime.now().hour;
+    final greeting = hour < 12
+        ? 'Morning'
+        : (hour < 17 ? 'Afternoon' : 'Evening');
+
+    return FadeTransition(
+      opacity: _greetingFade,
+      child: Row(
+        children: [
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$greeting,',
+                  style: AppTextStyles.bodyMd.copyWith(
+                    color: tc.textSecondary,
+                    fontWeight: FontWeight.w500,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  controller.userName,
+                  style: AppTextStyles.h1.copyWith(
+                    color: tc.textPrimary,
+                    fontSize: 26,
+                  ),
+                ),
+              ],
             ),
           ),
-          SafeArea(
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // App Bar / Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Hello, $_userName 👋',
-                            style: const TextStyle(
-                              color: Colors.white,
-                              fontSize: 24,
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            'Your daily progress',
-                            style: TextStyle(
-                              color: Colors.white.withValues(alpha: 0.6),
-                              fontSize: 14,
-                            ),
-                          ),
-                        ],
-                      ),
-                      GestureDetector(
-                        onTap: _logout,
-                        child: Container(
-                          padding: const EdgeInsets.all(10),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.1),
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(
-                            Icons.logout,
-                            color: Colors.white,
-                            size: 20,
-                          ),
-                        ),
-                      ),
-                    ],
+          GestureDetector(
+            onTap: () => controller.changeNavigationIndex(4),
+            child: Container(
+              padding: const EdgeInsets.all(2),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: tc.primary, width: 2),
+              ),
+              child: CircleAvatar(
+                radius: 20,
+                backgroundColor: tc.primary.withValues(alpha: 0.1),
+                child: Text(
+                  controller.userName.isNotEmpty
+                      ? controller.userName[0].toUpperCase()
+                      : 'U',
+                  style: TextStyle(
+                    color: tc.primary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
                   ),
-
-                  const SizedBox(height: 32),
-
-                  // Progress Card
-                  Container(
-                    width: double.infinity,
-                    padding: const EdgeInsets.all(24),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(24),
-                      boxShadow: [
-                        BoxShadow(
-                          color: const Color(0xFF6366F1).withValues(alpha: 0.3),
-                          blurRadius: 20,
-                          offset: const Offset(0, 10),
-                        ),
-                      ],
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text(
-                                "Today's Goal",
-                                style: TextStyle(
-                                  color: Colors.white70,
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '${(progress * 100).toInt()}% Done',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 28,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                              const SizedBox(height: 8),
-                              Text(
-                                '$completedCount of $totalCount habits',
-                                style: const TextStyle(
-                                  color: Colors.white,
-                                  fontSize: 14,
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        SizedBox(
-                          width: 80,
-                          height: 80,
-                          child: Stack(
-                            alignment: Alignment.center,
-                            children: [
-                              CircularProgressIndicator(
-                                value: progress,
-                                strokeWidth: 8,
-                                backgroundColor: Colors.white.withValues(
-                                  alpha: 0.2,
-                                ),
-                                valueColor: const AlwaysStoppedAnimation(
-                                  Colors.white,
-                                ),
-                              ),
-                              if (progress == 1.0)
-                                const Icon(
-                                  Icons.star,
-                                  color: Colors.white,
-                                  size: 32,
-                                ),
-                            ],
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-
-                  const SizedBox(height: 32),
-
-                  // Habits List Header
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'My Habits',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                      GestureDetector(
-                        onTap: () => _showForm(),
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 6,
-                          ),
-                          decoration: BoxDecoration(
-                            color: const Color(
-                              0xFF7C3AED,
-                            ).withValues(alpha: 0.2),
-                            borderRadius: BorderRadius.circular(20),
-                          ),
-                          child: const Text(
-                            '+ Add New',
-                            style: TextStyle(
-                              color: Color(0xFF8B5CF6),
-                              fontWeight: FontWeight.bold,
-                            ),
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-
-                  const SizedBox(height: 16),
-
-                  // List content
-                  if (_isLoading)
-                    const Padding(
-                      padding: EdgeInsets.only(top: 40),
-                      child: Center(child: CircularProgressIndicator()),
-                    )
-                  else if (_habits.isEmpty)
-                    _buildEmptyState()
-                  else
-                    ListView.separated(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      itemCount: _habits.length,
-                      separatorBuilder: (context, index) =>
-                          const SizedBox(height: 16),
-                      itemBuilder: (context, index) {
-                        final habit = _habits[index];
-                        return _buildHabitCard(habit);
-                      },
-                    ),
-
-                  // Extra padding at bottom for FAB
-                  const SizedBox(height: 80),
-                ],
+                ),
               ),
             ),
           ),
         ],
       ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: () => _showForm(),
-        backgroundColor: const Color(0xFF7C3AED),
-        child: const Icon(Icons.add, color: Colors.white),
-      ),
-      bottomNavigationBar: _buildBottomNav(),
     );
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.only(top: 40),
+  // ─── 2. HERO PROGRESS CARD ───────────────────────────────────────────────
+
+  Widget _buildHeroProgressCard(HomeController controller) {
+    final tc = context.colors;
+    final pct = (controller.todayProgress * 100).toInt();
+    final allDone = controller.completedHabits == controller.totalHabits &&
+        controller.totalHabits > 0;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: allDone
+              ? [AppColors.success, AppColors.success.withValues(alpha: 0.85)]
+              : [tc.primary, tc.primary.withValues(alpha: 0.85)],
+        ),
+        borderRadius: BorderRadius.circular(24),
+        boxShadow: [
+          BoxShadow(
+            color: (allDone ? AppColors.success : tc.primary)
+                .withValues(alpha: 0.3),
+            blurRadius: 20,
+            offset: const Offset(0, 8),
+          ),
+        ],
+      ),
+      child: Row(
+        children: [
+          // Progress ring
+          SizedBox(
+            width: 72,
+            height: 72,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                TweenAnimationBuilder<double>(
+                  tween: Tween(begin: 0.0, end: controller.todayProgress),
+                  duration: const Duration(milliseconds: 1200),
+                  curve: Curves.easeOutCubic,
+                  builder: (_, value, _) {
+                    return CircularProgressIndicator(
+                      value: value,
+                      strokeWidth: 6,
+                      strokeCap: StrokeCap.round,
+                      backgroundColor: Colors.white.withValues(alpha: 0.2),
+                      valueColor: const AlwaysStoppedAnimation(Colors.white),
+                    );
+                  },
+                ),
+                Text(
+                  '$pct%',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w800,
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 20),
+          // Text info
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  allDone ? 'All done for today! 🎉' : 'Your progress today',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 18,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '${controller.completedHabits} of ${controller.totalHabits} completed',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.85),
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Mini progress bar
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: TweenAnimationBuilder<double>(
+                    tween: Tween(begin: 0.0, end: controller.todayProgress),
+                    duration: const Duration(milliseconds: 1200),
+                    curve: Curves.easeOutCubic,
+                    builder: (_, value, _) {
+                      return LinearProgressIndicator(
+                        value: value,
+                        minHeight: 6,
+                        backgroundColor: Colors.white.withValues(alpha: 0.2),
+                        valueColor: const AlwaysStoppedAnimation(Colors.white),
+                      );
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─── 3. QUICK STATS ROW ──────────────────────────────────────────────────
+
+  Widget _buildQuickStatsRow(HomeController controller) {
+    final tc = context.colors;
+
+    return Row(
+      children: [
+        _buildStatCard(
+          icon: Icons.local_fire_department_rounded,
+          label: 'Streak',
+          value: '${controller.currentStreak}',
+          color: AppColors.warning,
+          tc: tc,
+        ),
+        const SizedBox(width: 10),
+        _buildStatCard(
+          icon: Icons.emoji_events_rounded,
+          label: 'Record',
+          value: '${controller.bestStreak}',
+          color: AppColors.secondary,
+          tc: tc,
+        ),
+        const SizedBox(width: 10),
+        _buildStatCard(
+          icon: Icons.check_circle_rounded,
+          label: 'Done',
+          value: '${controller.completedHabits}',
+          color: AppColors.success,
+          tc: tc,
+        ),
+        const SizedBox(width: 10),
+        _buildStatCard(
+          icon: Icons.pending_actions_rounded,
+          label: 'Remaining',
+          value: '${controller.totalHabits - controller.completedHabits}',
+          color: tc.textMuted,
+          tc: tc,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStatCard({
+    required IconData icon,
+    required String label,
+    required String value,
+    required Color color,
+    required ThemeColors tc,
+  }) {
+    return Expanded(
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+        decoration: BoxDecoration(
+          color: tc.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: tc.border.withValues(alpha: 0.2)),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withValues(alpha: 0.03),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
         child: Column(
           children: [
-            Icon(
-              Icons.notes,
-              size: 60,
-              color: Colors.white.withValues(alpha: 0.2),
-            ),
-            const SizedBox(height: 16),
+            Icon(icon, color: color, size: 22),
+            const SizedBox(height: 6),
             Text(
-              "No habits yet",
+              value,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.6),
-                fontSize: 16,
+                color: tc.textPrimary,
+                fontSize: 20,
+                fontWeight: FontWeight.w800,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 2),
             Text(
-              "Start building your dream life!",
+              label,
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.4),
-                fontSize: 14,
+                color: tc.textMuted,
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
               ),
             ),
           ],
@@ -441,83 +461,192 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildHabitCard(Habit habit) {
+  // ─── 4. CATEGORY FILTER CHIPS ─────────────────────────────────────────────
+
+  Widget _buildCategoryChips(HomeController controller) {
+    final tc = context.colors;
+    final cats = controller.categories;
+    final selected = controller.selectedCategory ?? 'All';
+
+    return SizedBox(
+      height: 36,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        itemCount: cats.length,
+        separatorBuilder: (_, _) => const SizedBox(width: 8),
+        itemBuilder: (_, i) {
+          final cat = cats[i];
+          final isActive = cat == selected;
+
+          return GestureDetector(
+            onTap: () => controller.selectCategory(cat),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+              decoration: BoxDecoration(
+                color: isActive ? tc.primary : tc.card,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: isActive ? tc.primary : tc.border.withValues(alpha: 0.3),
+                ),
+              ),
+              child: Text(
+                cat,
+                style: TextStyle(
+                  color: isActive ? Colors.white : tc.textSecondary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  // ─── 5. SECTION HEADER ────────────────────────────────────────────────────
+
+  Widget _buildSectionHeader({
+    required String title,
+    int? count,
+    VoidCallback? onAdd,
+  }) {
+    final tc = context.colors;
+
+    return Row(
+      children: [
+        Text(
+          title,
+          style: AppTextStyles.h3.copyWith(
+            color: tc.textPrimary,
+            fontSize: 18,
+          ),
+        ),
+        if (count != null) ...[
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: tc.primary.withValues(alpha: 0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              '$count',
+              style: TextStyle(
+                color: tc.primary,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+        ],
+        const Spacer(),
+        if (onAdd != null)
+          GestureDetector(
+            onTap: onAdd,
+            child: Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: tc.primary.withValues(alpha: 0.08),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Icon(Icons.add_rounded, color: tc.primary, size: 20),
+            ),
+          ),
+      ],
+    );
+  }
+
+  // ─── 6. HABIT CARD (premium) ──────────────────────────────────────────────
+
+  Widget _buildHabitCard(Habit habit, HomeController controller) {
+    final tc = context.colors;
+    final isDone = habit.isCompleted;
+    final streakCount = habit.currentStreak;
+
     return Dismissible(
       key: Key(habit.id),
       direction: DismissDirection.endToStart,
       background: Container(
         alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 20),
+        padding: const EdgeInsets.only(right: 24),
         decoration: BoxDecoration(
-          color: const Color(0xFFEF4444),
-          borderRadius: BorderRadius.circular(20),
+          color: AppColors.error.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(18),
         ),
-        child: const Icon(Icons.delete_outline, color: Colors.white),
+        child: const Icon(Icons.delete_sweep_rounded, color: AppColors.error, size: 26),
       ),
-      confirmDismiss: (direction) async {
-        return await showDialog(
+      confirmDismiss: (_) async {
+        return await showDialog<bool>(
           context: context,
           builder: (ctx) => AlertDialog(
-            backgroundColor: const Color(0xFF2D2D44),
-            title: const Text(
-              "Delete Habit?",
-              style: TextStyle(color: Colors.white),
-            ),
-            content: const Text(
-              "This action cannot be undone.",
-              style: TextStyle(color: Colors.white70),
-            ),
+            title: const Text('Delete Habit?'),
+            content: Text('Remove "${habit.title}" permanently?'),
             actions: [
+              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
               TextButton(
-                onPressed: () => Navigator.of(ctx).pop(false),
-                child: const Text("Cancel"),
-              ),
-              TextButton(
-                onPressed: () => Navigator.of(ctx).pop(true),
-                child: const Text(
-                  "Delete",
-                  style: TextStyle(color: Color(0xFFEF4444)),
-                ),
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Delete', style: TextStyle(color: AppColors.error)),
               ),
             ],
           ),
         );
       },
-      onDismissed: (_) => _deleteHabit(habit.id),
+      onDismissed: (_) => controller.removeHabit(habit.id),
       child: GestureDetector(
-        onTap: () => _showForm(habit),
-        child: Container(
-          padding: const EdgeInsets.all(16),
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => HabitDetailScreen(
+                habit: habit,
+                onToggle: () => controller.loadData(),
+                onDelete: () => controller.loadData(),
+              ),
+            ),
+          ).then((_) => controller.loadData());
+        },
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 250),
+          padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
-            color: const Color(0xFF2D2D44),
-            borderRadius: BorderRadius.circular(20),
+            color: tc.card,
+            borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: habit.isCompleted
-                  ? const Color(0xFF10B981)
-                  : Colors.transparent,
-              width: 1.5,
+              color: isDone
+                  ? AppColors.success.withValues(alpha: 0.4)
+                  : tc.border.withValues(alpha: 0.15),
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 10,
-                offset: const Offset(0, 4),
+                color: Colors.black.withValues(alpha: 0.03),
+                blurRadius: 8,
+                offset: const Offset(0, 2),
               ),
             ],
           ),
           child: Row(
             children: [
-              // Icon
+              // ── Habit icon
               Container(
-                padding: const EdgeInsets.all(12),
+                width: 46,
+                height: 46,
                 decoration: BoxDecoration(
-                  color: habit.color.withValues(alpha: 0.2),
-                  borderRadius: BorderRadius.circular(16),
+                  color: habit.color.withValues(alpha: isDone ? 0.08 : 0.12),
+                  borderRadius: BorderRadius.circular(14),
                 ),
-                child: Icon(habit.icon, color: habit.color, size: 24),
+                child: Icon(
+                  habit.icon,
+                  color: isDone
+                      ? habit.color.withValues(alpha: 0.5)
+                      : habit.color,
+                  size: 22,
+                ),
               ),
-              const SizedBox(width: 16),
-              // Text
+              const SizedBox(width: 12),
+
+              // ── Title + meta
               Expanded(
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -525,48 +654,100 @@ class _HomePageState extends State<HomePage> {
                     Text(
                       habit.title,
                       style: TextStyle(
-                        color: habit.isCompleted
-                            ? Colors.white54
-                            : Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        decoration: habit.isCompleted
-                            ? TextDecoration.lineThrough
-                            : null,
+                        color: isDone ? tc.textMuted : tc.textPrimary,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w600,
+                        decoration: isDone ? TextDecoration.lineThrough : null,
+                        decorationColor: tc.textMuted,
                       ),
                     ),
                     const SizedBox(height: 4),
-                    Text(
-                      habit.time,
-                      style: TextStyle(
-                        color: Colors.white.withValues(alpha: 0.5),
-                        fontSize: 13,
-                      ),
+                    Row(
+                      children: [
+                        // Category pill
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          decoration: BoxDecoration(
+                            color: habit.color.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(6),
+                          ),
+                          child: Text(
+                            habit.category,
+                            style: TextStyle(
+                              color: habit.color,
+                              fontSize: 10,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ),
+                        if (habit.time.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          Icon(Icons.schedule_rounded, size: 12, color: tc.textMuted),
+                          const SizedBox(width: 3),
+                          Text(
+                            habit.time,
+                            style: TextStyle(color: tc.textMuted, fontSize: 11),
+                          ),
+                        ],
+                        if (streakCount > 0) ...[
+                          const SizedBox(width: 8),
+                          Icon(
+                            Icons.local_fire_department_rounded,
+                            size: 12,
+                            color: AppColors.warning,
+                          ),
+                          const SizedBox(width: 2),
+                          Text(
+                            '$streakCount',
+                            style: TextStyle(
+                              color: AppColors.warning,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        ],
+                      ],
                     ),
                   ],
                 ),
               ),
-              // Checkbox
+
+              // ── Completion toggle
               GestureDetector(
-                onTap: () => _toggleCompletion(habit),
+                onTap: () async {
+                  final result = await controller.toggleHabitAsync(habit);
+                  if (result != null && mounted) {
+                    final isNowDone = result['isCompleted'] == true;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          isNowDone
+                              ? '${habit.title} — done ✓'
+                              : '${habit.title} — unmarked',
+                        ),
+                        backgroundColor: isNowDone ? AppColors.success : tc.textMuted,
+                        duration: const Duration(seconds: 1),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                      ),
+                    );
+                  }
+                },
                 child: AnimatedContainer(
                   duration: const Duration(milliseconds: 300),
-                  width: 32,
-                  height: 32,
+                  curve: Curves.easeInOut,
+                  width: 36,
+                  height: 36,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: habit.isCompleted
-                        ? const Color(0xFF10B981)
-                        : Colors.transparent,
+                    color: isDone ? AppColors.success : Colors.transparent,
                     border: Border.all(
-                      color: habit.isCompleted
-                          ? const Color(0xFF10B981)
-                          : Colors.white24,
+                      color: isDone ? AppColors.success : tc.border,
                       width: 2,
                     ),
                   ),
-                  child: habit.isCompleted
-                      ? const Icon(Icons.check, size: 20, color: Colors.white)
+                  child: isDone
+                      ? const Icon(Icons.check_rounded, size: 20, color: Colors.white)
                       : null,
                 ),
               ),
@@ -577,34 +758,138 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  // Basic Bottom Nav Placeholder from original design
-  Widget _buildBottomNav() {
+  // ─── 7. REMINDERS LIST ────────────────────────────────────────────────────
+
+  Widget _buildRemindersList(HomeController controller) {
+    final tc = context.colors;
+
+    return Column(
+      children: controller.upcomingReminders.map((r) {
+        return Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          decoration: BoxDecoration(
+            color: tc.card,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: tc.border.withValues(alpha: 0.15)),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.notifications_active_rounded, color: tc.primary, size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  r.title,
+                  style: TextStyle(
+                    color: tc.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w500,
+                  ),
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: tc.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text(
+                  r.time,
+                  style: TextStyle(
+                    color: tc.primary,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  // ─── EMPTY STATE ──────────────────────────────────────────────────────────
+
+  Widget _buildEmptyState() {
+    final tc = context.colors;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tc.border.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: tc.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: Icon(
+              Icons.add_task_rounded,
+              size: 40,
+              color: tc.primary,
+            ),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            'No habits yet',
+            style: AppTextStyles.h3.copyWith(
+              color: tc.textPrimary,
+              fontSize: 17,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Tap + to add your first habit\nand build a daily routine.',
+            textAlign: TextAlign.center,
+            style: AppTextStyles.bodyMd.copyWith(
+              color: tc.textMuted,
+              height: 1.6,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  BOTTOM NAV
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildBottomNav(HomeController controller) {
+    final tc = context.colors;
+
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF2D2D44),
-        borderRadius: const BorderRadius.only(
-          topLeft: Radius.circular(24),
-          topRight: Radius.circular(24),
+        color: tc.surface,
+        border: Border(
+          top: BorderSide(color: tc.border.withValues(alpha: 0.15), width: 1),
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.3),
-            blurRadius: 20,
-            offset: const Offset(0, -5),
+            color: Colors.black.withValues(alpha: 0.04),
+            blurRadius: 8,
+            offset: const Offset(0, -2),
           ),
         ],
       ),
       child: SafeArea(
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(Icons.home, 'Home', 0),
-              _buildNavItem(Icons.bar_chart, 'Stats', 1),
-              _buildNavItem(Icons.calendar_today, 'Habits', 2),
-              _buildNavItem(Icons.emoji_events, 'Goals', 3),
-              _buildNavItem(Icons.person, 'Profile', 4),
+              _navItem(controller, Icons.home_rounded, 'Home', 0),
+              _navItem(controller, Icons.people_rounded, 'Community', 1),
+              _navItem(controller, Icons.notifications_rounded, 'Inbox', 2),
+              _navItem(controller, Icons.bar_chart_rounded, 'Insights', 3),
+              _navItem(controller, Icons.person_rounded, 'Profile', 4),
             ],
           ),
         ),
@@ -612,28 +897,228 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildNavItem(IconData icon, String label, int index) {
-    final isSelected = _selectedIndex == index;
+  Widget _navItem(
+    HomeController controller,
+    IconData icon,
+    String label,
+    int index,
+  ) {
+    final tc = context.colors;
+    final active = controller.selectedIndex == index;
+
     return GestureDetector(
-      onTap: () => setState(() => _selectedIndex = index),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(
-            icon,
-            color: isSelected ? const Color(0xFF6366F1) : Colors.white54,
-            size: 24,
-          ),
-          const SizedBox(height: 4),
-          Text(
-            label,
-            style: TextStyle(
-              color: isSelected ? const Color(0xFF6366F1) : Colors.white54,
-              fontSize: 11,
-              fontWeight: isSelected ? FontWeight.w600 : FontWeight.normal,
+      onTap: () => controller.changeNavigationIndex(index),
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 250),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+        decoration: BoxDecoration(
+          color: active ? tc.primary.withValues(alpha: 0.08) : Colors.transparent,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Wrap Inbox icon (index 2) with a badge
+            if (index == 2)
+              Consumer<NotificationController>(
+                builder: (context, notifCtrl, child) {
+                  final count = notifCtrl.unreadCount;
+                  return Badge(
+                    isLabelVisible: count > 0,
+                    label: Text(
+                      count > 99 ? '99+' : '$count',
+                      style: const TextStyle(
+                        fontSize: 9,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                    backgroundColor: tc.error,
+                    child: child!,
+                  );
+                },
+                child: Icon(
+                  icon,
+                  color: active ? tc.primary : tc.textMuted,
+                  size: 22,
+                ),
+              )
+            else
+              Icon(
+                icon,
+                color: active ? tc.primary : tc.textMuted,
+                size: 22,
+              ),
+            const SizedBox(height: 2),
+            Text(
+              label,
+              style: TextStyle(
+                color: active ? tc.primary : tc.textMuted,
+                fontSize: 10,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              ),
             ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  PROFILE TAB
+  // ═══════════════════════════════════════════════════════════════════════════
+
+  Widget _buildProfile(HomeController controller) {
+    final tc = context.colors;
+
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          children: [
+            const SizedBox(height: 40),
+            Container(
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(color: tc.primary, width: 2.5),
+              ),
+              child: CircleAvatar(
+                radius: 50,
+                backgroundColor: tc.primary.withValues(alpha: 0.1),
+                child: Text(
+                  controller.userName.isNotEmpty
+                      ? controller.userName[0].toUpperCase()
+                      : 'U',
+                  style: TextStyle(
+                    fontSize: 40,
+                    color: tc.primary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ),
+            const SizedBox(height: 20),
+            Text(
+              controller.userName,
+              style: AppTextStyles.h2.copyWith(color: tc.textPrimary),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'One habit at a time.',
+              style: AppTextStyles.bodyMd.copyWith(color: tc.textSecondary),
+            ),
+            const SizedBox(height: 24),
+
+            // Profile stats row
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: tc.card,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: tc.border.withValues(alpha: 0.15)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                children: [
+                  _profileStat('${controller.totalHabits}', 'Habits', tc),
+                  Container(width: 1, height: 30, color: tc.border.withValues(alpha: 0.2)),
+                  _profileStat('${controller.currentStreak}', 'Streak', tc),
+                  Container(width: 1, height: 30, color: tc.border.withValues(alpha: 0.2)),
+                  _profileStat('${controller.bestStreak}', 'Record', tc),
+                ],
+              ),
+            ),
+            const SizedBox(height: 24),
+
+            _profileOption(Icons.settings_rounded, 'Settings', 'Alerts, reminders, quiet hours', tc, onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+            }),
+            _profileOption(Icons.palette_outlined, 'Appearance', 'Light, dark, or system theme', tc),
+            _profileOption(Icons.shield_outlined, 'Privacy', 'Manage your data', tc),
+            _profileOption(Icons.help_outline_rounded, 'Help & Support', 'FAQs and contact', tc),
+            const SizedBox(height: 24),
+
+            SizedBox(
+              width: double.infinity,
+              height: 52,
+              child: OutlinedButton.icon(
+                onPressed: () => _logout(controller),
+                icon: const Icon(Icons.logout_rounded),
+                label: const Text('Log Out', style: TextStyle(fontWeight: FontWeight.w600)),
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: AppColors.error,
+                  side: const BorderSide(color: AppColors.error),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _profileStat(String value, String label, ThemeColors tc) {
+    return Column(
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            color: tc.textPrimary,
+            fontSize: 22,
+            fontWeight: FontWeight.w800,
           ),
-        ],
+        ),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(color: tc.textMuted, fontSize: 12)),
+      ],
+    );
+  }
+
+  Widget _profileOption(
+    IconData icon,
+    String title,
+    String subtitle,
+    ThemeColors tc, {
+    VoidCallback? onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: tc.card,
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: tc.border.withValues(alpha: 0.15)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: tc.surfaceVariant,
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: tc.textSecondary, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    title,
+                    style: TextStyle(color: tc.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+                  ),
+                  Text(subtitle, style: AppTextStyles.caption.copyWith(color: tc.textMuted)),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: tc.textMuted, size: 20),
+          ],
+        ),
       ),
     );
   }

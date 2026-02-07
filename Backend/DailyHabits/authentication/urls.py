@@ -10,6 +10,9 @@ from .views import (
     LogoutView,
     UserProfileView,
     ChangePasswordView,
+    LoginHistoryView,
+    DataExportView,
+    DataDeletionRequestView,
 )
 
 app_name = 'authentication'
@@ -23,4 +26,9 @@ urlpatterns = [
     # User profile endpoints
     path('profile/', UserProfileView.as_view(), name='profile'),
     path('change-password/', ChangePasswordView.as_view(), name='change-password'),
+    
+    # Security & privacy endpoints
+    path('login-history/', LoginHistoryView.as_view(), name='login-history'),
+    path('data-export/', DataExportView.as_view(), name='data-export'),
+    path('request-deletion/', DataDeletionRequestView.as_view(), name='request-deletion'),
 ]

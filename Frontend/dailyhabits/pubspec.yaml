@@ -18,6 +18,8 @@ dependencies:
   # Networking & Storage
   http: ^1.1.0
   shared_preferences: ^2.2.2
+  fl_chart: ^0.66.0
+  intl: ^0.19.0
 
 dev_dependencies:
   flutter_test:

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:dailyhabits/theme/app_theme.dart';
 import '../../../models/habit.dart';
 
 /// ===============================================================
@@ -43,13 +44,14 @@ class HabitCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: tc.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
+          color: tc.border.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -84,7 +86,7 @@ class HabitCardWidget extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 16,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white,
+                          color: tc.textPrimary,
                           decoration: habit.isCompleted
                               ? TextDecoration.lineThrough
                               : null,
@@ -96,7 +98,7 @@ class HabitCardWidget extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
-                          color: Colors.white.withValues(alpha: 0.5),
+                          color: tc.textMuted,
                         ),
                       ),
                     ],
@@ -112,18 +114,18 @@ class HabitCardWidget extends StatelessWidget {
                     height: 28,
                     decoration: BoxDecoration(
                       color: habit.isCompleted
-                          ? const Color(0xFF10B981)
+                          ? AppColors.success
                           : Colors.transparent,
                       borderRadius: BorderRadius.circular(8),
                       border: Border.all(
                         color: habit.isCompleted
-                            ? const Color(0xFF10B981)
-                            : Colors.white.withValues(alpha: 0.3),
+                            ? AppColors.success
+                            : tc.textMuted,
                         width: 2,
                       ),
                     ),
                     child: habit.isCompleted
-                        ? const Icon(Icons.check, color: Colors.white, size: 18)
+                        ? Icon(Icons.check, color: Colors.white, size: 18)
                         : null,
                   ),
                 ),

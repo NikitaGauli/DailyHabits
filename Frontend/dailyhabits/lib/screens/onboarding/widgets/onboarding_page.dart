@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/screens/onboarding/widgets/calendar_widget.dart';
+import 'package:dailyhabits/theme/app_theme.dart';
 
 /// ---------------------------------------------------------------------------
 /// OnboardingPageData
@@ -74,6 +75,7 @@ class OnboardingPageWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return Container(
       decoration: BoxDecoration(gradient: pageData.gradient),
       child: SafeArea(
@@ -94,10 +96,10 @@ class OnboardingPageWidget extends StatelessWidget {
                       vertical: 8,
                     ),
                   ),
-                  child: const Text(
+                  child: Text(
                     'Skip',
                     style: TextStyle(
-                      color: Colors.white,
+                      color: tc.textPrimary,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                       letterSpacing: 0.3,
@@ -133,10 +135,10 @@ class OnboardingPageWidget extends StatelessWidget {
                     child: Text(
                       pageData.title,
                       textAlign: TextAlign.center,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 28,
                         fontWeight: FontWeight.w700,
-                        color: Colors.white,
+                        color: tc.textPrimary,
                         letterSpacing: -0.5,
                         height: 1.2,
                       ),
@@ -154,7 +156,7 @@ class OnboardingPageWidget extends StatelessWidget {
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.w400,
-                        color: Colors.white.withValues(alpha: 0.95),
+                        color: tc.textSecondary,
                         height: 1.5,
                         letterSpacing: 0.2,
                       ),
@@ -190,18 +192,19 @@ class _GlassmorphicContainer extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return Container(
       width: 260,
       height: 260,
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(42),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.5),
+          color: tc.border,
           width: 3,
         ),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: tc.textPrimary.withValues(alpha: 0.1),
             blurRadius: 30,
             offset: const Offset(0, 10),
           ),
@@ -212,12 +215,12 @@ class _GlassmorphicContainer extends StatelessWidget {
         child: Container(
           padding: const EdgeInsets.all(10),
           decoration: BoxDecoration(
-            color: Colors.white.withValues(alpha: 0.25),
+            color: tc.surfaceVariant,
             borderRadius: BorderRadius.circular(39),
           ),
           child: Container(
             decoration: BoxDecoration(
-              color: Colors.white.withValues(alpha: 0.95),
+              color: tc.card,
               borderRadius: BorderRadius.circular(32),
             ),
             child: child,
@@ -255,16 +258,17 @@ class _ImageContent extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return ClipRRect(
       borderRadius: BorderRadius.circular(32),
       child: Container(
-        color: Colors.grey[200],
+        color: tc.surface,
         child: Stack(
           fit: StackFit.expand,
           children: [
             // Placeholder image representation
-            const Center(
-              child: Icon(Icons.image_outlined, size: 60, color: Colors.grey),
+            Center(
+              child: Icon(Icons.image_outlined, size: 60, color: tc.textMuted),
             ),
 
             // Overlay icon (if provided)
@@ -274,11 +278,11 @@ class _ImageContent extends StatelessWidget {
                   width: iconSize + 20,
                   height: iconSize + 20,
                   decoration: BoxDecoration(
-                    color: Colors.white,
+                    color: tc.card,
                     shape: BoxShape.circle,
                     boxShadow: [
                       BoxShadow(
-                        color: Colors.black.withValues(alpha: 0.1),
+                        color: tc.textPrimary.withValues(alpha: 0.1),
                         blurRadius: 20,
                         offset: const Offset(0, 5),
                       ),
@@ -287,7 +291,7 @@ class _ImageContent extends StatelessWidget {
                   child: Icon(
                     overlayIcon,
                     size: iconSize,
-                    color: const Color(0xFFA855F7),
+                    color: tc.accent,
                   ),
                 ),
               ),

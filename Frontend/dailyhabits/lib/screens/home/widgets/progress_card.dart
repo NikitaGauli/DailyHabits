@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-
-/// ===============================================================
-/// ProgressCardWidget
+import 'package:dailyhabits/theme/app_theme.dart';
 /// ===============================================================
 ///
 /// A reusable card widget that displays the user's daily progress
@@ -42,19 +40,20 @@ class ProgressCardWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 20),
       padding: const EdgeInsets.all(20),
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
+        gradient: LinearGradient(
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
-          colors: [Color(0xFF6366F1), Color(0xFF8B5CF6)],
+          colors: [tc.card, tc.primary.withValues(alpha: 0.08)],
         ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF8B5CF6).withValues(alpha: 0.3),
+            color: tc.primary.withValues(alpha: 0.1),
             blurRadius: 20,
             offset: const Offset(0, 10),
           ),
@@ -67,21 +66,21 @@ class ProgressCardWidget extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Text(
+                Text(
                   "Today's Progress",
                   style: TextStyle(
                     fontSize: 14,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white,
+                    color: tc.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 8),
                 Text(
                   '${(todayProgress * 100).toInt()}% Complete',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 20,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: tc.textPrimary,
                   ),
                 ),
                 const SizedBox(height: 16),
@@ -92,15 +91,15 @@ class ProgressCardWidget extends StatelessWidget {
                     vertical: 8,
                   ),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF59E0B),
+                    color: tc.warning,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Row(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      const Icon(
+                      Icon(
                         Icons.local_fire_department,
-                        color: Colors.white,
+                        color: tc.textPrimary,
                         size: 18,
                       ),
                       const SizedBox(width: 6),
@@ -109,7 +108,7 @@ class ProgressCardWidget extends StatelessWidget {
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w600,
-                          color: Colors.white.withValues(alpha: 0.9),
+                          color: tc.textSecondary,
                         ),
                       ),
                       const SizedBox(width: 8),
@@ -119,15 +118,15 @@ class ProgressCardWidget extends StatelessWidget {
                           vertical: 2,
                         ),
                         decoration: BoxDecoration(
-                          color: Colors.white.withValues(alpha: 0.2),
+                          color: tc.border,
                           borderRadius: BorderRadius.circular(6),
                         ),
                         child: Text(
                           '$currentStreak Days',
-                          style: const TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: tc.textPrimary,
                           ),
                         ),
                       ),
@@ -153,18 +152,18 @@ class ProgressCardWidget extends StatelessWidget {
                   child: CircularProgressIndicator(
                     value: todayProgress,
                     strokeWidth: 6,
-                    backgroundColor: Colors.white.withValues(alpha: 0.2),
-                    valueColor: const AlwaysStoppedAnimation<Color>(
-                      Colors.white,
+                    backgroundColor: tc.border,
+                    valueColor: AlwaysStoppedAnimation<Color>(
+                      tc.secondary,
                     ),
                   ),
                 ),
                 Text(
                   '$completedHabits/$totalHabits',
-                  style: const TextStyle(
+                  style: TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.w700,
-                    color: Colors.white,
+                    color: tc.textPrimary,
                   ),
                 ),
               ],

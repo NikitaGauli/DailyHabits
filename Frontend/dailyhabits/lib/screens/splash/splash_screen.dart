@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:dailyhabits/screens/onboarding/onboarding_carousel.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
 import 'package:dailyhabits/screens/home/home_page.dart';
+import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// ---------------------------------------------------------------------------
@@ -114,7 +115,9 @@ class _SplashScreenState extends State<SplashScreen>
     final prefs = await SharedPreferences.getInstance();
     final bool onboardingComplete =
         prefs.getBool('onboardingComplete') ?? false;
-    final bool isLoggedIn = prefs.getBool('isLoggedIn') ?? false;
+    // Check for saved auth token (set by AuthService on login/register)
+    final String? authToken = prefs.getString('auth_token');
+    final bool isLoggedIn = authToken != null && authToken.isNotEmpty;
 
     if (!onboardingComplete) {
       _navigateTo(const OnboardingCarousel());
@@ -162,19 +165,25 @@ class _SplashScreenState extends State<SplashScreen>
 
   // ----------------------- UI Components -----------------------
   BoxDecoration _buildAnimatedGradient() {
+    final isDark = context.isDarkMode;
+    final startBase = isDark ? AppColors.darkBg : AppColors.lightBg;
+    final startPulse = isDark ? AppColors.darkSurface : AppColors.lightSurfaceVariant;
+    final endBase = isDark ? AppColors.darkSurface : AppColors.lightSurface;
+    final endPulse = isDark ? AppColors.darkSurface : AppColors.lightSurfaceVariant;
+
     return BoxDecoration(
       gradient: LinearGradient(
         begin: Alignment.topLeft,
         end: Alignment.bottomRight,
         colors: [
           Color.lerp(
-            const Color(0xFF5B6FED),
-            const Color(0xFF4E5FDC),
+            startBase,
+            startPulse,
             _backgroundPulseAnimation.value - 1.0,
           )!,
           Color.lerp(
-            const Color(0xFFA855F7),
-            const Color(0xFF9333EA),
+            endBase,
+            endPulse,
             _backgroundPulseAnimation.value - 1.0,
           )!,
         ],
@@ -193,7 +202,7 @@ class _SplashScreenState extends State<SplashScreen>
             width: 130,
             height: 130,
             decoration: BoxDecoration(
-              color: Colors.white,
+              color: context.colors.accent,
               borderRadius: BorderRadius.circular(32),
               boxShadow: [
                 BoxShadow(
@@ -202,13 +211,13 @@ class _SplashScreenState extends State<SplashScreen>
                   offset: const Offset(0, 20),
                 ),
                 BoxShadow(
-                  color: const Color(0xFFA855F7).withValues(alpha: 0.3),
+                  color: context.colors.accent.withValues(alpha: 0.3),
                   blurRadius: 60,
                   spreadRadius: 10,
                 ),
               ],
             ),
-            child: const Icon(Icons.check, size: 75, color: Color(0xFFA855F7)),
+            child: const Icon(Icons.check, size: 75, color: AppColors.textOnAccent),
           ),
         ),
       ),
@@ -220,10 +229,10 @@ class _SplashScreenState extends State<SplashScreen>
       position: _textSlideAnimation,
       child: FadeTransition(
         opacity: _textFadeAnimation,
-        child: const Text(
+        child: Text(
           'DailyHabits',
           style: TextStyle(
-            color: Colors.white,
+            color: context.colors.textPrimary,
             fontSize: 40,
             fontWeight: FontWeight.w700,
             letterSpacing: -0.5,
@@ -244,15 +253,15 @@ class _SplashScreenState extends State<SplashScreen>
             child: CircularProgressIndicator(
               strokeWidth: 3,
               valueColor: AlwaysStoppedAnimation<Color>(
-                Colors.white.withValues(alpha: 0.7),
+                context.colors.textSecondary,
               ),
             ),
           ),
           const SizedBox(height: 24),
           Text(
-            'Loading...',
+            'Getting ready…',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.8),
+              color: context.colors.textSecondary,
               fontSize: 14,
               fontWeight: FontWeight.w500,
               letterSpacing: 0.5,

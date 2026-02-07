@@ -18,5 +18,6 @@
     }
   },
   "python.terminal.executeInFileDir": true,
-  "python.terminal.executeInTerminal": true
+  "python.terminal.executeInTerminal": true,
+  "cmake.sourceDirectory": "C:/FlutterDev/projects/Development/Frontend/dailyhabits/linux"
 }

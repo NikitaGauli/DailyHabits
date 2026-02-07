@@ -2,11 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:dailyhabits/screens/auth/signup_screen.dart';
 import 'package:dailyhabits/screens/home/home_page.dart';
 import 'package:dailyhabits/services/auth_service.dart';
+import 'package:dailyhabits/theme/app_theme.dart';
 
 /// ---------------------------------------------------------------------------
 /// LoginScreen
 /// ---------------------------------------------------------------------------
-/// Professional login screen with glassmorphism styling.
+/// Professional login screen with theme-aware styling.
 /// Saves login state to SharedPreferences for SplashScreen navigation.
 /// ---------------------------------------------------------------------------
 class LoginScreen extends StatefulWidget {
@@ -51,10 +52,11 @@ class _LoginScreenState extends State<LoginScreen> {
       if (!mounted) return;
 
       if (result['success']) {
-        // Navigate to HomePage
-        Navigator.pushReplacement(
+        // Navigate to HomePage — initState will trigger loadData()
+        Navigator.pushAndRemoveUntil(
           context,
           MaterialPageRoute(builder: (_) => const HomePage()),
+          (route) => false,
         );
       } else {
         // Show error message
@@ -98,14 +100,9 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Gradient background
   Widget _buildBackground({required Widget child}) {
+    final tc = context.colors;
     return Container(
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [Color(0xFF14B8A6), Color(0xFF3B82F6)],
-        ),
-      ),
+      decoration: BoxDecoration(gradient: tc.bgGradient),
       child: child,
     );
   }
@@ -124,15 +121,16 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Glassmorphic login card
+  /// Login card
   Widget _buildCard() {
+    final tc = context.colors;
     return Container(
       padding: const EdgeInsets.all(32),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.15),
+        color: tc.card,
         borderRadius: BorderRadius.circular(32),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.3),
+          color: tc.border,
           width: 1.5,
         ),
       ),
@@ -158,37 +156,38 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Card header
   Widget _buildHeader() {
+    final tc = context.colors;
     return Column(
       children: [
         Container(
           width: 70,
           height: 70,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: tc.accent,
             borderRadius: BorderRadius.circular(18),
           ),
           child: const Icon(
             Icons.login_rounded,
             size: 40,
-            color: Color(0xFF14B8A6),
+            color: Colors.white,
           ),
         ),
         const SizedBox(height: 20),
-        const Text(
+        Text(
           'Welcome Back',
           style: TextStyle(
             fontSize: 24,
             fontWeight: FontWeight.w700,
-            color: Colors.white,
+            color: tc.textPrimary,
             letterSpacing: -0.5,
           ),
         ),
         const SizedBox(height: 8),
         Text(
-          'Continue your habit journey',
+          'Pick up where you left off',
           style: TextStyle(
             fontSize: 15,
-            color: Colors.white.withValues(alpha: 0.9),
+            color: tc.textSecondary,
           ),
         ),
       ],
@@ -197,19 +196,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Form fields
   Widget _buildFormFields() {
+    final tc = context.colors;
     return Column(
       children: [
         _GlassTextField(
           controller: _emailController,
-          hintText: 'Email Address',
+          hintText: 'Email',
           prefixIcon: Icons.email_outlined,
           keyboardType: TextInputType.emailAddress,
           validator: (value) {
             if (value == null || value.isEmpty) {
-              return 'Please enter your email';
+              return 'Enter your email';
             }
             if (!value.contains('@')) {
-              return 'Please enter a valid email';
+              return 'Enter a valid email';
             }
             return null;
           },
@@ -225,13 +225,13 @@ class _LoginScreenState extends State<LoginScreen> {
               _obscurePassword
                   ? Icons.visibility_outlined
                   : Icons.visibility_off_outlined,
-              color: Colors.white.withValues(alpha: 0.7),
+              color: tc.textMuted,
             ),
             onPressed: () =>
                 setState(() => _obscurePassword = !_obscurePassword),
           ),
           validator: (value) => (value == null || value.isEmpty)
-              ? 'Please enter your password'
+              ? 'Enter your password'
               : null,
         ),
       ],
@@ -240,13 +240,14 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Forgot password
   Widget _buildForgotPassword() {
+    final tc = context.colors;
     return Align(
       alignment: Alignment.centerRight,
       child: TextButton(
         onPressed: () {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
-              content: Text('Reset password functionality coming soon!'),
+              content: Text('Password reset coming soon'),
             ),
           );
         },
@@ -255,9 +256,9 @@ class _LoginScreenState extends State<LoginScreen> {
           minimumSize: Size.zero,
           tapTargetSize: MaterialTapTargetSize.shrinkWrap,
         ),
-        child: const Text(
+        child: Text(
           'Forgot Password?',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
+          style: TextStyle(color: tc.accent, fontWeight: FontWeight.w600),
         ),
       ),
     );
@@ -274,11 +275,12 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Divider
   Widget _buildDivider() {
+    final tc = context.colors;
     return Text(
-      'or continue with',
+      'or sign in with',
       style: TextStyle(
         fontSize: 14,
-        color: Colors.white.withValues(alpha: 0.8),
+        color: tc.textMuted,
         fontWeight: FontWeight.w500,
       ),
     );
@@ -295,21 +297,22 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// Signup link
   Widget _buildSignupLink() {
+    final tc = context.colors;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         Text(
-          "Don't have an account? ",
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.9)),
+          "New here? ",
+          style: TextStyle(color: tc.textSecondary),
         ),
         TextButton(
           onPressed: _navigateToSignup,
-          child: const Text(
-            'Sign Up',
+          child: Text(
+            'Create Account',
             style: TextStyle(
               fontWeight: FontWeight.w700,
               decoration: TextDecoration.underline,
-              color: Colors.white,
+              color: tc.accent,
             ),
           ),
         ),
@@ -319,7 +322,7 @@ class _LoginScreenState extends State<LoginScreen> {
 }
 
 /// ---------------------------------------------------------------------------
-/// Glass-style TextField
+/// Theme-aware TextField
 /// ---------------------------------------------------------------------------
 class _GlassTextField extends StatelessWidget {
   const _GlassTextField({
@@ -342,22 +345,23 @@ class _GlassTextField extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return TextFormField(
       controller: controller,
       obscureText: obscureText,
       keyboardType: keyboardType,
       validator: validator,
-      style: const TextStyle(color: Colors.white),
+      style: TextStyle(color: tc.textPrimary),
       decoration: InputDecoration(
         hintText: hintText,
-        hintStyle: TextStyle(color: Colors.white.withValues(alpha: 0.6)),
+        hintStyle: TextStyle(color: tc.textMuted),
         prefixIcon: Icon(
           prefixIcon,
-          color: Colors.white.withValues(alpha: 0.7),
+          color: tc.textMuted,
         ),
         suffixIcon: suffixIcon,
         filled: true,
-        fillColor: Colors.white.withValues(alpha: 0.2),
+        fillColor: tc.inputFill,
         border: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide.none,
@@ -365,13 +369,13 @@ class _GlassTextField extends StatelessWidget {
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
           borderSide: BorderSide(
-            color: Colors.white.withValues(alpha: 0.3),
+            color: tc.inputBorder,
             width: 1,
           ),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: const BorderSide(color: Colors.white, width: 2),
+          borderSide: BorderSide(color: tc.accent, width: 2),
         ),
         errorBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -406,14 +410,15 @@ class _SolidButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return SizedBox(
       width: double.infinity,
       height: 54,
       child: ElevatedButton(
         onPressed: isLoading ? null : onPressed,
         style: ElevatedButton.styleFrom(
-          backgroundColor: Colors.white,
-          foregroundColor: const Color(0xFF14B8A6),
+          backgroundColor: tc.accent,
+          foregroundColor: Colors.white,
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
@@ -424,7 +429,7 @@ class _SolidButton extends StatelessWidget {
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
-                  color: Color(0xFF14B8A6),
+                  color: Colors.white,
                   strokeWidth: 2.5,
                 ),
               )
@@ -457,26 +462,27 @@ class _SocialButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return SizedBox(
       width: double.infinity,
       height: 48,
       child: OutlinedButton.icon(
         onPressed: onPressed,
         style: OutlinedButton.styleFrom(
-          foregroundColor: Colors.white,
+          foregroundColor: tc.textPrimary,
           side: BorderSide(
-            color: Colors.white.withValues(alpha: 0.4),
+            color: tc.border,
             width: 1.5,
           ),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-        icon: Icon(icon, size: 24, color: Colors.white),
+        icon: Icon(icon, size: 24, color: tc.textPrimary),
         label: Text(
           label,
-          style: const TextStyle(
-            color: Colors.white,
+          style: TextStyle(
+            color: tc.textPrimary,
             fontWeight: FontWeight.w600,
             fontSize: 15,
           ),

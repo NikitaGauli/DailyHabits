@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-
-/// ===============================================================
-/// BottomNavigationWidget
+import 'package:dailyhabits/theme/app_theme.dart';
 /// ===============================================================
 ///
 /// A customizable bottom navigation bar for the DailyHabits app.
@@ -39,12 +37,13 @@ class BottomNavigationWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return Container(
       decoration: BoxDecoration(
-        color: const Color(0xFF1E293B),
+        color: tc.surface,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
+            color: tc.border,
             blurRadius: 20,
             offset: const Offset(0, -5),
           ),
@@ -57,11 +56,11 @@ class BottomNavigationWidget extends StatelessWidget {
           child: Row(
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildNavItem(Icons.home_rounded, 'Home', 0),
-              _buildNavItem(Icons.bar_chart_rounded, 'Statistics', 1),
-              _buildNavItem(Icons.calendar_today_rounded, 'Habits', 2),
-              _buildNavItem(Icons.emoji_events_rounded, 'Rewards', 3),
-              _buildNavItem(Icons.settings_rounded, 'Settings', 4),
+              _buildNavItem(Icons.home_rounded, 'Home', 0, tc),
+              _buildNavItem(Icons.bar_chart_rounded, 'Statistics', 1, tc),
+              _buildNavItem(Icons.calendar_today_rounded, 'Habits', 2, tc),
+              _buildNavItem(Icons.emoji_events_rounded, 'Rewards', 3, tc),
+              _buildNavItem(Icons.settings_rounded, 'Settings', 4, tc),
             ],
           ),
         ),
@@ -70,7 +69,7 @@ class BottomNavigationWidget extends StatelessWidget {
   }
 
   /// Builds an individual navigation item with icon and label
-  Widget _buildNavItem(IconData icon, String label, int index) {
+  Widget _buildNavItem(IconData icon, String label, int index, ThemeColors tc) {
     final isSelected = selectedIndex == index;
 
     return GestureDetector(
@@ -81,8 +80,8 @@ class BottomNavigationWidget extends StatelessWidget {
           Icon(
             icon,
             color: isSelected
-                ? const Color(0xFF8B5CF6)
-                : Colors.white.withValues(alpha: 0.4),
+                ? tc.accent
+                : tc.textMuted,
             size: 26,
           ),
           const SizedBox(height: 4),
@@ -92,8 +91,8 @@ class BottomNavigationWidget extends StatelessWidget {
               fontSize: 11,
               fontWeight: FontWeight.w600,
               color: isSelected
-                  ? const Color(0xFF8B5CF6)
-                  : Colors.white.withValues(alpha: 0.4),
+                  ? tc.accent
+                  : tc.textMuted,
             ),
           ),
         ],

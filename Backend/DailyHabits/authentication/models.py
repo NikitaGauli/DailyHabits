@@ -67,3 +67,59 @@ class User(AbstractBaseUser, PermissionsMixin):
     
     def get_short_name(self):
         return self.name.split()[0] if self.name else self.email
+
+
+class LoginActivity(models.Model):
+    """
+    Track user login events for security auditing.
+    """
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='login_activities'
+    )
+    id = models.AutoField(primary_key=True)
+    ip_address = models.GenericIPAddressField(null=True, blank=True)
+    user_agent = models.TextField(blank=True, default='')
+    device_type = models.CharField(max_length=50, blank=True, default='unknown')
+    location = models.CharField(max_length=255, blank=True, default='')
+    login_at = models.DateTimeField(auto_now_add=True)
+    was_successful = models.BooleanField(default=True)
+
+    class Meta:
+        db_table = 'login_activities'
+        ordering = ['-login_at']
+        verbose_name_plural = 'Login Activities'
+
+    def __str__(self):
+        status_str = 'success' if self.was_successful else 'failed'
+        return f'{self.user.email} - {status_str} - {self.login_at}'
+
+
+class DataDeletionRequest(models.Model):
+    """
+    GDPR-style data deletion requests.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('processing', 'Processing'),
+        ('completed', 'Completed'),
+        ('cancelled', 'Cancelled'),
+    ]
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='deletion_requests'
+    )
+    id = models.AutoField(primary_key=True)
+    reason = models.TextField(blank=True, default='')
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    requested_at = models.DateTimeField(auto_now_add=True)
+    processed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        db_table = 'data_deletion_requests'
+        ordering = ['-requested_at']
+
+    def __str__(self):
+        return f'{self.user.email} - {self.status} - {self.requested_at}'

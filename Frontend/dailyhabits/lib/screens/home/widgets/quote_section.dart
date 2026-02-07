@@ -1,7 +1,5 @@
 import 'package:flutter/material.dart';
-
-/// ===============================================================
-/// QuoteSectionWidget
+import 'package:dailyhabits/theme/app_theme.dart';
 /// ===============================================================
 ///
 /// A reusable widget that displays a motivational quote with
@@ -36,14 +34,15 @@ class QuoteSectionWidget extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final tc = context.colors;
     return Container(
       margin: const EdgeInsets.all(20),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.05),
+        color: tc.surfaceVariant,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: Colors.white.withValues(alpha: 0.1),
+          color: tc.border.withValues(alpha: 0.3),
           width: 1,
         ),
       ),
@@ -54,7 +53,7 @@ class QuoteSectionWidget extends StatelessWidget {
             width: 4,
             height: 40,
             decoration: BoxDecoration(
-              color: const Color(0xFF8B5CF6),
+              color: tc.accent,
               borderRadius: BorderRadius.circular(2),
             ),
           ),
@@ -70,7 +69,7 @@ class QuoteSectionWidget extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w500,
-                    color: Colors.white.withValues(alpha: 0.9),
+                    color: tc.textSecondary,
                     fontStyle: FontStyle.italic,
                     height: 1.4,
                   ),
@@ -81,7 +80,7 @@ class QuoteSectionWidget extends StatelessWidget {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: Colors.white.withValues(alpha: 0.6),
+                    color: tc.textSecondary,
                   ),
                 ),
               ],
