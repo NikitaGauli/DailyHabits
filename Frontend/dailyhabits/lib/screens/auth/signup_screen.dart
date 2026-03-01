@@ -1,8 +1,37 @@
+// **signup_screen.dart** — User Registration Screen
+//
+// This file implements the account creation flow for DailyHabits, including:
+//   - A theme-aware gradient background with a centred card layout.
+//   - Name, email, and password form fields with real-time validation
+//     (minimum 8 characters, not purely numeric).
+//   - A social sign-up (Google) placeholder button.
+//   - Navigation back to [LoginScreen] for existing users.
+//
+// On successful registration the user is immediately logged in and
+// redirected to [HomePage], bypassing the login form entirely.
+//
+// Authentication is delegated to [AuthService.register], which persists
+// tokens to `SharedPreferences` for seamless session continuity.
+//
+// See also:
+//   - [LoginScreen] for existing-user authentication.
+//   - [AuthService] for the underlying REST registration API.
+//   - [HomePage] for the post-signup entry point.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
 import 'package:dailyhabits/screens/home/home_page.dart';
 import 'package:dailyhabits/services/auth_service.dart';
+import 'package:dailyhabits/services/google_auth_service.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+
+// =============================================================================
+// SignupScreen Widget
+// =============================================================================
 
 /// ---------------------------------------------------------------------------
 /// SignupScreen
@@ -29,6 +58,7 @@ class _SignupScreenState extends State<SignupScreen> {
 
   /// UI state flags
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   bool _obscurePassword = true;
 
   @override
@@ -94,6 +124,49 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
+  /// -------------------------------------------------------------------------
+  /// Handles Google sign-up / sign-in flow
+  /// -------------------------------------------------------------------------
+  /// Steps:
+  /// 1. Initiates Google Sign-In via [GoogleAuthService]
+  /// 2. Sends the Google ID token to the Django backend
+  /// 3. Backend verifies the token and returns JWT tokens
+  /// 4. On success, navigates to [HomePage]
+  /// 5. On failure, shows an error SnackBar
+  /// -------------------------------------------------------------------------
+  Future<void> _handleGoogleSignup() async {
+    if (_isGoogleLoading || _isLoading) return;
+
+    setState(() => _isGoogleLoading = true);
+
+    try {
+      final result = await GoogleAuthService().signInWithGoogle();
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        // Navigate to HomePage on successful Google auth
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+          (route) => false,
+        );
+      } else if (result['cancelled'] != true) {
+        // Show error only if user didn't cancel
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Google sign-in failed'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isGoogleLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -110,7 +183,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  /// Gradient background wrapper
+  /// Gradient background wrapper for the entire signup screen.
   Widget _buildBackground({required Widget child}) {
     final tc = context.colors;
     return Container(
@@ -119,7 +192,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  /// Signup form container
+  /// Wraps the signup card inside a [Form] widget for validation.
   Widget _buildSignupForm() {
     return Form(
       key: _formKey,
@@ -133,7 +206,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  /// Signup card
+  /// The main signup card containing header, fields, buttons, and links.
   Widget _buildCard() {
     final tc = context.colors;
     return Container(
@@ -141,10 +214,7 @@ class _SignupScreenState extends State<SignupScreen> {
       decoration: BoxDecoration(
         color: tc.card,
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(
-          color: tc.border,
-          width: 1.5,
-        ),
+        border: Border.all(color: tc.border, width: 1.5),
       ),
       child: Column(
         children: [
@@ -164,7 +234,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  /// Icon, title, and subtitle
+  /// App icon, title ("Get Started"), and subtitle displayed at the card top.
   Widget _buildHeader() {
     final tc = context.colors;
     return Column(
@@ -195,16 +265,13 @@ class _SignupScreenState extends State<SignupScreen> {
         const SizedBox(height: 8),
         Text(
           'Build habits that stick',
-          style: TextStyle(
-            fontSize: 15,
-            color: tc.textSecondary,
-          ),
+          style: TextStyle(fontSize: 15, color: tc.textSecondary),
         ),
       ],
     );
   }
 
-  /// Input fields section
+  /// Name, email, and password input fields with inline validation.
   Widget _buildFormFields() {
     final tc = context.colors;
     return Column(
@@ -265,7 +332,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  /// Signup button
+  /// Primary "Create Account" button with loading state support.
   Widget _buildSignupButton() {
     return _SolidButton(
       label: 'Create Account',
@@ -274,7 +341,7 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  /// Divider text
+  /// Separator text between the signup button and social sign-up options.
   Widget _buildDivider() {
     final tc = context.colors;
     return Text(
@@ -287,16 +354,17 @@ class _SignupScreenState extends State<SignupScreen> {
     );
   }
 
-  /// Social login buttons
+  /// Google sign-up button with loading state support.
   Widget _buildSocialButtons() {
     return _SocialButton(
       icon: Icons.g_mobiledata_rounded,
-      label: 'Google',
-      onPressed: () {},
+      label: 'Continue with Google',
+      isLoading: _isGoogleLoading,
+      onPressed: _handleGoogleSignup,
     );
   }
 
-  /// Login navigation link
+  /// "Already have an account? Log In" navigation link to [LoginScreen].
   Widget _buildLoginLink() {
     final tc = context.colors;
     return Row(
@@ -322,8 +390,16 @@ class _SignupScreenState extends State<SignupScreen> {
   }
 }
 
+// =============================================================================
+// Shared Private Widgets
+// =============================================================================
+
 /// ---------------------------------------------------------------------------
-/// Theme-aware text field component
+/// Theme-aware glass-morphism style text field.
+///
+/// Used across auth screens for a consistent, modern input appearance.
+/// Supports optional obscuring (for passwords), custom validators, and
+/// a trailing suffix icon (e.g. visibility toggle).
 /// ---------------------------------------------------------------------------
 class _GlassTextField extends StatelessWidget {
   const _GlassTextField({
@@ -356,10 +432,7 @@ class _GlassTextField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: TextStyle(color: tc.textMuted),
-        prefixIcon: Icon(
-          prefixIcon,
-          color: tc.textMuted,
-        ),
+        prefixIcon: Icon(prefixIcon, color: tc.textMuted),
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: tc.inputFill,
@@ -369,10 +442,7 @@ class _GlassTextField extends StatelessWidget {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: tc.inputBorder,
-            width: 1,
-          ),
+          borderSide: BorderSide(color: tc.inputBorder, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -396,7 +466,10 @@ class _GlassTextField extends StatelessWidget {
 }
 
 /// ---------------------------------------------------------------------------
-/// Solid primary button
+/// Full-width solid primary action button with loading spinner.
+///
+/// Disables tap handling and shows a [CircularProgressIndicator] when
+/// [isLoading] is `true`.
 /// ---------------------------------------------------------------------------
 class _SolidButton extends StatelessWidget {
   const _SolidButton({
@@ -448,18 +521,23 @@ class _SolidButton extends StatelessWidget {
 }
 
 /// ---------------------------------------------------------------------------
-/// Social login button
+/// Outlined social login button (icon + label).
+///
+/// Currently used for Google sign-up. Additional providers can be added
+/// by instantiating more [_SocialButton] widgets with different icons.
 /// ---------------------------------------------------------------------------
 class _SocialButton extends StatelessWidget {
   const _SocialButton({
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.isLoading = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -468,22 +546,28 @@ class _SocialButton extends StatelessWidget {
       width: double.infinity,
       height: 48,
       child: OutlinedButton.icon(
-        onPressed: onPressed,
+        onPressed: isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
           foregroundColor: tc.textPrimary,
-          side: BorderSide(
-            color: tc.border,
-            width: 1.5,
-          ),
+          side: BorderSide(color: tc.border, width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-        icon: Icon(icon, size: 24, color: tc.textPrimary),
+        icon: isLoading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: tc.textMuted,
+                ),
+              )
+            : Icon(icon, size: 24, color: tc.textPrimary),
         label: Text(
-          label,
+          isLoading ? 'Signing in...' : label,
           style: TextStyle(
-            color: tc.textPrimary,
+            color: isLoading ? tc.textMuted : tc.textPrimary,
             fontWeight: FontWeight.w600,
             fontSize: 15,
           ),

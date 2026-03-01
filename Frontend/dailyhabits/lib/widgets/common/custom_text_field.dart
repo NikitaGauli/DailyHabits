@@ -1,18 +1,62 @@
+// DailyHabits — Custom Text Field Widget
+//
+// A fully themed [TextFormField] wrapper that provides consistent styling,
+// validation support, and theme-aware colors throughout the app.  Used on
+// authentication screens, habit forms, and settings panels.
+//
+// See also:
+// - [AppRadius]     — border-radius tokens applied to input borders.
+// - [ThemeColors]   — runtime color resolution for fill, border, and text.
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 
-/// A themed text field with glass-morphism styling for the DailyHabits app.
+/// A themed text field with consistent styling for the DailyHabits app.
+///
+/// Wraps [TextFormField] with the app’s design-system border radii, fill
+/// colors, and focus/error border treatments.  Supports an optional leading
+/// icon, suffix widget, obscured text, multi-line input, and form validation.
+///
+/// ```dart
+/// CustomTextField(
+///   controller: _emailCtrl,
+///   hintText: 'you@example.com',
+///   prefixIcon: Icons.email_outlined,
+///   validator: (v) => v!.isEmpty ? 'Required' : null,
+/// )
+/// ```
 class CustomTextField extends StatelessWidget {
+  /// Optional controller to read/write the field’s text value.
   final TextEditingController? controller;
+
+  /// Placeholder text shown when the field is empty.
   final String? hintText;
+
+  /// Floating label displayed above the field when focused.
   final String? labelText;
+
+  /// Material icon rendered to the left of the input area.
   final IconData? prefixIcon;
+
+  /// Widget placed at the trailing end (e.g., visibility toggle).
   final Widget? suffixIcon;
+
+  /// Whether to mask the input (e.g., for passwords). Defaults to `false`.
   final bool obscureText;
+
+  /// Keyboard type hint for the platform input method.
   final TextInputType keyboardType;
+
+  /// Optional form validator returning an error string or `null`.
   final String? Function(String?)? validator;
+
+  /// Callback fired on every keystroke.
   final ValueChanged<String>? onChanged;
+
+  /// Number of visible text lines. Defaults to `1`.
   final int maxLines;
+
+  /// Whether the field accepts user input. Defaults to `true`.
   final bool enabled;
 
   const CustomTextField({
@@ -33,6 +77,9 @@ class CustomTextField extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tc = context.colors;
+
+    // Build a TextFormField with theme-aware decoration that responds
+    // to light/dark mode through the ThemeColors extension.
     return TextFormField(
       controller: controller,
       obscureText: obscureText,

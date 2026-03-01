@@ -1,8 +1,39 @@
+// **login_screen.dart** — User Login Screen
+//
+// This file implements the full login flow for DailyHabits, including:
+//   - A theme-aware gradient background with a centred card layout.
+//   - Email and password form fields with real-time validation.
+//   - A "Forgot Password" placeholder link.
+//   - A social login (Google) placeholder button.
+//   - Navigation to [SignupScreen] for new users.
+//
+// On successful authentication the user is redirected to [HomePage],
+// with the entire navigation stack replaced so that the back button
+// does not return to the login form.
+//
+// Authentication is delegated to [AuthService.login], which persists
+// tokens to `SharedPreferences` for session continuity.
+//
+// See also:
+//   - [SignupScreen] for account creation.
+//   - [AuthService] for the underlying REST authentication API.
+//   - [HomePage] for the post-login entry point.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
+import 'package:dailyhabits/screens/auth/forgot_password_screen.dart';
 import 'package:dailyhabits/screens/auth/signup_screen.dart';
 import 'package:dailyhabits/screens/home/home_page.dart';
 import 'package:dailyhabits/services/auth_service.dart';
+import 'package:dailyhabits/services/google_auth_service.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+
+// =============================================================================
+// LoginScreen Widget
+// =============================================================================
 
 /// ---------------------------------------------------------------------------
 /// LoginScreen
@@ -27,6 +58,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
   /// UI state flags
   bool _isLoading = false;
+  bool _isGoogleLoading = false;
   bool _obscurePassword = true;
 
   @override
@@ -82,6 +114,49 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
+  /// -------------------------------------------------------------------------
+  /// Handles Google sign-in flow
+  /// -------------------------------------------------------------------------
+  /// Steps:
+  /// 1. Initiates Google Sign-In via [GoogleAuthService]
+  /// 2. Sends the Google ID token to the Django backend
+  /// 3. Backend verifies the token and returns JWT tokens
+  /// 4. On success, navigates to [HomePage]
+  /// 5. On failure, shows an error SnackBar
+  /// -------------------------------------------------------------------------
+  Future<void> _handleGoogleLogin() async {
+    if (_isGoogleLoading || _isLoading) return;
+
+    setState(() => _isGoogleLoading = true);
+
+    try {
+      final result = await GoogleAuthService().signInWithGoogle();
+
+      if (!mounted) return;
+
+      if (result['success'] == true) {
+        // Navigate to HomePage on successful Google auth
+        Navigator.pushAndRemoveUntil(
+          context,
+          MaterialPageRoute(builder: (_) => const HomePage()),
+          (route) => false,
+        );
+      } else if (result['cancelled'] != true) {
+        // Show error only if user didn't cancel
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(result['message'] ?? 'Google sign-in failed'),
+            backgroundColor: Colors.redAccent,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isGoogleLoading = false);
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -98,7 +173,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Gradient background
+  /// Gradient background wrapper for the entire login screen.
   Widget _buildBackground({required Widget child}) {
     final tc = context.colors;
     return Container(
@@ -107,7 +182,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Login form
+  /// Wraps the login card inside a [Form] widget for validation.
   Widget _buildLoginForm() {
     return Form(
       key: _formKey,
@@ -121,7 +196,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Login card
+  /// The main login card containing header, fields, buttons, and links.
   Widget _buildCard() {
     final tc = context.colors;
     return Container(
@@ -129,10 +204,7 @@ class _LoginScreenState extends State<LoginScreen> {
       decoration: BoxDecoration(
         color: tc.card,
         borderRadius: BorderRadius.circular(32),
-        border: Border.all(
-          color: tc.border,
-          width: 1.5,
-        ),
+        border: Border.all(color: tc.border, width: 1.5),
       ),
       child: Column(
         children: [
@@ -154,7 +226,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Card header
+  /// App icon, welcome title, and subtitle displayed at the top of the card.
   Widget _buildHeader() {
     final tc = context.colors;
     return Column(
@@ -166,11 +238,7 @@ class _LoginScreenState extends State<LoginScreen> {
             color: tc.accent,
             borderRadius: BorderRadius.circular(18),
           ),
-          child: const Icon(
-            Icons.login_rounded,
-            size: 40,
-            color: Colors.white,
-          ),
+          child: const Icon(Icons.login_rounded, size: 40, color: Colors.white),
         ),
         const SizedBox(height: 20),
         Text(
@@ -185,16 +253,13 @@ class _LoginScreenState extends State<LoginScreen> {
         const SizedBox(height: 8),
         Text(
           'Pick up where you left off',
-          style: TextStyle(
-            fontSize: 15,
-            color: tc.textSecondary,
-          ),
+          style: TextStyle(fontSize: 15, color: tc.textSecondary),
         ),
       ],
     );
   }
 
-  /// Form fields
+  /// Email and password input fields with inline validation.
   Widget _buildFormFields() {
     final tc = context.colors;
     return Column(
@@ -230,24 +295,24 @@ class _LoginScreenState extends State<LoginScreen> {
             onPressed: () =>
                 setState(() => _obscurePassword = !_obscurePassword),
           ),
-          validator: (value) => (value == null || value.isEmpty)
-              ? 'Enter your password'
-              : null,
+          validator: (value) =>
+              (value == null || value.isEmpty) ? 'Enter your password' : null,
         ),
       ],
     );
   }
 
-  /// Forgot password
+  /// "Forgot Password?" link (currently shows a placeholder snackbar).
   Widget _buildForgotPassword() {
     final tc = context.colors;
     return Align(
       alignment: Alignment.centerRight,
       child: TextButton(
         onPressed: () {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Password reset coming soon'),
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => const ForgotPasswordScreen(),
             ),
           );
         },
@@ -264,7 +329,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Login button
+  /// Primary "Log in" button with loading state support.
   Widget _buildLoginButton() {
     return _SolidButton(
       label: 'Log in',
@@ -273,7 +338,7 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Divider
+  /// Separator text between the login button and social sign-in options.
   Widget _buildDivider() {
     final tc = context.colors;
     return Text(
@@ -286,25 +351,23 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  /// Social login buttons
+  /// Google sign-in button with loading state support.
   Widget _buildSocialButtons() {
     return _SocialButton(
       icon: Icons.g_mobiledata_rounded,
-      label: 'Google',
-      onPressed: () {},
+      label: 'Continue with Google',
+      isLoading: _isGoogleLoading,
+      onPressed: _handleGoogleLogin,
     );
   }
 
-  /// Signup link
+  /// "New here? Create Account" navigation link to [SignupScreen].
   Widget _buildSignupLink() {
     final tc = context.colors;
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        Text(
-          "New here? ",
-          style: TextStyle(color: tc.textSecondary),
-        ),
+        Text("New here? ", style: TextStyle(color: tc.textSecondary)),
         TextButton(
           onPressed: _navigateToSignup,
           child: Text(
@@ -321,8 +384,16 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 }
 
+// =============================================================================
+// Shared Private Widgets
+// =============================================================================
+
 /// ---------------------------------------------------------------------------
-/// Theme-aware TextField
+/// Theme-aware glass-morphism style text field.
+///
+/// Used across auth screens for a consistent, modern input appearance.
+/// Supports optional obscuring (for passwords), custom validators, and
+/// a trailing suffix icon (e.g. visibility toggle).
 /// ---------------------------------------------------------------------------
 class _GlassTextField extends StatelessWidget {
   const _GlassTextField({
@@ -355,10 +426,7 @@ class _GlassTextField extends StatelessWidget {
       decoration: InputDecoration(
         hintText: hintText,
         hintStyle: TextStyle(color: tc.textMuted),
-        prefixIcon: Icon(
-          prefixIcon,
-          color: tc.textMuted,
-        ),
+        prefixIcon: Icon(prefixIcon, color: tc.textMuted),
         suffixIcon: suffixIcon,
         filled: true,
         fillColor: tc.inputFill,
@@ -368,10 +436,7 @@ class _GlassTextField extends StatelessWidget {
         ),
         enabledBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
-          borderSide: BorderSide(
-            color: tc.inputBorder,
-            width: 1,
-          ),
+          borderSide: BorderSide(color: tc.inputBorder, width: 1),
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: BorderRadius.circular(16),
@@ -395,7 +460,10 @@ class _GlassTextField extends StatelessWidget {
 }
 
 /// ---------------------------------------------------------------------------
-/// Solid button
+/// Full-width solid primary action button with loading spinner.
+///
+/// Disables tap handling and shows a [CircularProgressIndicator] when
+/// [isLoading] is `true`.
 /// ---------------------------------------------------------------------------
 class _SolidButton extends StatelessWidget {
   const _SolidButton({
@@ -447,18 +515,23 @@ class _SolidButton extends StatelessWidget {
 }
 
 /// ---------------------------------------------------------------------------
-/// Social button
+/// Outlined social login button (icon + label).
+///
+/// Currently used for Google sign-in. Additional providers can be added
+/// by instantiating more [_SocialButton] widgets with different icons.
 /// ---------------------------------------------------------------------------
 class _SocialButton extends StatelessWidget {
   const _SocialButton({
     required this.icon,
     required this.label,
     required this.onPressed,
+    this.isLoading = false,
   });
 
   final IconData icon;
   final String label;
   final VoidCallback onPressed;
+  final bool isLoading;
 
   @override
   Widget build(BuildContext context) {
@@ -467,22 +540,28 @@ class _SocialButton extends StatelessWidget {
       width: double.infinity,
       height: 48,
       child: OutlinedButton.icon(
-        onPressed: onPressed,
+        onPressed: isLoading ? null : onPressed,
         style: OutlinedButton.styleFrom(
           foregroundColor: tc.textPrimary,
-          side: BorderSide(
-            color: tc.border,
-            width: 1.5,
-          ),
+          side: BorderSide(color: tc.border, width: 1.5),
           shape: RoundedRectangleBorder(
             borderRadius: BorderRadius.circular(16),
           ),
         ),
-        icon: Icon(icon, size: 24, color: tc.textPrimary),
+        icon: isLoading
+            ? SizedBox(
+                width: 20,
+                height: 20,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  color: tc.textMuted,
+                ),
+              )
+            : Icon(icon, size: 24, color: tc.textPrimary),
         label: Text(
-          label,
+          isLoading ? 'Signing in...' : label,
           style: TextStyle(
-            color: tc.textPrimary,
+            color: isLoading ? tc.textMuted : tc.textPrimary,
             fontWeight: FontWeight.w600,
             fontSize: 15,
           ),
