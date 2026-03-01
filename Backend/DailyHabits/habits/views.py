@@ -1,15 +1,48 @@
 """
-Enhanced Habit Views
-Production-ready API endpoints with full functionality
+Habits Views — REST API Endpoints for Habit Management
+======================================================
+
+This module exposes all habit-related API endpoints through two DRF ViewSets:
+
+    :class:`HabitViewSet`
+        Full CRUD plus custom actions (today, toggle-complete, skip, pause,
+        resume, reorder, partial-complete, history, stats, categories,
+        stats_summary).  Covers every operation the Flutter client needs.
+
+    :class:`HabitLogViewSet`
+        Read-only / filtered listing of :class:`~habits.models.HabitLog`
+        records.  Useful for calendar heat-maps, CSV exports, etc.
+
+Authentication:
+    All endpoints require ``IsAuthenticated``.  Users can only access
+    their own data — queryset filtering by ``request.user`` is enforced
+    at the ViewSet level.
+
+Response convention:
+    Every response wraps its payload in a ``{ success, message?, ... }``
+    envelope so the Flutter ``ApiClient`` can handle success/error paths
+    uniformly.
+
+Authors:
+    DailyHabits Engineering Team
+
+Since:
+    v1.0.0
 """
 
+# === Third-Party Imports =====================================================
 from rest_framework import viewsets, permissions, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
+
+# === Django Imports ==========================================================
 from django.utils import timezone
 from django.db.models import Count, Q, Prefetch
+
+# === Standard Library Imports ================================================
 from datetime import timedelta
 
+# === Local Imports ===========================================================
 from .models import Habit, HabitLog, Streak, Category
 from .serializers import (
     HabitSerializer, 
@@ -19,29 +52,66 @@ from .serializers import (
     CategorySerializer,
 )
 from achievements.services import AchievementService
+from gamification.services import GamificationEngine
+
+
+# =============================================================================
+# HabitViewSet — Primary Habit CRUD + Custom Actions
+# =============================================================================
 
 
 class HabitViewSet(viewsets.ModelViewSet):
     """
-    Full CRUD ViewSet for habits
+    Full-featured ViewSet for Habit CRUD and domain actions.
+
+    Provides:
+        * Standard REST verbs (list / create / retrieve / update / destroy).
+        * ``today``           — filtered habits for the current day with progress.
+        * ``toggle_complete`` — mark / un-mark a habit as completed today.
+        * ``skip``            — record a skip with an optional reason.
+        * ``history``         — paginated log history for a single habit.
+        * ``stats``           — per-habit analytics (streak + consistency).
+        * ``categories``      — default + user-defined categories.
+        * ``stats_summary``   — dashboard-level aggregate statistics.
+        * ``pause`` / ``resume`` — habit lifecycle management.
+        * ``reorder``         — bulk update sort order.
+        * ``partial_complete`` — fractional completion scoring.
+
+    All endpoints are scoped to the authenticated user and exclude
+    soft-deleted habits.
     """
+
     permission_classes = [permissions.IsAuthenticated]
     
+    # --- Serializer Selection -------------------------------------------------
+
     def get_serializer_class(self):
+        """Return the appropriate serializer based on the current action."""
         if self.action == 'list':
-            return HabitListSerializer
+            return HabitListSerializer      # Lightweight for list views
         if self.action == 'today':
-            return TodayHabitSerializer
-        return HabitSerializer
+            return TodayHabitSerializer      # Rich payload for today screen
+        return HabitSerializer               # Full detail for CRUD
     
+    # --- Queryset Filtering ---------------------------------------------------
+
     def get_queryset(self):
-        """Filter by current user and exclude soft-deleted"""
+        """
+        Return the authenticated user's non-deleted habits.
+
+        Supports optional query-parameter filters:
+            * ``?status=active|paused|archived``
+            * ``?category=<category_name>``
+
+        The streak relation is eagerly loaded via ``select_related`` to
+        avoid N+1 queries when serializing lists.
+        """
         queryset = Habit.objects.filter(
             user=self.request.user,
             is_deleted=False
         ).select_related('streak').order_by('-created_at')
         
-        # Optional filters
+        # Optional query-param filters
         status_filter = self.request.query_params.get('status')
         category = self.request.query_params.get('category')
         
@@ -52,17 +122,25 @@ class HabitViewSet(viewsets.ModelViewSet):
         
         return queryset
     
+    # --- Standard CRUD Overrides ----------------------------------------------
+
     def perform_create(self, serializer):
-        """Save with current user"""
+        """Inject the authenticated user before saving a new habit."""
         serializer.save(user=self.request.user)
     
     def create(self, request, *args, **kwargs):
-        """Create habit with success response"""
+        """
+        POST /api/habits/
+
+        Create a new habit for the authenticated user.  On success the
+        achievement engine is triggered to check for creation-related
+        milestones (e.g. "Created your first habit!").
+        """
         serializer = self.get_serializer(data=request.data)
         if serializer.is_valid():
             self.perform_create(serializer)
             
-            # Check for habit creation achievements
+            # Trigger achievement evaluation for habit-creation milestones
             AchievementService.check_and_award_achievements(
                 request.user, 
                 trigger_type='habit_created'
@@ -81,7 +159,12 @@ class HabitViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     def update(self, request, *args, **kwargs):
-        """Update habit with success response"""
+        """
+        PUT / PATCH /api/habits/{id}/
+
+        Update an existing habit.  Supports both full and partial updates
+        via the ``partial`` kwarg (DRF handles PATCH automatically).
+        """
         partial = kwargs.pop('partial', False)
         instance = self.get_object()
         serializer = self.get_serializer(instance, data=request.data, partial=partial)
@@ -101,7 +184,12 @@ class HabitViewSet(viewsets.ModelViewSet):
         }, status=status.HTTP_400_BAD_REQUEST)
     
     def destroy(self, request, *args, **kwargs):
-        """Soft delete habit"""
+        """
+        DELETE /api/habits/{id}/
+
+        Perform a **soft delete** — the habit is flagged as deleted but
+        remains in the database so historical analytics data is preserved.
+        """
         instance = self.get_object()
         instance.soft_delete()
         
@@ -110,18 +198,26 @@ class HabitViewSet(viewsets.ModelViewSet):
             'message': 'Habit deleted successfully',
         }, status=status.HTTP_200_OK)
     
+    # --- Today's Habits Endpoint ----------------------------------------------
+
     @action(detail=False, methods=['get'])
     def today(self, request):
         """
         GET /api/habits/today/
-        Get habits scheduled for today with completion status
+
+        Return all **active** habits scheduled for today together with a
+        progress summary.  The response includes:
+
+            * ``habits``  — serialized list (via :class:`TodayHabitSerializer`).
+            * ``summary`` — aggregate dict with total, completed, remaining,
+              progress percentage, streak highs, and category counts.
         """
         today = timezone.now().date()
-        weekday = today.weekday()
+        weekday = today.weekday()  # 0 = Monday
         
         habits = self.get_queryset().filter(status='active')
         
-        # Filter by frequency
+        # Build the today-specific habit list based on each habit's frequency
         today_habits = []
         for habit in habits:
             if habit.frequency == 'daily':
@@ -129,17 +225,17 @@ class HabitViewSet(viewsets.ModelViewSet):
             elif habit.frequency == 'custom' and weekday in (habit.custom_days or []):
                 today_habits.append(habit)
             elif habit.frequency == 'weekly':
-                today_habits.append(habit)
+                today_habits.append(habit)  # Weekly: shown every day of the week
         
         serializer = TodayHabitSerializer(today_habits, many=True)
         
-        # Calculate today's progress
+        # --- Calculate today’s progress stats --------------------------------
         total = len(today_habits)
         completed = sum(1 for h in today_habits if HabitLog.objects.filter(
             habit=h, date=today, status='completed'
         ).exists())
         
-        # Get overall streak info
+        # Determine the highest streak values across today’s habits
         max_current_streak = 0
         max_best_streak = 0
         for h in today_habits:
@@ -149,7 +245,7 @@ class HabitViewSet(viewsets.ModelViewSet):
             except Streak.DoesNotExist:
                 pass
         
-        # Category counts for filter chips
+        # Tally habits per category for the frontend filter chips
         category_counts = {}
         for h in today_habits:
             cat = h.category_name or 'General'
@@ -170,25 +266,33 @@ class HabitViewSet(viewsets.ModelViewSet):
             }
         })
     
+    # --- Toggle Completion Endpoint -------------------------------------------
+
     @action(detail=True, methods=['post'], url_path='toggle-complete')
     def toggle_complete(self, request, pk=None):
         """
         POST /api/habits/{id}/toggle-complete/
-        Toggle habit completion for today
+
+        Idempotent toggle: if the habit is already completed today it
+        reverts to ``missed``; otherwise it records a new completion.
+
+        On completion the achievement engine is invoked, and any newly
+        earned achievements are returned in ``newAchievements``.
         """
         habit = self.get_object()
         today = timezone.now().date()
         now = timezone.now()
         
+        # Check for an existing log entry for today
         log = HabitLog.objects.filter(habit=habit, date=today).first()
         
         if log and log.status == 'completed':
-            # Uncomplete
+            # --- Un-complete path ------------------------------------------------
             log.status = 'missed'
             log.completed_at = None
             log.save()
             
-            # Update streak
+            # Recalculate streak after revoking completion
             self._update_streak_on_uncomplete(habit)
             
             return Response({
@@ -197,12 +301,14 @@ class HabitViewSet(viewsets.ModelViewSet):
                 'isCompleted': False,
             })
         else:
-            # Complete
+            # --- Complete path ---------------------------------------------------
             if log:
+                # Update existing log (e.g. converting 'missed' → 'completed')
                 log.status = 'completed'
                 log.completed_at = now
                 log.save()
             else:
+                # Create a brand-new completion log
                 HabitLog.objects.create(
                     habit=habit,
                     date=today,
@@ -210,15 +316,23 @@ class HabitViewSet(viewsets.ModelViewSet):
                     completed_at=now
                 )
             
-            # Update streak
+            # Extend the streak cache
             self._update_streak_on_complete(habit, today)
             
-            # Check achievements
+            # Evaluate completion-triggered achievements
             newly_earned = AchievementService.check_and_award_achievements(
                 request.user, 
                 habit=habit,
                 trigger_type='habit_completed'
             )
+
+            # Award XP, coins, and check challenges via gamification engine
+            gamification_result = GamificationEngine.award_habit_completion_xp(
+                request.user, habit
+            )
+            
+            # Check milestones after XP award
+            milestone_results = GamificationEngine.check_milestones(request.user)
             
             return Response({
                 'success': True,
@@ -230,17 +344,30 @@ class HabitViewSet(viewsets.ModelViewSet):
                     'name': ua.achievement.name,
                     'points': ua.achievement.points,
                 } for ua in newly_earned],
+                'gamification': {
+                    'xpEarned': gamification_result.get('xp', 0),
+                    'coinsEarned': gamification_result.get('coins', 0),
+                    'multiplier': gamification_result.get('multiplier', 1.0),
+                    'allDoneBonus': gamification_result.get('all_done_bonus'),
+                    'milestones': milestone_results,
+                },
             })
     
+    # --- Skip Endpoint --------------------------------------------------------
+
     @action(detail=True, methods=['post'])
     def skip(self, request, pk=None):
         """
         POST /api/habits/{id}/skip/
-        Mark habit as skipped for today
+
+        Record the habit as *skipped* for today with an optional reason.
+        Skips increment the streak's ``total_skips`` counter but do **not**
+        break the streak.
         """
         habit = self.get_object()
         today = timezone.now().date()
         
+        # Upsert today's log as 'skipped'
         log, created = HabitLog.objects.update_or_create(
             habit=habit,
             date=today,
@@ -250,7 +377,7 @@ class HabitViewSet(viewsets.ModelViewSet):
             }
         )
         
-        # Update streak skip count
+        # Increment the skip counter on the streak record
         if hasattr(habit, 'streak'):
             habit.streak.total_skips += 1
             habit.streak.save()
@@ -260,16 +387,22 @@ class HabitViewSet(viewsets.ModelViewSet):
             'status': 'skipped',
         })
     
+    # --- History Endpoint -----------------------------------------------------
+
     @action(detail=True, methods=['get'])
     def history(self, request, pk=None):
         """
-        GET /api/habits/{id}/history/
-        Get habit completion history
+        GET /api/habits/{id}/history/?days=30
+
+        Return the completion history (log entries) for a single habit.
+        The ``days`` query parameter controls the lookback window
+        (default 30, max 365).
         """
         habit = self.get_object()
         
+        # Parse and clamp the lookback window
         days = int(request.query_params.get('days', 30))
-        days = min(days, 365)
+        days = min(days, 365)  # Hard cap at one year
         
         today = timezone.now().date()
         start_date = today - timedelta(days=days)
@@ -291,11 +424,16 @@ class HabitViewSet(viewsets.ModelViewSet):
             } for log in logs],
         })
     
+    # --- Per-Habit Statistics Endpoint ----------------------------------------
+
     @action(detail=True, methods=['get'])
     def stats(self, request, pk=None):
         """
         GET /api/habits/{id}/stats/
-        Get habit-specific statistics
+
+        Return per-habit statistics including streak data and consistency
+        percentages over 7, 30, and 90 day windows.  Delegates heavy
+        computation to :class:`~analytics.services.AnalyticsService`.
         """
         habit = self.get_object()
         
@@ -310,6 +448,7 @@ class HabitViewSet(viewsets.ModelViewSet):
                 'lastCompleted': streak.last_completed_date.isoformat() if streak.last_completed_date else None,
             }
         except Streak.DoesNotExist:
+            # No streak record yet — return zeroed-out defaults
             streak_data = {
                 'currentStreak': 0,
                 'bestStreak': 0,
@@ -319,7 +458,7 @@ class HabitViewSet(viewsets.ModelViewSet):
                 'lastCompleted': None,
             }
         
-        # Calculate consistency
+        # Delegate consistency calculations to the analytics service
         from analytics.services import AnalyticsService
         
         return Response({
@@ -335,13 +474,20 @@ class HabitViewSet(viewsets.ModelViewSet):
             'successRate': AnalyticsService.get_habit_success_rate(habit),
         })
     
+    # --- Categories Endpoint --------------------------------------------------
+
     @action(detail=False, methods=['get'])
     def categories(self, request):
         """
         GET /api/habits/categories/
-        Get available categories
+
+        Return two collections:
+            * ``defaultCategories`` — system-defined category list with icon
+              and colour values matching Flutter Material Icons.
+            * ``userCategories``    — distinct category names the user has
+              assigned to their own habits.
         """
-        # Default categories
+        # System-provided defaults (icon codes are Material Icons codePoints)
         default_categories = [
             {'name': 'Health', 'iconCode': 0xE87D, 'colorValue': 0xFF10B981},
             {'name': 'Fitness', 'iconCode': 0xEB43, 'colorValue': 0xFFEF4444},
@@ -355,7 +501,7 @@ class HabitViewSet(viewsets.ModelViewSet):
             {'name': 'Other', 'iconCode': 0xE8E0, 'colorValue': 0xFF6B7280},
         ]
         
-        # Get user's custom categories
+        # Gather the user’s own unique category names
         user_categories = self.get_queryset().values_list('category_name', flat=True).distinct()
         
         return Response({
@@ -364,24 +510,33 @@ class HabitViewSet(viewsets.ModelViewSet):
             'userCategories': list(user_categories),
         })
     
+    # --- Dashboard Stats Summary Endpoint ------------------------------------
+
     @action(detail=False, methods=['get'])
     def stats_summary(self, request):
         """
         GET /api/habits/stats_summary/
-        Get overall habit statistics
+
+        Aggregate dashboard-level statistics across all **active** habits:
+            * ``totalHabits``       — number of active habits.
+            * ``todayCompleted``    — how many are completed today.
+            * ``todayProgress``     — percentage complete for today.
+            * ``currentStreak``     — highest current streak among all habits.
+            * ``bestStreak``        — highest all-time streak among all habits.
+            * ``weeklyCompletions`` — total log entries this ISO week.
         """
         habits = self.get_queryset().filter(status='active')
         today = timezone.now().date()
         
         total_habits = habits.count()
         
-        # Today's progress
+        # Count today’s completed habits
         today_completed = 0
         for habit in habits:
             if HabitLog.objects.filter(habit=habit, date=today, status='completed').exists():
                 today_completed += 1
         
-        # Overall streak
+        # Find the highest streak values across all active habits
         max_streak = 0
         max_best_streak = 0
         for habit in habits:
@@ -391,8 +546,8 @@ class HabitViewSet(viewsets.ModelViewSet):
             except Streak.DoesNotExist:
                 pass
         
-        # This week's completions
-        week_start = today - timedelta(days=today.weekday())
+        # Tally this ISO-week’s completions
+        week_start = today - timedelta(days=today.weekday())  # Monday
         weekly_completions = HabitLog.objects.filter(
             habit__in=habits,
             date__range=[week_start, today],
@@ -409,31 +564,50 @@ class HabitViewSet(viewsets.ModelViewSet):
             'weeklyCompletions': weekly_completions,
         })
     
+    # --- Internal Streak Helpers ----------------------------------------------
+
     def _update_streak_on_complete(self, habit, completed_date):
-        """Update streak when habit is completed"""
+        """
+        Create-or-fetch the Streak record and delegate the update.
+
+        Uses ``get_or_create`` so that a Streak row is bootstrapped
+        automatically if one doesn't already exist.
+        """
         streak, created = Streak.objects.get_or_create(habit=habit)
         streak.update_streak(completed_date)
     
     def _update_streak_on_uncomplete(self, habit):
-        """Update streak when habit is uncompleted"""
+        """
+        Recalculate the streak after a completion is revoked.
+
+        Delegates to :meth:`AnalyticsService.calculate_current_streak` for
+        an authoritative re-count based on the log history.
+        """
         from analytics.services import AnalyticsService
         
         try:
             streak = habit.streak
-            # Recalculate current streak
+            # Full re-count from log history
             streak.current_streak = AnalyticsService.calculate_current_streak(habit)
             streak.total_completions = max(0, streak.total_completions - 1)
             streak.save()
         except Streak.DoesNotExist:
             pass
 
-    # ─── Habit Quality-of-Life Endpoints ──────────────────────────────────
+    # =========================================================================
+    # Habit Quality-of-Life Endpoints
+    # =========================================================================
+
+    # --- Pause Endpoint -------------------------------------------------------
 
     @action(detail=True, methods=['post'])
     def pause(self, request, pk=None):
         """
         POST /api/habits/{id}/pause/
-        Pause a habit with an optional reason
+
+        Transition a habit to the ``paused`` state with an optional
+        user-supplied reason.  While paused, the habit will not appear
+        on the *Today* screen and its streak will not degrade.
         """
         habit = self.get_object()
         reason = request.data.get('reason', '')
@@ -449,11 +623,16 @@ class HabitViewSet(viewsets.ModelViewSet):
             'pauseReason': reason,
         })
 
+    # --- Resume Endpoint ------------------------------------------------------
+
     @action(detail=True, methods=['post'])
     def resume(self, request, pk=None):
         """
         POST /api/habits/{id}/resume/
-        Resume a paused habit — optionally recover streak
+
+        Transition a paused habit back to ``active``.  If the client sends
+        ``{ "recoverStreak": true }`` the endpoint will grant a *grace
+        recovery*, restoring the streak to 1 rather than leaving it at 0.
         """
         habit = self.get_object()
         recover_streak = request.data.get('recoverStreak', False)
@@ -465,10 +644,11 @@ class HabitViewSet(viewsets.ModelViewSet):
         
         message = 'Habit resumed'
         
+        # Optionally grant a streak grace-recovery
         if recover_streak:
             try:
                 streak = habit.streak
-                # Give a grace recovery — set streak to 1 instead of 0
+                # Grace recovery: set streak to 1 so the user isn't penalised
                 if streak.current_streak == 0:
                     streak.current_streak = 1
                     streak.last_completed_date = timezone.now().date()
@@ -480,11 +660,16 @@ class HabitViewSet(viewsets.ModelViewSet):
         
         return Response({'success': True, 'message': message})
 
+    # --- Reorder Endpoint -----------------------------------------------------
+
     @action(detail=False, methods=['post'])
     def reorder(self, request):
         """
         POST /api/habits/reorder/
-        Reorder habits by sending a list of {id, sortOrder}
+
+        Bulk-update the ``sort_order`` of multiple habits in a single
+        request.  Expects ``{ "order": [{ "id": 1, "sortOrder": 0 }, ...] }``.
+        Only habits owned by the authenticated user are affected.
         """
         order_data = request.data.get('order', [])
         if not order_data:
@@ -493,6 +678,7 @@ class HabitViewSet(viewsets.ModelViewSet):
                 'message': 'order list is required'
             }, status=status.HTTP_400_BAD_REQUEST)
         
+        # Apply each sort-order update (scoped to the current user)
         for item in order_data:
             Habit.objects.filter(
                 id=item['id'], user=request.user
@@ -503,19 +689,25 @@ class HabitViewSet(viewsets.ModelViewSet):
             'message': f'Reordered {len(order_data)} habits'
         })
 
+    # --- Partial Completion Endpoint ------------------------------------------
+
     @action(detail=True, methods=['post'], url_path='partial-complete')
     def partial_complete(self, request, pk=None):
         """
         POST /api/habits/{id}/partial-complete/
-        Log a partial completion with a score (0.0 – 1.0)
+
+        Log a fractional completion for today.  The ``score`` field
+        (0.0–1.0) is clamped to valid bounds.  A partial-complete does
+        **not** count as a full completion for streak purposes.
         """
         habit = self.get_object()
         score = float(request.data.get('score', 0.5))
-        score = max(0.0, min(1.0, score))
+        score = max(0.0, min(1.0, score))  # Clamp to [0.0, 1.0]
         
         today = timezone.now().date()
         now = timezone.now()
         
+        # Upsert today's log with partial status and score
         log, created = HabitLog.objects.update_or_create(
             habit=habit,
             date=today,
@@ -534,26 +726,40 @@ class HabitViewSet(viewsets.ModelViewSet):
         })
 
 
+# =============================================================================
+# HabitLogViewSet — Completion Record Browsing
+# =============================================================================
+
+
 class HabitLogViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for habit logs (completion records)
+    Read / filter interface for :class:`~habits.models.HabitLog` entries.
+
+    Primarily used by the frontend’s calendar heat-map and history views.
+    All logs are scoped to the authenticated user.  Supports query-param
+    filters for ``habit``, ``status``, ``start_date``, and ``end_date``.
+    Results are capped at 100 rows to prevent unbounded payloads.
     """
+
     permission_classes = [permissions.IsAuthenticated]
     serializer_class = HabitLogSerializer
     
     def get_queryset(self):
+        """Return logs for habits owned by the authenticated user."""
         return HabitLog.objects.filter(
             habit__user=self.request.user
         ).order_by('-date')
     
     def list(self, request):
         """
-        GET /api/habit-logs/
-        List habit logs with filters
+        GET /api/habit-logs/?habit=<id>&status=<s>&start_date=<d>&end_date=<d>
+
+        Filterable listing of habit log entries.  All filters are optional;
+        when none are supplied the 100 most recent logs are returned.
         """
         queryset = self.get_queryset()
         
-        # Filters
+        # --- Optional query-param filters ------------------------------------
         habit_id = request.query_params.get('habit')
         status_filter = request.query_params.get('status')
         start_date = request.query_params.get('start_date')
@@ -568,7 +774,7 @@ class HabitLogViewSet(viewsets.ModelViewSet):
         if end_date:
             queryset = queryset.filter(date__lte=end_date)
         
-        logs = queryset[:100]  # Limit
+        logs = queryset[:100]  # Hard cap to prevent oversized responses
         serializer = self.get_serializer(logs, many=True)
         
         return Response({
