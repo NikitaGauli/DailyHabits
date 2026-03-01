@@ -83,5 +83,4 @@ Thumbs.db
 node_modules/
 
 # PowerShell setup scripts (contain credentials)
-setup_email.ps1
-setup_google_oauth.ps1
+setup_*.ps1
