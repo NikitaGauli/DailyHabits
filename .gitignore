@@ -1,0 +1,87 @@
+# ==============================================================================
+# DailyHabits — .gitignore
+# ==============================================================================
+
+# ─── Python / Django ──────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+*.egg-info/
+*.egg
+dist/
+build/
+*.whl
+
+# Virtual environment
+.venv/
+venv/
+env/
+
+# Django
+*.sqlite3
+*.sqlite3-journal
+db.sqlite3.bak
+Backend/DailyHabits/logs/*.log
+Backend/DailyHabits/staticfiles/
+Backend/DailyHabits/media/
+
+# Environment / secrets
+.env
+*.env.local
+*.env.production
+
+# ─── Flutter / Dart ───────────────────────────────────────────────────────────
+.dart_tool/
+.packages
+.pub/
+build/
+*.iml
+
+# Generated plugin registrants (auto-generated, platform-specific)
+Frontend/dailyhabits/linux/flutter/generated_plugin_registrant.cc
+Frontend/dailyhabits/linux/flutter/generated_plugins.cmake
+Frontend/dailyhabits/windows/flutter/generated_plugin_registrant.cc
+Frontend/dailyhabits/windows/flutter/generated_plugins.cmake
+Frontend/dailyhabits/macos/Flutter/GeneratedPluginRegistrant.swift
+
+# iOS
+Frontend/dailyhabits/ios/Pods/
+Frontend/dailyhabits/ios/.symlinks/
+Frontend/dailyhabits/ios/Flutter/Flutter.framework
+Frontend/dailyhabits/ios/Flutter/Flutter.podspec
+Frontend/dailyhabits/ios/Flutter/Generated.xcconfig
+Frontend/dailyhabits/ios/Flutter/app.flx
+Frontend/dailyhabits/ios/Flutter/flutter_export_environment.sh
+Frontend/dailyhabits/ios/ServiceDefinitions.json
+Frontend/dailyhabits/ios/Runner/GeneratedPluginRegistrant.*
+
+# Android
+Frontend/dailyhabits/android/.gradle/
+Frontend/dailyhabits/android/app/build/
+Frontend/dailyhabits/android/build/
+Frontend/dailyhabits/android/local.properties
+Frontend/dailyhabits/android/key.properties
+*.jks
+*.keystore
+
+# ─── IDE / Editor ─────────────────────────────────────────────────────────────
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ─── Misc ─────────────────────────────────────────────────────────────────────
+*.log
+*.bak
+*.tmp
+*.cache
+node_modules/
+
+# PowerShell setup scripts (contain credentials)
+setup_email.ps1
+setup_google_oauth.ps1
