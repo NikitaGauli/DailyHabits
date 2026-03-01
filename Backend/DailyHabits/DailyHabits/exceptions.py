@@ -1,6 +1,24 @@
 """
-Custom Exception Handler for DailyHabits API
-Provides consistent error response format
+Custom Exception Handler — DailyHabits API
+==========================================
+
+Provides a unified error-response envelope for every API exception so that the
+Flutter client can rely on a single, predictable JSON structure::
+
+    {
+        "success": false,
+        "message": "Human-readable summary",
+        "errors":  { "field": ["detail", ...] },
+        "status_code": 400
+    }
+
+The handler is wired into DRF via the ``EXCEPTION_HANDLER`` setting in
+``settings.py`` and transparently wraps both DRF-native exceptions (validation
+errors, permission denied, etc.) and unhandled Python exceptions (500).
+
+See Also:
+    - DRF exception handling:
+      https://www.django-rest-framework.org/api-guide/exceptions/
 """
 
 from rest_framework.views import exception_handler
@@ -8,18 +26,31 @@ from rest_framework.response import Response
 from rest_framework import status
 import logging
 
+# Module-level logger — messages are emitted under the "DailyHabits.exceptions" namespace.
 logger = logging.getLogger(__name__)
 
 
 def custom_exception_handler(exc, context):
     """
-    Custom exception handler that provides a consistent error response format.
+    Unified API exception handler.
+
+    Wraps every error — whether raised by DRF (validation, permission,
+    throttle) or an unhandled Python exception — into a consistent
+    JSON envelope that the Flutter client can parse uniformly.
+
+    Args:
+        exc:     The exception instance.
+        context: Dict containing 'view', 'args', 'kwargs', and 'request'.
+
+    Returns:
+        Response: A DRF Response with the standardised error body.
     """
-    # Call REST framework's default exception handler first
+    # Delegate to DRF’s default handler first; it returns None for
+    # non-DRF exceptions (i.e. unexpected 500 errors).
     response = exception_handler(exc, context)
 
     if response is not None:
-        # Customize the response format
+        # DRF recognised the exception — reformat into the unified envelope
         custom_response = {
             'success': False,
             'message': get_error_message(exc, response),
@@ -27,7 +58,7 @@ def custom_exception_handler(exc, context):
             'status_code': response.status_code,
         }
         
-        # Log the error
+        # Structured log entry with view context for easier debugging
         logger.error(
             f"API Error: {exc.__class__.__name__} - {custom_response['message']}",
             extra={
@@ -38,7 +69,7 @@ def custom_exception_handler(exc, context):
         
         response.data = custom_response
     else:
-        # Handle unexpected exceptions
+        # Unhandled exception — log full traceback and return a safe 500
         logger.exception(f"Unhandled exception: {exc}")
         response = Response(
             {
@@ -54,7 +85,19 @@ def custom_exception_handler(exc, context):
 
 
 def get_error_message(exc, response):
-    """Extract a human-readable error message from the exception."""
+    """
+    Extract a human-readable error summary from a DRF exception.
+
+    Priority: exc.detail (string → list[0] → first dict value) then
+    a lookup table of HTTP status codes.
+
+    Args:
+        exc:      The original exception.
+        response: The DRF Response produced by the default handler.
+
+    Returns:
+        str: A short, user-facing error message.
+    """
     if hasattr(exc, 'detail'):
         if isinstance(exc.detail, str):
             return exc.detail
@@ -67,7 +110,7 @@ def get_error_message(exc, response):
                     return f"{key}: {value[0]}"
                 return f"{key}: {value}"
     
-    # Default messages based on status code
+    # Fallback: map common HTTP status codes to generic messages
     status_messages = {
         400: 'Bad request',
         401: 'Authentication required',
@@ -82,7 +125,18 @@ def get_error_message(exc, response):
 
 
 def get_error_details(data):
-    """Format error details for response."""
+    """
+    Normalise DRF’s ``response.data`` into a dict for the error envelope.
+
+    DRF may produce a dict, list, or raw string depending on the
+    exception type.  This helper guarantees a dict is always returned.
+
+    Args:
+        data: The raw ``response.data`` from DRF’s default handler.
+
+    Returns:
+        dict: A dictionary suitable for the ``errors`` key.
+    """
     if isinstance(data, dict):
         return data
     elif isinstance(data, list):
