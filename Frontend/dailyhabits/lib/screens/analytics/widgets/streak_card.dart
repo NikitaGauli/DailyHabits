@@ -1,8 +1,26 @@
+// =============================================================================
+// File: streak_card.dart
+// Project: DailyHabits — Personal Habit Tracking Application
+// Description: A presentation widget that displays the user's current and best
+//              habit streaks side-by-side in a glassy card with fire and trophy
+//              icons for visual emphasis.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 
+/// A compact card that highlights the user's streak progress.
+///
+/// Displays two stats separated by a vertical divider:
+/// - **Current Streak** — consecutive days with at least one habit completed.
+/// - **Best Streak** — the user's all-time longest streak.
+///
+/// The current streak icon is slightly larger to draw the user's eye.
 class StreakCard extends StatelessWidget {
+  /// Consecutive days the user has completed habits without interruption.
   final int currentStreak;
+
+  /// All-time longest streak recorded for the user.
   final int bestStreak;
 
   const StreakCard({
@@ -55,6 +73,9 @@ class StreakCard extends StatelessWidget {
     );
   }
 
+  /// Renders a single streak metric column with an [icon], numeric [value],
+  /// and descriptive [label]. When [isMain] is `true`, the icon and value
+  /// are rendered at a larger scale for visual emphasis.
   Widget _buildStreakItem(
     BuildContext context, {
     required String label,

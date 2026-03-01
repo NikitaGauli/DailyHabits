@@ -1,3 +1,11 @@
+// =============================================================================
+// File: analytics_screen.dart
+// Project: DailyHabits — Personal Habit Tracking Application
+// Description: Main analytics dashboard screen that presents the user's habit
+//              tracking statistics, including consistency rings, streak cards,
+//              category breakdowns, weekly trend charts, and monthly heatmaps.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dailyhabits/screens/analytics/analytics_controller.dart';
@@ -7,6 +15,12 @@ import 'package:dailyhabits/screens/analytics/widgets/calendar_heatmap.dart';
 import 'package:dailyhabits/screens/analytics/widgets/trend_chart.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 
+/// Top-level entry point for the Analytics feature.
+///
+/// Sets up a [ChangeNotifierProvider] to inject an [AnalyticsController]
+/// into the widget subtree. This separation keeps the screen's public API
+/// clean while allowing the private [_AnalyticsView] to consume the
+/// controller via Provider.
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
 
@@ -19,6 +33,15 @@ class AnalyticsScreen extends StatelessWidget {
   }
 }
 
+/// Internal view widget that renders the full analytics dashboard.
+///
+/// Displays a vertically scrollable layout containing:
+/// - A header with title and subtitle
+/// - An overview card with consistency ring and today's stats
+/// - A streak card showing current and best streaks
+/// - A category breakdown with per-category progress bars
+/// - A weekly trend line chart
+/// - A navigable monthly heatmap calendar
 class _AnalyticsView extends StatelessWidget {
   const _AnalyticsView();
 
@@ -27,6 +50,7 @@ class _AnalyticsView extends StatelessWidget {
     final tc = context.colors;
     final controller = Provider.of<AnalyticsController>(context);
 
+    // Show a loading spinner until the initial dashboard payload arrives
     if (controller.isLoading && controller.dashboardData == null) {
       return Scaffold(
         backgroundColor: tc.bg,
@@ -36,7 +60,7 @@ class _AnalyticsView extends StatelessWidget {
       );
     }
 
-    // Extract summary data
+    // Extract and safely parse summary statistics from the dashboard payload
     final data = controller.dashboardData ?? {};
     final summary = data['summary'] ?? {};
     final currentStreak = _toInt(summary['currentStreak']);
@@ -148,8 +172,11 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
-  // ─── Header ───────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  HEADER
+  // ═══════════════════════════════════════════════════════════════════════════
 
+  /// Builds the screen title and descriptive subtitle.
   Widget _buildHeader(BuildContext context) {
     final tc = context.colors;
     return Column(
@@ -168,8 +195,13 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
-  // ─── Overview Card ────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  OVERVIEW CARD
+  // ═══════════════════════════════════════════════════════════════════════════
 
+  /// Builds the hero overview card containing a [ConsistencyRing], today's
+  /// completion fraction, weekly completions, average consistency, and a
+  /// dynamic status badge (On Fire / Solid / Building Up / Getting Started).
   Widget _buildOverviewCard(
     BuildContext context, {
     required double consistency,
@@ -265,6 +297,8 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
+  /// Renders a small inline stat row used inside the overview card
+  /// (e.g. weekly completions, average percentage).
   Widget _miniStat(BuildContext context,
       {required IconData icon, required String value, required String label}) {
     final tc = context.colors;
@@ -283,6 +317,7 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
+  /// Returns an appropriate status colour based on the user's completion [rate].
   Color _statusColor(double rate) {
     if (rate >= 80) return AppColors.success;
     if (rate >= 50) return AppColors.secondary;
@@ -290,6 +325,7 @@ class _AnalyticsView extends StatelessWidget {
     return AppColors.error;
   }
 
+  /// Returns a human-readable motivation label based on the completion [rate].
   String _statusLabel(double rate) {
     if (rate >= 80) return 'On Fire';
     if (rate >= 50) return 'Solid';
@@ -297,8 +333,12 @@ class _AnalyticsView extends StatelessWidget {
     return 'Getting Started';
   }
 
-  // ─── Category Breakdown ───────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  CATEGORY BREAKDOWN
+  // ═══════════════════════════════════════════════════════════════════════════
 
+  /// Renders a card listing each habit category with its habit count,
+  /// colour-coded dot, progress bar, and average consistency percentage.
   Widget _buildCategoryBreakdown(
     BuildContext context,
     List<Map<String, dynamic>> categories,
@@ -399,8 +439,11 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
-  // ─── Helpers ──────────────────────────────────────────────────────────────
+  // ═══════════════════════════════════════════════════════════════════════════
+  //  HELPERS
+  // ═══════════════════════════════════════════════════════════════════════════
 
+  /// Builds a bold section title used to separate dashboard segments.
   Widget _sectionTitle(BuildContext context, String title) {
     final tc = context.colors;
     return Text(
@@ -413,6 +456,8 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
+  /// Displays a subtle empty-state placeholder with an icon and [message]
+  /// when a data section has no content to show.
   Widget _buildEmptyCard(BuildContext context, String message) {
     final tc = context.colors;
     return Container(
@@ -433,6 +478,9 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
+  /// Safely casts a dynamic value to [int], defaulting to `0`.
   static int _toInt(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
+
+  /// Safely casts a dynamic value to [double], defaulting to `0.0`.
   static double _toDouble(dynamic v) => v is double ? v : (v is num ? v.toDouble() : 0.0);
 }

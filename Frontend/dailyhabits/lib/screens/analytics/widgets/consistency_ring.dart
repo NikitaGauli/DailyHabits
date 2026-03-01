@@ -1,12 +1,50 @@
+// =============================================================================
+// File: consistency_ring.dart
+// Project: DailyHabits — Personal Habit Tracking Application
+// Description: A reusable circular progress indicator that animates from zero
+//              to the provided consistency value. Used across the analytics
+//              dashboard to visually represent daily completion rates.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 
+/// An animated circular progress ring that displays a consistency percentage.
+///
+/// Renders two concentric [CircularProgressIndicator] widgets:
+/// - A **background ring** at full opacity representing the total.
+/// - A **foreground ring** animated via [TweenAnimationBuilder] to the target
+///   [consistency] value.
+///
+/// A default centre label shows the percentage and the word “Consistent”;
+/// callers may supply a custom [child] to override the label content.
+///
+/// Example usage:
+/// ```dart
+/// ConsistencyRing(
+///   consistency: 0.73,
+///   size: 120,
+///   color: Colors.green,
+/// )
+/// ```
 class ConsistencyRing extends StatelessWidget {
+  /// The completion ratio expressed as a value between `0.0` and `1.0`.
   final double consistency; // 0.0 to 1.0
+
+  /// Overall diameter of the ring widget in logical pixels.
   final double size;
+
+  /// Width of the circular stroke in logical pixels.
   final double strokeWidth;
+
+  /// Foreground ring colour; defaults to the theme’s accent colour.
   final Color? color;
+
+  /// Background ring colour; defaults to the theme’s surface colour.
   final Color? backgroundColor;
+
+  /// Optional widget rendered in the centre of the ring.
+  /// When `null`, a percentage label is shown by default.
   final Widget? child;
 
   const ConsistencyRing({
@@ -30,7 +68,7 @@ class ConsistencyRing extends StatelessWidget {
       child: Stack(
         alignment: Alignment.center,
         children: [
-          // Background Ring
+          // Background ring — always at full progress to show the track
           SizedBox(
             width: size,
             height: size,
@@ -41,7 +79,7 @@ class ConsistencyRing extends StatelessWidget {
               strokeCap: StrokeCap.round,
             ),
           ),
-          // Foreground Ring (Progress)
+          // Foreground ring — animates from 0 to [consistency] over 1.5 s
           SizedBox(
             width: size,
             height: size,
@@ -59,7 +97,7 @@ class ConsistencyRing extends StatelessWidget {
               },
             ),
           ),
-          // Content
+          // Centre content — either the provided child or a default label
           if (child != null)
             child!
           else

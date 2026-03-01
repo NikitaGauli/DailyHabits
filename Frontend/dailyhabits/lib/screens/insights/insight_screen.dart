@@ -1,9 +1,25 @@
+// =============================================================================
+// insight_screen.dart — Daily Insights & Recommendations
+// =============================================================================
+// Screen that presents the user with AI-powered daily insights, a
+// motivational quote, and actionable recommendations to improve their
+// habit-building journey.
+//
+// Data is loaded via [InsightController] which wraps [InsightService].
+// The screen supports pull-to-refresh and gracefully handles loading
+// and empty states.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'insight_controller.dart';
 import '../../models/insight.dart';
 
+/// Entry point widget for the Insights feature.
+///
+/// Wraps [_InsightView] inside its own [ChangeNotifierProvider] so that
+/// the controller is scoped to this screen's lifecycle.
 class InsightScreen extends StatelessWidget {
   const InsightScreen({super.key});
 
@@ -16,6 +32,13 @@ class InsightScreen extends StatelessWidget {
   }
 }
 
+/// Internal view that builds the insights UI.
+///
+/// Reads [InsightController] from the widget tree and renders:
+///  1. A page header with title and decorative icon.
+///  2. A motivational quote card (if available).
+///  3. A list of smart insight cards.
+///  4. A list of recommended-action cards.
 class _InsightView extends StatelessWidget {
   const _InsightView();
 
@@ -95,6 +118,12 @@ class _InsightView extends StatelessWidget {
     );
   }
 
+  // =========================================================================
+  //  HEADER
+  // =========================================================================
+
+  /// Builds the page header with the screen title, subtitle, and a
+  /// decorative sparkle icon.
   Widget _buildHeader(BuildContext context) {
     final tc = context.colors;
     return Column(
@@ -142,6 +171,11 @@ class _InsightView extends StatelessWidget {
     );
   }
 
+  // =========================================================================
+  //  MOTIVATIONAL QUOTE
+  // =========================================================================
+
+  /// Renders an elegant gradient card displaying the [quote] of the day.
   Widget _buildQuoteCard(BuildContext context, MotivationalQuote quote) {
     final tc = context.colors;
     return Container(
@@ -194,6 +228,11 @@ class _InsightView extends StatelessWidget {
     );
   }
 
+  // =========================================================================
+  //  INSIGHT CARD
+  // =========================================================================
+
+  /// Builds a card for a single [Insight] with a coloured icon and message.
   Widget _buildInsightCard(BuildContext context, Insight insight) {
     final tc = context.colors;
     return Container(
@@ -245,6 +284,12 @@ class _InsightView extends StatelessWidget {
     );
   }
 
+  // =========================================================================
+  //  RECOMMENDATION CARD
+  // =========================================================================
+
+  /// Renders a green-accented card for a single [Recommendation] with a
+  /// forward-arrow affordance.
   Widget _buildRecommendationCard(BuildContext context, Recommendation rec) {
     final tc = context.colors;
     return Container(
@@ -293,6 +338,11 @@ class _InsightView extends StatelessWidget {
     );
   }
 
+  // =========================================================================
+  //  EMPTY STATE
+  // =========================================================================
+
+  /// Generic empty-state placeholder shown when no data is available.
   Widget _buildEmptyState(BuildContext context, String message) {
     final tc = context.colors;
     return Container(

@@ -1,11 +1,34 @@
+// =============================================================================
+// notification_tile.dart — Notification Inbox Tile
+// =============================================================================
+// A dismissible list tile that renders a single [AppNotification] in the
+// notification inbox.
+//
+// Features:
+//  • Swipe-to-delete with a confirmation delegate.
+//  • Unread indicator dot and bold styling for new notifications.
+//  • Social avatar with a type-icon badge for community notifications.
+//  • Colour-coded group/habit tag chip.
+//  • Relative timestamp formatting.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:dailyhabits/models/notification_model.dart';
 import 'package:intl/intl.dart';
 
+/// A single notification row in the inbox list.
+///
+/// Delegates dismissal and tap handling to the parent via callbacks,
+/// keeping this widget purely presentational.
 class NotificationTile extends StatelessWidget {
+  /// The notification data to display.
   final AppNotification notification;
+
+  /// Called when the user taps the tile (navigation / mark-read).
   final VoidCallback? onTap;
+
+  /// Called when the user swipes to dismiss the tile.
   final VoidCallback? onDismiss;
 
   const NotificationTile({
@@ -15,6 +38,12 @@ class NotificationTile extends StatelessWidget {
     this.onDismiss,
   });
 
+  /// Formats a [DateTime] as a human-friendly relative string:
+  ///  • < 1 min  → "Just now"
+  ///  • < 1 hour → "Xm ago"
+  ///  • < 1 day  → "Xh ago"
+  ///  • < 7 days → "Xd ago"
+  ///  • ≥ 7 days → abbreviated date (e.g. "Jan 15")
   String _formatDate(DateTime date) {
     final now = DateTime.now();
     final difference = now.difference(date);
@@ -233,6 +262,7 @@ class NotificationTile extends StatelessWidget {
     );
   }
 
+  /// Maps a notification [type] string to its corresponding Material icon.
   IconData _typeIcon(String type) {
     switch (type) {
       case 'friend_request':

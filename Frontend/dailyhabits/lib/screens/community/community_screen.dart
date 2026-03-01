@@ -1,13 +1,29 @@
+// =============================================================================
+// File: community_screen.dart
+// Project: DailyHabits — Personal Habit Tracking Application
+// Description: The primary Community hub screen, organised as a five-tab layout
+//              powered by TabController. Tabs include: Feed, Friends, Groups,
+//              Invite (referral), and Joined Dashboard. Each tab is implemented
+//              as a private widget that delegates data operations to
+//              [CommunityController].
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:dailyhabits/widgets/common/glass_container.dart';
+import 'package:dailyhabits/screens/grow_together/grow_together_screen.dart';
 import 'community_controller.dart';
 import 'widgets/feed_post_card.dart';
 import 'widgets/friend_tiles.dart';
 import 'widgets/group_cards.dart';
+import 'widgets/shared_habit_card.dart';
 
+/// Top-level entry point for the Community feature.
+///
+/// Manages a [TabController] with five tabs and creates a
+/// [CommunityController] for shared state management across all tabs.
 class CommunityScreen extends StatefulWidget {
   const CommunityScreen({super.key});
 
@@ -15,10 +31,20 @@ class CommunityScreen extends StatefulWidget {
   State<CommunityScreen> createState() => _CommunityScreenState();
 }
 
+/// Stateful implementation of [CommunityScreen].
+///
+/// Uses [SingleTickerProviderStateMixin] to drive the [TabController].
+/// The controller and tab bar are initialised in [initState] and properly
+/// disposed in [dispose] to prevent memory leaks.
 class _CommunityScreenState extends State<CommunityScreen>
     with SingleTickerProviderStateMixin {
+  /// Controller for the five-tab navigation bar.
   late TabController _tab;
+
+  /// Shared state controller for all community data operations.
   late CommunityController _ctrl;
+
+  /// Guards against showing the loading spinner after the first paint.
   bool _didInit = false;
 
   @override
@@ -96,6 +122,16 @@ class _CommunityScreenState extends State<CommunityScreen>
                 ),
               ),
               IconButton(
+                tooltip: 'Grow Together',
+                onPressed: () => Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => const GrowTogetherScreen(),
+                  ),
+                ),
+                icon: Icon(Icons.group_work_rounded, color: AppColors.secondary),
+              ),
+              IconButton(
                 onPressed: () => ctrl.loadAll(),
                 icon: Icon(Icons.refresh_rounded, color: tc.textMuted),
               ),
@@ -118,8 +154,7 @@ class _CommunityScreenState extends State<CommunityScreen>
               labelStyle: AppTextStyles.button.copyWith(fontSize: 13),
               dividerColor: Colors.transparent,
               padding: EdgeInsets.zero,
-              labelPadding:
-                  const EdgeInsets.symmetric(horizontal: 16),
+              labelPadding: const EdgeInsets.symmetric(horizontal: 16),
               tabs: const [
                 Tab(text: 'Feed'),
                 Tab(text: 'Friends'),
@@ -136,10 +171,13 @@ class _CommunityScreenState extends State<CommunityScreen>
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 //  TAB 1 — FEED
-// ═════════════════════════════════════════════════════════════════════════════
+//  Displays a paginated list of community feed posts with like and comment
+//  interactions. Supports pull-to-refresh and infinite scroll pagination.
+// =============================================================================
 
+/// Social feed tab showing posts from friends and group members.
 class _FeedTab extends StatelessWidget {
   final CommunityController ctrl;
   const _FeedTab({required this.ctrl});
@@ -147,10 +185,18 @@ class _FeedTab extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final tc = context.colors;
+    final hasShared = ctrl.sharedHabits.isNotEmpty;
+    final hasFeed = ctrl.feedPosts.isNotEmpty;
+
     return RefreshIndicator(
-      onRefresh: () => ctrl.loadFeed(reset: true),
+      onRefresh: () async {
+        await Future.wait([
+          ctrl.loadFeed(reset: true),
+          ctrl.loadSharedHabits(),
+        ]);
+      },
       color: tc.primary,
-      child: ctrl.feedPosts.isEmpty
+      child: (!hasShared && !hasFeed)
           ? _emptyState(
               context,
               icon: Icons.dynamic_feed_outlined,
@@ -160,35 +206,77 @@ class _FeedTab extends StatelessWidget {
             )
           : ListView.builder(
               padding: const EdgeInsets.fromLTRB(16, 0, 16, 80),
-              itemCount: ctrl.feedPosts.length + 1,
+              // shared habits header + cards + feed posts + sentinel
+              itemCount:
+                  (hasShared ? ctrl.sharedHabits.length + 1 : 0) +
+                  ctrl.feedPosts.length +
+                  1,
               itemBuilder: (context, i) {
-                if (i == ctrl.feedPosts.length) {
-                  if (ctrl.hasMoreFeed) {
-                    ctrl.loadFeed();
-                    return Padding(
-                      padding: const EdgeInsets.all(20),
-                      child: Center(
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: tc.primary,
+                // ── Shared With You header ──
+                if (hasShared && i == 0) {
+                  return Padding(
+                    padding: const EdgeInsets.only(bottom: 12, top: 4),
+                    child: Row(
+                      children: [
+                        Icon(Icons.share_rounded, size: 18, color: tc.primary),
+                        const SizedBox(width: 6),
+                        Text(
+                          'Shared With You',
+                          style: AppTextStyles.h3.copyWith(
+                            color: tc.textPrimary,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                    );
-                  }
-                  return const SizedBox.shrink();
+                      ],
+                    ),
+                  );
                 }
-                final post = ctrl.feedPosts[i];
-                return FeedPostCard(
-                  post: post,
-                  onLike: () => ctrl.toggleLike(post['id']),
-                  onComment: () =>
-                      _showCommentSheet(context, post['id']),
-                );
+
+                // ── Shared habit cards ──
+                if (hasShared && i > 0 && i <= ctrl.sharedHabits.length) {
+                  final sh = ctrl.sharedHabits[i - 1];
+                  return SharedHabitCard(
+                    habit: sh,
+                    onReact: (type) => ctrl.reactToHabit(sh.habitId, type),
+                    onComment: () =>
+                        _showHabitCommentSheet(context, sh.habitId),
+                    onJoin: () => ctrl.joinHabit(sh.habitId),
+                  );
+                }
+
+                // ── Feed posts ──
+                final feedIdx =
+                    i - (hasShared ? ctrl.sharedHabits.length + 1 : 0);
+                if (feedIdx < ctrl.feedPosts.length) {
+                  final post = ctrl.feedPosts[feedIdx];
+                  return FeedPostCard(
+                    post: post,
+                    onLike: () => ctrl.toggleLike(post['id']),
+                    onComment: () => _showCommentSheet(context, post['id']),
+                  );
+                }
+
+                // ── Infinite scroll sentinel ──
+                if (ctrl.hasMoreFeed) {
+                  ctrl.loadFeed();
+                  return Padding(
+                    padding: const EdgeInsets.all(20),
+                    child: Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: tc.primary,
+                      ),
+                    ),
+                  );
+                }
+                return const SizedBox.shrink();
               },
             ),
     );
   }
 
+  /// Shows a modal bottom sheet for composing and submitting a comment
+  /// on the post identified by [postId].
   void _showCommentSheet(BuildContext context, int postId) {
     final tc = context.colors;
     final textCtrl = TextEditingController();
@@ -219,8 +307,10 @@ class _FeedTab extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 16),
-              Text('Add a comment',
-                  style: AppTextStyles.h3.copyWith(color: tc.textPrimary)),
+              Text(
+                'Add a comment',
+                style: AppTextStyles.h3.copyWith(color: tc.textPrimary),
+              ),
               const SizedBox(height: 16),
               TextField(
                 controller: textCtrl,
@@ -253,10 +343,98 @@ class _FeedTab extends StatelessWidget {
                     backgroundColor: tc.primary,
                     foregroundColor: Colors.white,
                     shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(14)),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
                   ),
-                  child: const Text('Post Comment',
-                      style: TextStyle(fontWeight: FontWeight.w600)),
+                  child: const Text(
+                    'Post Comment',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  /// Shows a bottom sheet for adding comments to a shared habit.
+  void _showHabitCommentSheet(BuildContext context, int habitId) {
+    final tc = context.colors;
+    final textCtrl = TextEditingController();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: tc.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: tc.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Add a comment',
+                style: AppTextStyles.h3.copyWith(color: tc.textPrimary),
+              ),
+              const SizedBox(height: 16),
+              TextField(
+                controller: textCtrl,
+                style: TextStyle(color: tc.textPrimary),
+                maxLines: 3,
+                maxLength: 300,
+                decoration: InputDecoration(
+                  hintText: 'Cheer them on\u2026',
+                  hintStyle: TextStyle(color: tc.textMuted),
+                  counterText: '',
+                  filled: true,
+                  fillColor: tc.surfaceVariant,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () {
+                    final text = textCtrl.text.trim();
+                    if (text.isNotEmpty) {
+                      Navigator.pop(ctx);
+                      ctrl.commentOnHabit(habitId, text);
+                    }
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: tc.primary,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Post Comment',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
                 ),
               ),
             ],
@@ -267,10 +445,14 @@ class _FeedTab extends StatelessWidget {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 //  TAB 2 — FRIENDS
-// ═════════════════════════════════════════════════════════════════════════════
+//  Provides user search, incoming friend request management, and a list of
+//  current friends with streak badges. Feedback snackbars surface controller
+//  action results.
+// =============================================================================
 
+/// Friends management tab with search, requests, and friend list.
 class _FriendsTab extends StatefulWidget {
   final CommunityController ctrl;
   const _FriendsTab({required this.ctrl});
@@ -289,6 +471,8 @@ class _FriendsTabState extends State<_FriendsTab> {
     super.dispose();
   }
 
+  /// Consumes the controller’s one-shot [actionMessage] and shows a
+  /// floating snackbar coloured by success or failure.
   void _showFeedback(BuildContext context, CommunityController ctrl) {
     if (ctrl.actionMessage != null) {
       final msg = ctrl.actionMessage!;
@@ -297,9 +481,7 @@ class _FriendsTabState extends State<_FriendsTab> {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(msg),
-          backgroundColor: ok
-              ? context.colors.success
-              : Colors.red.shade600,
+          backgroundColor: ok ? context.colors.success : Colors.red.shade600,
           behavior: SnackBarBehavior.floating,
           duration: const Duration(seconds: 2),
         ),
@@ -312,7 +494,7 @@ class _FriendsTabState extends State<_FriendsTab> {
     final tc = context.colors;
     final ctrl = widget.ctrl;
 
-    // Show feedback snackbar when actionMessage changes
+    // Post-frame callback ensures the snackbar fires after the current build
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _showFeedback(context, ctrl);
     });
@@ -339,8 +521,7 @@ class _FriendsTabState extends State<_FriendsTab> {
                       hintStyle: TextStyle(color: tc.textMuted),
                       border: InputBorder.none,
                       isDense: true,
-                      contentPadding:
-                          const EdgeInsets.symmetric(vertical: 10),
+                      contentPadding: const EdgeInsets.symmetric(vertical: 10),
                     ),
                     onChanged: (v) {
                       setState(() => _showSearch = v.length >= 2);
@@ -370,16 +551,20 @@ class _FriendsTabState extends State<_FriendsTab> {
               Padding(
                 padding: const EdgeInsets.all(20),
                 child: Center(
-                    child: CircularProgressIndicator(
-                        strokeWidth: 2, color: tc.primary)),
+                  child: CircularProgressIndicator(
+                    strokeWidth: 2,
+                    color: tc.primary,
+                  ),
+                ),
               )
             else if (ctrl.searchResults.isEmpty)
               Padding(
                 padding: const EdgeInsets.all(20),
-                child: Text('No users found',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.bodyMd
-                        .copyWith(color: tc.textMuted)),
+                child: Text(
+                  'No users found',
+                  textAlign: TextAlign.center,
+                  style: AppTextStyles.bodyMd.copyWith(color: tc.textMuted),
+                ),
               )
             else
               ...ctrl.searchResults.map(
@@ -421,8 +606,7 @@ class _FriendsTabState extends State<_FriendsTab> {
               context,
               icon: Icons.people_outline,
               title: 'No friends yet',
-              subtitle:
-                  'Search for people above to send friend requests.',
+              subtitle: 'Search for people above to send friend requests.',
             )
           else
             ...ctrl.friends.map(
@@ -438,16 +622,20 @@ class _FriendsTabState extends State<_FriendsTab> {
     );
   }
 
-  Widget _sectionLabel(BuildContext context, String title,
-      {String? trailing}) {
+  /// Renders a bold section label with an optional trailing count badge.
+  Widget _sectionLabel(BuildContext context, String title, {String? trailing}) {
     final tc = context.colors;
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Row(
         children: [
-          Text(title,
-              style: AppTextStyles.h3.copyWith(
-                  color: tc.textPrimary, fontSize: 16)),
+          Text(
+            title,
+            style: AppTextStyles.h3.copyWith(
+              color: tc.textPrimary,
+              fontSize: 16,
+            ),
+          ),
           if (trailing != null) ...[
             const SizedBox(width: 6),
             Container(
@@ -456,9 +644,13 @@ class _FriendsTabState extends State<_FriendsTab> {
                 color: tc.primary.withValues(alpha: 0.1),
                 borderRadius: BorderRadius.circular(8),
               ),
-              child: Text(trailing,
-                  style: AppTextStyles.caption.copyWith(
-                      color: tc.primary, fontWeight: FontWeight.w700)),
+              child: Text(
+                trailing,
+                style: AppTextStyles.caption.copyWith(
+                  color: tc.primary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
             ),
           ],
         ],
@@ -467,10 +659,13 @@ class _FriendsTabState extends State<_FriendsTab> {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 //  TAB 3 — GROUPS
-// ═════════════════════════════════════════════════════════════════════════════
+//  Lists the user's groups with action chips for creating or joining groups,
+//  and group cards with inline leave / invite-code-copy actions.
+// =============================================================================
 
+/// Groups management tab with create, join, and browse functionality.
 class _GroupsTab extends StatelessWidget {
   final CommunityController ctrl;
   const _GroupsTab({required this.ctrl});
@@ -509,29 +704,26 @@ class _GroupsTab extends StatelessWidget {
           const SizedBox(height: 18),
 
           // my groups
-          _sectionTitle(context, 'My Groups',
-              count: ctrl.myGroups.length),
+          _sectionTitle(context, 'My Groups', count: ctrl.myGroups.length),
           const SizedBox(height: 8),
           if (ctrl.myGroups.isEmpty)
             _emptyState(
               context,
               icon: Icons.group_outlined,
               title: 'No groups yet',
-              subtitle:
-                  'Create a group or join one using an invite code.',
+              subtitle: 'Create a group or join one using an invite code.',
             )
           else
             ...ctrl.myGroups.map(
-              (g) => GroupCard(
-                group: g,
-                onLeave: () => ctrl.leaveGroup(g['id']),
-              ),
+              (g) =>
+                  GroupCard(group: g, onLeave: () => ctrl.leaveGroup(g['id'])),
             ),
         ],
       ),
     );
   }
 
+  /// Builds a tappable icon-and-label chip used for primary group actions.
   Widget _actionChip(
     BuildContext context, {
     required IconData icon,
@@ -549,9 +741,13 @@ class _GroupsTab extends StatelessWidget {
             children: [
               Icon(icon, color: tc.primary, size: 26),
               const SizedBox(height: 8),
-              Text(label,
-                  style: AppTextStyles.button
-                      .copyWith(fontSize: 13, color: tc.textPrimary)),
+              Text(
+                label,
+                style: AppTextStyles.button.copyWith(
+                  fontSize: 13,
+                  color: tc.textPrimary,
+                ),
+              ),
             ],
           ),
         ),
@@ -559,13 +755,15 @@ class _GroupsTab extends StatelessWidget {
     );
   }
 
+  /// Renders a section heading with an optional numeric [count] badge.
   Widget _sectionTitle(BuildContext context, String title, {int? count}) {
     final tc = context.colors;
     return Row(
       children: [
-        Text(title,
-            style:
-                AppTextStyles.h3.copyWith(color: tc.textPrimary, fontSize: 16)),
+        Text(
+          title,
+          style: AppTextStyles.h3.copyWith(color: tc.textPrimary, fontSize: 16),
+        ),
         if (count != null && count > 0) ...[
           const SizedBox(width: 6),
           Container(
@@ -574,15 +772,21 @@ class _GroupsTab extends StatelessWidget {
               color: tc.primary.withValues(alpha: 0.1),
               borderRadius: BorderRadius.circular(8),
             ),
-            child: Text('$count',
-                style: AppTextStyles.caption
-                    .copyWith(color: tc.primary, fontWeight: FontWeight.w700)),
+            child: Text(
+              '$count',
+              style: AppTextStyles.caption.copyWith(
+                color: tc.primary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ),
         ],
       ],
     );
   }
 
+  /// Opens a dialog for creating a new group with a name and
+  /// optional description.
   void _showCreateDialog(BuildContext context) {
     final tc = context.colors;
     final nameCtrl = TextEditingController();
@@ -617,7 +821,8 @@ class _GroupsTab extends StatelessWidget {
               backgroundColor: tc.primary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text('Create'),
           ),
@@ -626,6 +831,7 @@ class _GroupsTab extends StatelessWidget {
     );
   }
 
+  /// Opens a dialog prompting for an invite code to join an existing group.
   void _showJoinDialog(BuildContext context) {
     final tc = context.colors;
     final codeCtrl = TextEditingController();
@@ -652,7 +858,8 @@ class _GroupsTab extends StatelessWidget {
               backgroundColor: tc.primary,
               foregroundColor: Colors.white,
               shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(12)),
+                borderRadius: BorderRadius.circular(12),
+              ),
             ),
             child: const Text('Join'),
           ),
@@ -661,8 +868,8 @@ class _GroupsTab extends StatelessWidget {
     );
   }
 
-  Widget _dialogField(
-      ThemeColors tc, TextEditingController ctrl, String hint) {
+  /// A themed text field used inside create / join dialogs.
+  Widget _dialogField(ThemeColors tc, TextEditingController ctrl, String hint) {
     return TextField(
       controller: ctrl,
       style: TextStyle(color: tc.textPrimary),
@@ -680,10 +887,14 @@ class _GroupsTab extends StatelessWidget {
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 //  TAB 4 — INVITE / REFERRAL
-// ═════════════════════════════════════════════════════════════════════════════
+//  Displays the user's referral code, invite stats, and a share button.
+//  Provides a hero card, stat counters, and clipboard copy functionality.
+// =============================================================================
 
+/// Referral / invite tab that surfaces the user’s unique referral code
+/// and tracks how many people they’ve invited and how many joined.
 class _InviteTab extends StatelessWidget {
   final CommunityController ctrl;
   const _InviteTab({required this.ctrl});
@@ -711,8 +922,11 @@ class _InviteTab extends StatelessWidget {
                     color: tc.primary.withValues(alpha: 0.1),
                     shape: BoxShape.circle,
                   ),
-                  child: Icon(Icons.card_giftcard_rounded,
-                      color: tc.primary, size: 30),
+                  child: Icon(
+                    Icons.card_giftcard_rounded,
+                    color: tc.primary,
+                    size: 30,
+                  ),
                 ),
                 const SizedBox(height: 16),
                 Text(
@@ -764,9 +978,12 @@ class _InviteTab extends StatelessWidget {
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Text('Your Referral Code',
-                            style: AppTextStyles.caption
-                                .copyWith(color: tc.textMuted)),
+                        Text(
+                          'Your Referral Code',
+                          style: AppTextStyles.caption.copyWith(
+                            color: tc.textMuted,
+                          ),
+                        ),
                         const SizedBox(height: 4),
                         Text(
                           ref['code'] ?? '—',
@@ -780,8 +997,7 @@ class _InviteTab extends StatelessWidget {
                   ),
                   IconButton(
                     onPressed: () {
-                      Clipboard.setData(
-                          ClipboardData(text: ref['code'] ?? ''));
+                      Clipboard.setData(ClipboardData(text: ref['code'] ?? ''));
                       ScaffoldMessenger.of(context).showSnackBar(
                         const SnackBar(content: Text('Code copied!')),
                       );
@@ -802,21 +1018,25 @@ class _InviteTab extends StatelessWidget {
               onPressed: () async {
                 await ctrl.loadReferral();
                 if (context.mounted && ctrl.referralData != null) {
-                  Clipboard.setData(ClipboardData(
-                      text: ctrl.referralData!['code'] ?? ''));
+                  Clipboard.setData(
+                    ClipboardData(text: ctrl.referralData!['code'] ?? ''),
+                  );
                   ScaffoldMessenger.of(context).showSnackBar(
                     const SnackBar(content: Text('Referral code copied!')),
                   );
                 }
               },
               icon: const Icon(Icons.share_rounded),
-              label: const Text('Share Referral Code',
-                  style: TextStyle(fontWeight: FontWeight.w600)),
+              label: const Text(
+                'Share Referral Code',
+                style: TextStyle(fontWeight: FontWeight.w600),
+              ),
               style: ElevatedButton.styleFrom(
                 backgroundColor: tc.primary,
                 foregroundColor: Colors.white,
                 shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14)),
+                  borderRadius: BorderRadius.circular(14),
+                ),
               ),
             ),
           ),
@@ -825,8 +1045,13 @@ class _InviteTab extends StatelessWidget {
     );
   }
 
+  /// Renders a centred stat card with an icon, large value, and caption.
   Widget _statCard(
-      BuildContext context, String value, String label, IconData icon) {
+    BuildContext context,
+    String value,
+    String label,
+    IconData icon,
+  ) {
     final tc = context.colors;
     return GlassContainer(
       padding: const EdgeInsets.all(16),
@@ -834,21 +1059,31 @@ class _InviteTab extends StatelessWidget {
         children: [
           Icon(icon, color: tc.primary, size: 26),
           const SizedBox(height: 10),
-          Text(value,
-              style: AppTextStyles.h2
-                  .copyWith(fontWeight: FontWeight.bold, color: tc.textPrimary)),
+          Text(
+            value,
+            style: AppTextStyles.h2.copyWith(
+              fontWeight: FontWeight.bold,
+              color: tc.textPrimary,
+            ),
+          ),
           const SizedBox(height: 4),
-          Text(label, style: AppTextStyles.caption.copyWith(color: tc.textMuted)),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(color: tc.textMuted),
+          ),
         ],
       ),
     );
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 //  TAB 5 — JOINED DASHBOARD
-// ═════════════════════════════════════════════════════════════════════════════
+//  Presents a summary view of the user's social footprint: friends count,
+//  groups joined, community streak, group details, and recent friend activity.
+// =============================================================================
 
+/// Joined dashboard tab showing community membership at a glance.
 class _JoinedTab extends StatelessWidget {
   final CommunityController ctrl;
   const _JoinedTab({required this.ctrl});
@@ -868,27 +1103,43 @@ class _JoinedTab extends StatelessWidget {
           Row(
             children: [
               Expanded(
-                  child: _heroStat(context, '${data?['totalFriends'] ?? 0}',
-                      'Friends', Icons.people_outline)),
+                child: _heroStat(
+                  context,
+                  '${data?['totalFriends'] ?? 0}',
+                  'Friends',
+                  Icons.people_outline,
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                  child: _heroStat(context, '${data?['totalGroups'] ?? 0}',
-                      'Groups', Icons.groups_outlined)),
+                child: _heroStat(
+                  context,
+                  '${data?['totalGroups'] ?? 0}',
+                  'Groups',
+                  Icons.groups_outlined,
+                ),
+              ),
               const SizedBox(width: 10),
               Expanded(
-                  child: _heroStat(
-                      context,
-                      '${data?['communityStreak'] ?? 0}',
-                      'Streak',
-                      Icons.local_fire_department)),
+                child: _heroStat(
+                  context,
+                  '${data?['communityStreak'] ?? 0}',
+                  'Streak',
+                  Icons.local_fire_department,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 22),
 
           // groups section
-          Text('Your Groups',
-              style: AppTextStyles.h3
-                  .copyWith(color: tc.textPrimary, fontSize: 16)),
+          Text(
+            'Your Groups',
+            style: AppTextStyles.h3.copyWith(
+              color: tc.textPrimary,
+              fontSize: 16,
+            ),
+          ),
           const SizedBox(height: 10),
           if ((data?['groups'] as List?)?.isEmpty ?? true)
             _emptyState(
@@ -898,65 +1149,75 @@ class _JoinedTab extends StatelessWidget {
               subtitle: 'Join a group in the Groups tab to see it here.',
             )
           else
-            ...(data!['groups'] as List).map(
-              (g) {
-                final group = g as Map<String, dynamic>;
-                return GlassContainer(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
-                  child: Row(
-                    children: [
-                      Container(
-                        width: 40,
-                        height: 40,
-                        decoration: BoxDecoration(
-                          color: tc.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Icon(Icons.group, color: tc.primary, size: 20),
+            ...(data!['groups'] as List).map((g) {
+              final group = g as Map<String, dynamic>;
+              return GlassContainer(
+                margin: const EdgeInsets.only(bottom: 10),
+                padding: const EdgeInsets.all(14),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 40,
+                      height: 40,
+                      decoration: BoxDecoration(
+                        color: tc.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(12),
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(group['name'] ?? '',
-                                style: AppTextStyles.bodyMd.copyWith(
-                                    fontWeight: FontWeight.w600,
-                                    color: tc.textPrimary)),
-                            Text(
-                              '${group['memberCount'] ?? 0} members',
-                              style: AppTextStyles.caption
-                                  .copyWith(color: tc.textMuted),
+                      child: Icon(Icons.group, color: tc.primary, size: 20),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            group['name'] ?? '',
+                            style: AppTextStyles.bodyMd.copyWith(
+                              fontWeight: FontWeight.w600,
+                              color: tc.textPrimary,
                             ),
-                          ],
+                          ),
+                          Text(
+                            '${group['memberCount'] ?? 0} members',
+                            style: AppTextStyles.caption.copyWith(
+                              color: tc.textMuted,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 10,
+                        vertical: 4,
+                      ),
+                      decoration: BoxDecoration(
+                        color: tc.primary.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Text(
+                        group['myRole'] ?? '',
+                        style: AppTextStyles.caption.copyWith(
+                          color: tc.primary,
+                          fontWeight: FontWeight.w600,
                         ),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: tc.primary.withValues(alpha: 0.1),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          group['myRole'] ?? '',
-                          style: AppTextStyles.caption.copyWith(
-                              color: tc.primary, fontWeight: FontWeight.w600),
-                        ),
-                      ),
-                    ],
-                  ),
-                );
-              },
-            ),
+                    ),
+                  ],
+                ),
+              );
+            }),
 
           const SizedBox(height: 22),
 
           // recent friend activity
-          Text('Friend Activity',
-              style: AppTextStyles.h3
-                  .copyWith(color: tc.textPrimary, fontSize: 16)),
+          Text(
+            'Friend Activity',
+            style: AppTextStyles.h3.copyWith(
+              color: tc.textPrimary,
+              fontSize: 16,
+            ),
+          ),
           const SizedBox(height: 10),
           if ((data?['recentFriendActivity'] as List?)?.isEmpty ?? true)
             _emptyState(
@@ -975,8 +1236,13 @@ class _JoinedTab extends StatelessWidget {
     );
   }
 
+  /// Builds a compact stat widget for the hero row (friends, groups, streak).
   Widget _heroStat(
-      BuildContext context, String value, String label, IconData icon) {
+    BuildContext context,
+    String value,
+    String label,
+    IconData icon,
+  ) {
     final tc = context.colors;
     return GlassContainer(
       padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 8),
@@ -984,24 +1250,32 @@ class _JoinedTab extends StatelessWidget {
         children: [
           Icon(icon, color: tc.primary, size: 24),
           const SizedBox(height: 8),
-          Text(value,
-              style: AppTextStyles.h3.copyWith(
-                  fontWeight: FontWeight.bold,
-                  color: tc.textPrimary,
-                  fontSize: 22)),
+          Text(
+            value,
+            style: AppTextStyles.h3.copyWith(
+              fontWeight: FontWeight.bold,
+              color: tc.textPrimary,
+              fontSize: 22,
+            ),
+          ),
           const SizedBox(height: 2),
-          Text(label,
-              style: AppTextStyles.caption.copyWith(color: tc.textMuted)),
+          Text(
+            label,
+            style: AppTextStyles.caption.copyWith(color: tc.textMuted),
+          ),
         ],
       ),
     );
   }
 }
 
-// ═════════════════════════════════════════════════════════════════════════════
+// =============================================================================
 //  SHARED HELPERS
-// ═════════════════════════════════════════════════════════════════════════════
+//  Utility widgets used across multiple community tabs.
+// =============================================================================
 
+/// Displays a centred empty-state placeholder with an icon, title, and
+/// subtitle. Used when a tab has no content to show.
 Widget _emptyState(
   BuildContext context, {
   required IconData icon,
@@ -1015,10 +1289,13 @@ Widget _emptyState(
       children: [
         Icon(icon, color: tc.border, size: 56),
         const SizedBox(height: 14),
-        Text(title,
-            style:
-                AppTextStyles.bodyLg.copyWith(
-                    color: tc.textSecondary, fontWeight: FontWeight.w600)),
+        Text(
+          title,
+          style: AppTextStyles.bodyLg.copyWith(
+            color: tc.textSecondary,
+            fontWeight: FontWeight.w600,
+          ),
+        ),
         const SizedBox(height: 6),
         Text(
           subtitle,

@@ -1,9 +1,22 @@
+// =============================================================================
+// File: achievements_screen.dart
+// Project: DailyHabits — Personal Habit Tracking Application
+// Description: Displays the user’s gamification profile: current level, XP
+//              progress bar, and a grid of badge-style achievement cards.
+//              Badges glow and gain colour when unlocked. Data is sourced from
+//              [AchievementsController] via Provider.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'achievements_controller.dart';
 import '../../models/achievement.dart';
 
+/// Top-level entry point for the Achievements feature.
+///
+/// Wraps the private [_AchievementsView] with a [ChangeNotifierProvider]
+/// that creates an [AchievementsController] for data management.
 class AchievementsScreen extends StatelessWidget {
   const AchievementsScreen({super.key});
 
@@ -16,6 +29,14 @@ class AchievementsScreen extends StatelessWidget {
   }
 }
 
+/// Internal scrollable view that displays the achievements UI.
+///
+/// Layout (top to bottom):
+/// 1. **Header** — title and descriptive subtitle.
+/// 2. **Level Card** — gradient card showing the user’s current level,
+///    level name, XP progress bar, and XP-to-next-level label.
+/// 3. **Badge Grid** — 3-column grid of [Achievement] items, each styled
+///    with a glow effect when unlocked.
 class _AchievementsView extends StatelessWidget {
   const _AchievementsView();
 
@@ -87,6 +108,7 @@ class _AchievementsView extends StatelessWidget {
     );
   }
 
+  /// Builds the page header with title and motivational subtitle.
   Widget _buildHeader(BuildContext context) {
     final tc = context.colors;
     return Column(
@@ -109,6 +131,8 @@ class _AchievementsView extends StatelessWidget {
     );
   }
 
+  /// Builds the gradient level card that shows the user’s current
+  /// [level], XP progress bar, and XP needed for the next level.
   Widget _buildLevelCard(BuildContext context, UserLevel level) {
     final tc = context.colors;
     return Container(
@@ -197,6 +221,10 @@ class _AchievementsView extends StatelessWidget {
     );
   }
 
+  /// Renders a single badge tile for an [achievement].
+  ///
+  /// Unlocked badges show a coloured circular icon with a glow shadow;
+  /// locked badges appear dimmed with a transparent background.
   Widget _buildAchievementItem(BuildContext context, Achievement achievement) {
     final tc = context.colors;
     final isUnlocked = achievement.isEarned;

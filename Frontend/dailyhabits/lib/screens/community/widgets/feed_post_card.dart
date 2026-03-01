@@ -1,11 +1,32 @@
+// =============================================================================
+// File: feed_post_card.dart
+// Project: DailyHabits — Personal Habit Tracking Application
+// Description: A glass-morphism card that renders a single community feed post.
+//              Displays author info with avatar, streak badge, post-type chip,
+//              content text with optional emoji, liked habit reference, and
+//              interactive like / comment action buttons.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:dailyhabits/widgets/common/glass_container.dart';
 
-/// Feed post card matching the home-page design system.
+/// A richly styled card for displaying a community feed post.
+///
+/// The card contains five visual sections (top → bottom):
+/// 1. **Author row** — Avatar initial, name, time-ago label, and streak badge.
+/// 2. **Type badge** — Colour-coded chip (completion, streak, achievement, etc.).
+/// 3. **Content** — Main text with an optional leading emoji.
+/// 4. **Habit reference** — Subtly highlighted linked habit title.
+/// 5. **Actions** — Like and comment buttons with live counts.
 class FeedPostCard extends StatelessWidget {
+  /// Raw post data map from the backend.
   final Map<String, dynamic> post;
+
+  /// Called when the user taps the like button.
   final VoidCallback? onLike;
+
+  /// Called when the user taps the comment button.
   final VoidCallback? onComment;
 
   const FeedPostCard({
@@ -171,6 +192,8 @@ class FeedPostCard extends StatelessWidget {
     );
   }
 
+  /// Renders a colour-coded badge indicating the post type (e.g.
+  /// “Completed”, “Streak”, “Achievement”).
   Widget _typeBadge(BuildContext context, String type) {
     final tc = context.colors;
     final Map<String, (IconData, Color, String)> map = {
@@ -204,6 +227,7 @@ class FeedPostCard extends StatelessWidget {
     );
   }
 
+  /// Builds a compact icon + label tap target for like / comment actions.
   Widget _actionBtn(
     BuildContext context, {
     required IconData icon,
@@ -233,6 +257,8 @@ class FeedPostCard extends StatelessWidget {
     );
   }
 
+  /// Converts an ISO 8601 timestamp string into a human-readable
+  /// relative label (e.g. “5m ago”, “3h ago”, “2d ago”, “1w ago”).
   String _timeAgo(String iso) {
     if (iso.isEmpty) return '';
     try {

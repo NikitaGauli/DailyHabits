@@ -1,12 +1,34 @@
+// =============================================================================
+// File: friend_tiles.dart
+// Project: DailyHabits — Personal Habit Tracking Application
+// Description: A collection of reusable tile widgets for the Friends tab.
+//              Includes tiles for accepted friends, user search results, and
+//              incoming friend requests, each with contextual action buttons.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:dailyhabits/widgets/common/glass_container.dart';
 
-/// Friend list-tile with streak badge and action button.
+// =============================================================================
+//  FRIEND TILE
+// =============================================================================
+
+/// A list tile representing an accepted friend.
+///
+/// Shows the friend’s avatar initial, name, current streak badge, and
+/// an optional trailing action button (defaults to a “remove friend” icon).
 class FriendTile extends StatelessWidget {
+  /// Raw friend data map containing at least `'name'` and `'currentStreak'`.
   final Map<String, dynamic> friend;
+
+  /// Callback fired when the trailing action button is tapped.
   final VoidCallback? onAction;
+
+  /// Icon displayed in the trailing action button.
   final IconData actionIcon;
+
+  /// Colour of the trailing action icon; defaults to the theme’s muted text.
   final Color? actionColor;
 
   const FriendTile({
@@ -81,9 +103,23 @@ class FriendTile extends StatelessWidget {
   }
 }
 
-/// Compact search result tile with relationship status.
+// =============================================================================
+//  USER SEARCH TILE
+// =============================================================================
+
+/// A compact tile for displaying a user search result.
+///
+/// Shows the user’s avatar initial and name on the left, and a relationship
+/// status widget on the right that adapts based on the current relationship:
+/// - `'accepted'` → "Friends" badge in green.
+/// - `'pending'` → "Pending" badge in warning amber.
+/// - `'incoming'` → "Respond" badge in primary colour.
+/// - `'none'` → An “Add” icon button.
 class UserSearchTile extends StatelessWidget {
+  /// Raw user data map containing at least `'name'` and `'relationship'`.
   final Map<String, dynamic> user;
+
+  /// Callback fired when the add-friend button is tapped (relationship = none).
   final VoidCallback? onAdd;
 
   const UserSearchTile({
@@ -131,6 +167,8 @@ class UserSearchTile extends StatelessWidget {
     );
   }
 
+  /// Returns a status badge or action button based on the [rel]ationship
+  /// string. Handles four states: accepted, pending, incoming, and none.
   Widget _statusWidget(BuildContext context, String rel) {
     final tc = context.colors;
     if (rel == 'accepted') {
@@ -190,10 +228,22 @@ class UserSearchTile extends StatelessWidget {
   }
 }
 
-/// Incoming friend request tile with accept/reject.
+// =============================================================================
+//  FRIEND REQUEST TILE
+// =============================================================================
+
+/// A tile for an incoming friend request with accept / reject buttons.
+///
+/// Displays the requester’s avatar and name, a “Wants to be your friend”
+/// subtitle, a reject (X) icon button, and a primary “Accept” elevated button.
 class FriendRequestTile extends StatelessWidget {
+  /// Raw request data map containing a nested `'user'` map with `'name'`.
   final Map<String, dynamic> request;
+
+  /// Callback fired when the user taps the Accept button.
   final VoidCallback? onAccept;
+
+  /// Callback fired when the user taps the Reject (X) button.
   final VoidCallback? onReject;
 
   const FriendRequestTile({

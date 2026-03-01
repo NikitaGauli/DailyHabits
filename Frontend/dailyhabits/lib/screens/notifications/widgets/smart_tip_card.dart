@@ -1,11 +1,34 @@
+// =============================================================================
+// smart_tip_card.dart — AI Smart Tip Card Widget
+// =============================================================================
+// A dismissible card that renders a single AI-generated [SmartTip].
+//
+// Features:
+//  • Swipe-to-dismiss to remove the tip.
+//  • "Helpful" (like) and "Save" action chips with optimistic toggle.
+//  • Colour-coded icon and optional habit-name chip.
+//  • Relative timestamp (e.g. "3h ago").
+//
+// Used inside the Smart Tips tab of [NotificationScreen].
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:dailyhabits/models/notification_model.dart';
 
+/// A card that presents a single [SmartTip] with like, save, and
+/// dismiss interactions.
 class SmartTipCard extends StatelessWidget {
+  /// The smart tip data to render.
   final SmartTip tip;
+
+  /// Called when the user taps the "Helpful" chip.
   final VoidCallback? onLike;
+
+  /// Called when the user taps the "Save" chip.
   final VoidCallback? onSave;
+
+  /// Called when the user swipes the card away.
   final VoidCallback? onDismiss;
 
   const SmartTipCard({
@@ -147,6 +170,8 @@ class SmartTipCard extends StatelessWidget {
     );
   }
 
+  /// Formats a [DateTime] as a concise relative age string
+  /// (e.g. "3d ago", "5h ago", "Just now").
   String _formatAge(DateTime date) {
     final diff = DateTime.now().difference(date);
     if (diff.inDays > 0) return '${diff.inDays}d ago';
@@ -156,11 +181,24 @@ class SmartTipCard extends StatelessWidget {
   }
 }
 
+/// A small, tappable chip used for like / save actions.
+///
+/// Displays an [icon] and [label], toggling visual styling between
+/// active (filled colour) and inactive (muted) states.
 class _ActionChip extends StatelessWidget {
+  /// The leading icon for the chip.
   final IconData icon;
+
+  /// Display label next to the icon.
   final String label;
+
+  /// Whether this chip is currently in the "active" state.
   final bool isActive;
+
+  /// Colour used when [isActive] is `true`.
   final Color activeColor;
+
+  /// Tap callback.
   final VoidCallback? onTap;
 
   const _ActionChip({

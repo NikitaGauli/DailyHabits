@@ -1,12 +1,34 @@
+// =============================================================================
+// File: group_cards.dart
+// Project: DailyHabits — Personal Habit Tracking Application
+// Description: Reusable card widgets for the Groups tab. Includes a full-detail
+//              GroupCard for groups the user belongs to (with leave / copy-code
+//              menu) and a lightweight DiscoverGroupCard for public groups the
+//              user can join.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:dailyhabits/widgets/common/glass_container.dart';
 
-/// Group card for the Groups tab.
+// =============================================================================
+//  GROUP CARD (Joined)
+// =============================================================================
+
+/// A detailed card for a group the user has already joined.
+///
+/// Displays the group name, member count / capacity, the user’s role,
+/// a progress bar representing capacity fill, and a popup menu with
+/// “Copy Invite Code” and “Leave Group” actions.
 class GroupCard extends StatelessWidget {
+  /// Raw group data map from the backend.
   final Map<String, dynamic> group;
+
+  /// Callback fired when the group card body is tapped.
   final VoidCallback? onTap;
+
+  /// Callback fired when “Leave Group” is selected from the popup menu.
   final VoidCallback? onLeave;
 
   const GroupCard({
@@ -129,9 +151,19 @@ class GroupCard extends StatelessWidget {
   }
 }
 
-/// Discover-group card with a Join button.
+// =============================================================================
+//  DISCOVER GROUP CARD
+// =============================================================================
+
+/// A compact card for discoverable public groups with a Join button.
+///
+/// Shows the group name, description (if any), and member count, alongside
+/// a primary “Join” button that triggers [onJoin] with the group’s invite code.
 class DiscoverGroupCard extends StatelessWidget {
+  /// Raw group data map from the backend.
   final Map<String, dynamic> group;
+
+  /// Async callback fired with the group’s invite code when Join is tapped.
   final Future<void> Function(String code)? onJoin;
 
   const DiscoverGroupCard({
