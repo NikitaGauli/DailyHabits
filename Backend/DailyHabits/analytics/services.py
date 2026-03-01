@@ -1,6 +1,24 @@
 """
-Analytics Service
-Core business logic for analytics calculations
+Analytics Service — analytics/services.py
+
+Contains the core business logic for every analytics calculation used across
+the DailyHabits application. All methods are stateless ``@staticmethod``’s
+grouped inside ``AnalyticsService`` so that views, management commands, and
+celery tasks can invoke them without instantiating the class.
+
+Key responsibilities:
+    • Streak calculation (current & best) for individual habits.
+    • Consistency and success-rate metrics over configurable time windows.
+    • Charting data: weekly bar-chart payloads and monthly calendar heatmaps.
+    • Dashboard summary aggregation across all of a user’s active habits.
+    • Category-level and difficulty-level breakdowns for the insights screen.
+    • Week-over-week comparison and long-term monthly trend analysis.
+    • Year-level productivity heatmap for the annual overview.
+
+Design note:
+    Calculations query the ``HabitLog`` table directly rather than reading
+    from the cached summary models, keeping the service as the single source
+    of truth. The cached models are populated *from* this service.
 """
 
 from datetime import datetime, timedelta
@@ -11,21 +29,43 @@ from calendar import monthrange
 from habits.models import Habit, HabitLog, Streak
 
 
+# =============================================================================
+# Analytics Service
+# =============================================================================
+
 class AnalyticsService:
     """
-    Service class for all analytics calculations
+    Stateless service class encapsulating all analytics computations.
+
+    Every public method is a ``@staticmethod`` that accepts the minimum
+    required arguments (a ``Habit`` or ``User`` instance, plus optional
+    parameters) and returns plain Python data structures ready for JSON
+    serialisation.
     """
     
+    # =================================================================
+    # Streak Calculations
+    # =================================================================
+
     @staticmethod
     def calculate_current_streak(habit):
         """
-        Calculate consecutive days completed from today backwards
+        Calculate the current consecutive-day streak for a habit.
+
+        Walks backwards from today (or yesterday, if today is not yet
+        completed) counting unbroken 'completed' log entries.
+
+        Args:
+            habit: A ``Habit`` model instance.
+
+        Returns:
+            int: Number of consecutive completed days (0 if none).
         """
         today = timezone.now().date()
         streak = 0
         check_date = today
-        
-        # Check if today is completed, if not start from yesterday
+
+        # If today’s habit is not yet completed, start counting from yesterday
         today_log = HabitLog.objects.filter(
             habit=habit, 
             date=today, 
@@ -34,7 +74,8 @@ class AnalyticsService:
         
         if not today_log:
             check_date = today - timedelta(days=1)
-        
+
+        # Walk backwards day-by-day until a non-completed day is found
         while True:
             log_exists = HabitLog.objects.filter(
                 habit=habit, 
@@ -46,14 +87,23 @@ class AnalyticsService:
                 streak += 1
                 check_date -= timedelta(days=1)
             else:
-                break
+                break  # Streak is broken
         
         return streak
     
     @staticmethod
     def calculate_best_streak(habit):
         """
-        Calculate the longest consecutive days streak ever achieved
+        Find the longest consecutive-day completion streak ever achieved.
+
+        Loads all 'completed' dates in chronological order and performs a
+        single pass to detect the maximum run of consecutive calendar days.
+
+        Args:
+            habit: A ``Habit`` model instance.
+
+        Returns:
+            int: Length of the best streak (0 if no completions).
         """
         logs = HabitLog.objects.filter(
             habit=habit, 
@@ -64,28 +114,45 @@ class AnalyticsService:
             return 0
         
         logs = list(logs)
-        best = current = 1
-        
+        best = current = 1  # At least one log exists → minimum streak of 1
+
         for i in range(1, len(logs)):
             if (logs[i] - logs[i-1]).days == 1:
+                # Consecutive day — extend the current streak
                 current += 1
                 best = max(best, current)
             else:
+                # Gap detected — reset current streak
                 current = 1
         
         return best
     
+    # =================================================================
+    # Consistency & Success-Rate Metrics
+    # =================================================================
+
     @staticmethod
     def get_consistency_percentage(habit, days=30):
         """
-        Calculate consistency rate over a specified period
+        Calculate the consistency rate over a rolling window.
+
+        Consistency = (completed days / eligible days) × 100. The window is
+        clamped to the habit’s ``start_date`` so days before the habit existed
+        are excluded from the denominator.
+
+        Args:
+            habit: A ``Habit`` model instance.
+            days:  Look-back window size in days (default 30).
+
+        Returns:
+            float: Consistency % rounded to one decimal place.
         """
         today = timezone.now().date()
         start_date = today - timedelta(days=days-1)
-        
-        # Get habit start date to avoid counting days before habit existed
+
+        # Clamp the window start to the habit’s creation date
         actual_start = max(start_date, habit.start_date) if habit.start_date else start_date
-        actual_days = (today - actual_start).days + 1
+        actual_days = (today - actual_start).days + 1  # Inclusive day count
         
         if actual_days <= 0:
             return 0.0
@@ -101,7 +168,17 @@ class AnalyticsService:
     @staticmethod
     def get_habit_success_rate(habit):
         """
-        Calculate overall success rate (completed / total tracked days)
+        Calculate the overall success rate for a habit.
+
+        Success rate = (completed logs / total logs) × 100. Unlike consistency,
+        this metric counts only days that have a log entry (completed, skipped,
+        or missed) rather than every calendar day.
+
+        Args:
+            habit: A ``Habit`` model instance.
+
+        Returns:
+            float: Success rate % rounded to one decimal place.
         """
         total_logs = HabitLog.objects.filter(habit=habit).count()
         if total_logs == 0:
@@ -110,14 +187,31 @@ class AnalyticsService:
         completed = HabitLog.objects.filter(habit=habit, status='completed').count()
         return round((completed / total_logs) * 100, 1)
     
+    # =================================================================
+    # Chart / Visualisation Data
+    # =================================================================
+
     @staticmethod
     def get_weekly_data(user, weeks_back=0):
         """
-        Get weekly completion data for charts
+        Build a 7-element list of daily completion data for the bar chart.
+
+        Each element contains the day name, date, completed count, total
+        active habits, completion rate, and whether the day is today.
+
+        Args:
+            user:       The requesting ``User`` instance.
+            weeks_back: Number of weeks to step back from the current week
+                        (0 = current week).
+
+        Returns:
+            list[dict]: Seven dicts keyed Mon–Sun.
         """
         today = timezone.now().date()
+        # Calculate the Monday that starts the target week
         week_start = today - timedelta(days=today.weekday()) - timedelta(weeks=weeks_back)
-        
+
+        # Total active (non-deleted) habits for the user
         active_habits = Habit.objects.filter(
             user=user, 
             status='active', 
@@ -126,7 +220,8 @@ class AnalyticsService:
         
         data = []
         day_names = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
-        
+
+        # Iterate over each day of the week (Mon=0 … Sun=6)
         for i in range(7):
             day = week_start + timedelta(days=i)
             completed = HabitLog.objects.filter(
@@ -153,7 +248,19 @@ class AnalyticsService:
     @staticmethod
     def get_monthly_heatmap(user, year, month):
         """
-        Get calendar heatmap data for a month
+        Generate calendar-heatmap data for a given month.
+
+        Returns one dict per calendar day with an ``intensity`` value
+        (0.0–1.0) representing the fraction of active habits completed.
+        The frontend uses this to colour-code the calendar cells.
+
+        Args:
+            user:  The requesting ``User`` instance.
+            year:  Calendar year (e.g. 2026).
+            month: Calendar month (1–12).
+
+        Returns:
+            list[dict]: One entry per day of the month.
         """
         days_in_month = monthrange(year, month)[1]
         today = timezone.now().date()
@@ -167,7 +274,8 @@ class AnalyticsService:
         heatmap = []
         for day in range(1, days_in_month + 1):
             date = datetime(year, month, day).date()
-            
+
+            # Count completed logs for this specific date
             completed = HabitLog.objects.filter(
                 habit__user=user,
                 habit__status='active',
@@ -175,7 +283,8 @@ class AnalyticsService:
                 date=date,
                 status='completed'
             ).count()
-            
+
+            # Normalise to a 0.0–1.0 intensity score for the heatmap colour
             intensity = (completed / active_habits) if active_habits > 0 else 0
             
             heatmap.append({
@@ -192,10 +301,24 @@ class AnalyticsService:
         
         return heatmap
     
+    # =================================================================
+    # Per-Habit Statistics
+    # =================================================================
+
     @staticmethod
     def get_habit_stats(user):
         """
-        Get detailed stats for each habit
+        Compile detailed statistics for every active habit belonging to a user.
+
+        Returns a list sorted by 30-day consistency (most consistent first),
+        making it easy for the frontend to render a ranked habits table.
+
+        Args:
+            user: The requesting ``User`` instance.
+
+        Returns:
+            list[dict]: One dict per active habit with streaks, consistency,
+                        and success-rate fields.
         """
         habits = Habit.objects.filter(
             user=user, 
@@ -205,6 +328,7 @@ class AnalyticsService:
         
         stats = []
         for habit in habits:
+            # Calculate streaks for this habit
             current_streak = AnalyticsService.calculate_current_streak(habit)
             best_streak = AnalyticsService.calculate_best_streak(habit)
             
@@ -221,15 +345,31 @@ class AnalyticsService:
                 'successRate': AnalyticsService.get_habit_success_rate(habit),
             })
         
-        # Sort by consistency (most consistent first)
+        # Sort by 30-day consistency descending (best performers first)
         stats.sort(key=lambda x: x['consistency30d'], reverse=True)
         
         return stats
     
+    # =================================================================
+    # Dashboard Summary
+    # =================================================================
+
     @staticmethod
     def get_dashboard_summary(user):
         """
-        Get overall dashboard summary
+        Build the high-level summary payload for the analytics dashboard.
+
+        Aggregates today’s completion count, the user’s best and current
+        streak, average 30-day consistency, and this week’s completion
+        total into a single dict.
+
+        Args:
+            user: The requesting ``User`` instance.
+
+        Returns:
+            dict: Keys include ``totalHabits``, ``todayCompleted``,
+                  ``todayRate``, ``currentStreak``, ``bestStreak``,
+                  ``avgConsistency``, and ``weeklyCompletions``.
         """
         habits = Habit.objects.filter(
             user=user, 
@@ -239,8 +379,8 @@ class AnalyticsService:
         
         total_habits = habits.count()
         today = timezone.now().date()
-        
-        # Today's completion
+
+        # ── Today’s completion count ──────────────────────────────────────
         today_completed = HabitLog.objects.filter(
             habit__user=user,
             habit__status='active',
@@ -248,27 +388,28 @@ class AnalyticsService:
             date=today,
             status='completed'
         ).count()
-        
-        # Calculate overall stats
+
+        # ── Streak & consistency aggregation across all habits ───────────
         overall_current_streak = 0
         overall_best_streak = 0
         total_consistency = 0
-        
+
         for habit in habits:
             try:
-                streak = habit.streak
+                streak = habit.streak  # type: ignore[attr-defined]  # OneToOne reverse relation
                 overall_current_streak = max(overall_current_streak, streak.current_streak)
                 overall_best_streak = max(overall_best_streak, streak.best_streak)
             except Streak.DoesNotExist:
-                pass
+                pass  # Habit has no streak record yet
             
             total_consistency += AnalyticsService.get_consistency_percentage(habit, 30)
-        
+
+        # Derive averages (guard against division by zero)
         avg_consistency = (total_consistency / total_habits) if total_habits > 0 else 0
         today_rate = (today_completed / total_habits * 100) if total_habits > 0 else 0
-        
-        # This week's total completions
-        week_start = today - timedelta(days=today.weekday())
+
+        # ── This week’s completion total ──────────────────────────────────
+        week_start = today - timedelta(days=today.weekday())  # Monday
         weekly_completions = HabitLog.objects.filter(
             habit__user=user,
             habit__status='active',
@@ -287,10 +428,23 @@ class AnalyticsService:
             'weeklyCompletions': weekly_completions,
         }
     
+    # =================================================================
+    # Category Breakdown
+    # =================================================================
+
     @staticmethod
     def get_category_breakdown(user):
         """
-        Get completion rates by category
+        Group the user’s active habits by category and compute the average
+        30-day consistency for each group.
+
+        Args:
+            user: The requesting ``User`` instance.
+
+        Returns:
+            list[dict]: Sorted by ``avgConsistency`` descending. Each dict
+                        contains ``category``, ``habitCount``,
+                        ``avgConsistency``, and ``habits`` (list of titles).
         """
         habits = Habit.objects.filter(
             user=user, 
@@ -300,7 +454,7 @@ class AnalyticsService:
         
         categories = {}
         for habit in habits:
-            cat = habit.category_name or 'General'
+            cat = habit.category_name or 'General'  # Fallback for uncategorised habits
             if cat not in categories:
                 categories[cat] = {
                     'name': cat,
@@ -314,6 +468,7 @@ class AnalyticsService:
             categories[cat]['totalConsistency'] += consistency
             categories[cat]['count'] += 1
         
+        # Build the response list and sort by average consistency
         result = []
         for cat, data in categories.items():
             avg = data['totalConsistency'] / data['count'] if data['count'] > 0 else 0
@@ -327,10 +482,22 @@ class AnalyticsService:
         result.sort(key=lambda x: x['avgConsistency'], reverse=True)
         return result
     
+    # =================================================================
+    # Completion Trend
+    # =================================================================
+
     @staticmethod
     def get_completion_trend(user, days=30):
         """
-        Get daily completion trend for trend line chart
+        Generate a day-by-day completion trend for a line/area chart.
+
+        Args:
+            user: The requesting ``User`` instance.
+            days: Number of past days to include (default 30).
+
+        Returns:
+            list[dict]: One entry per day with ``date``, ``completed``,
+                        ``total``, and ``rate``.
         """
         today = timezone.now().date()
         start_date = today - timedelta(days=days-1)
@@ -363,22 +530,36 @@ class AnalyticsService:
         
         return trend
 
-    # ─── ENHANCED ANALYTICS ────────────────────────────────────────────
+    # =================================================================
+    # Enhanced Analytics — Week-over-Week Comparison
+    # =================================================================
 
     @staticmethod
     def get_weekly_comparison(user):
         """
-        Compare this week vs last week for weekly insights
+        Compare the current week’s performance against the previous week.
+
+        Returns daily averages for both weeks, a percentage change, and a
+        trend label ('improving', 'stable', or 'declining') based on a
+        ±5 % threshold.
+
+        Args:
+            user: The requesting ``User`` instance.
+
+        Returns:
+            dict: ``thisWeek``, ``lastWeek`` sub-dicts, ``changePercent``,
+                  and ``trend``.
         """
         today = timezone.now().date()
-        this_week_start = today - timedelta(days=today.weekday())
+        this_week_start = today - timedelta(days=today.weekday())  # Monday
         last_week_start = this_week_start - timedelta(days=7)
-        last_week_end = this_week_start - timedelta(days=1)
+        last_week_end = this_week_start - timedelta(days=1)  # Sunday
         
         habits = Habit.objects.filter(
             user=user, status='active', is_deleted=False
         )
         
+        # Count completions for each week
         this_week = HabitLog.objects.filter(
             habit__in=habits, date__range=[this_week_start, today], status='completed'
         ).count()
@@ -386,16 +567,19 @@ class AnalyticsService:
         last_week = HabitLog.objects.filter(
             habit__in=habits, date__range=[last_week_start, last_week_end], status='completed'
         ).count()
-        
+
+        # Compute daily averages (this week may be partial)
         days_this_week = (today - this_week_start).days + 1
         this_week_daily = round(this_week / days_this_week, 1) if days_this_week > 0 else 0
-        last_week_daily = round(last_week / 7, 1)
-        
+        last_week_daily = round(last_week / 7, 1)  # Last week is always 7 days
+
+        # Percentage change relative to last week’s daily average
         if last_week > 0:
             change_pct = round(((this_week_daily - last_week_daily) / last_week_daily) * 100, 1)
         else:
             change_pct = 100.0 if this_week > 0 else 0.0
-        
+
+        # Classify trend using a ±5 % dead-band to avoid noise
         trend = 'improving' if change_pct > 5 else ('declining' if change_pct < -5 else 'stable')
         
         return {
@@ -413,11 +597,25 @@ class AnalyticsService:
             'trend': trend,
         }
 
+    # =================================================================
+    # Enhanced Analytics — Difficulty Scoring
+    # =================================================================
+
     @staticmethod
     def get_difficulty_scores(user):
         """
-        Calculate difficulty scores based on completion rates
-        Easy habits (high completion) get lower scores; hard ones get higher.
+        Assign a difficulty score (1–5) to each active habit based on its
+        recent completion rates.
+
+        Lower consistency → higher difficulty. The labels range from
+        'Easy' (score 1, ≥80 %) to 'Very Hard' (score 5, <20 %).
+
+        Args:
+            user: The requesting ``User`` instance.
+
+        Returns:
+            list[dict]: Sorted hardest-first, each with ``difficulty``,
+                        ``difficultyLabel``, and consistency metrics.
         """
         habits = Habit.objects.filter(
             user=user, status='active', is_deleted=False
@@ -427,8 +625,8 @@ class AnalyticsService:
         for habit in habits:
             consistency_7d = AnalyticsService.get_consistency_percentage(habit, 7)
             consistency_30d = AnalyticsService.get_consistency_percentage(habit, 30)
-            
-            # Inverse relation: lower consistency = higher difficulty
+
+            # Inverse mapping: lower consistency → higher difficulty tier
             avg_consistency = (consistency_7d + consistency_30d) / 2
             if avg_consistency >= 80:
                 difficulty = 1  # Easy
@@ -456,10 +654,24 @@ class AnalyticsService:
         scores.sort(key=lambda x: x['difficulty'], reverse=True)
         return scores
 
+    # =================================================================
+    # Enhanced Analytics — Long-Term Monthly Trends
+    # =================================================================
+
     @staticmethod
     def get_long_term_trends(user, months=6):
         """
-        Long-term consistency trends — monthly averages over N months
+        Compute monthly completion rates over the last N months for a
+        long-term trend line.
+
+        Args:
+            user:   The requesting ``User`` instance.
+            months: Number of past months to include (default 6, max 12).
+
+        Returns:
+            list[dict]: Chronological list with ``month`` label,
+                        ``completions``, ``possibleCompletions``, and
+                        ``completionRate``.
         """
         today = timezone.now().date()
         habits = Habit.objects.filter(
@@ -471,7 +683,7 @@ class AnalyticsService:
         
         trends = []
         for i in range(months - 1, -1, -1):
-            # Approximate month start/end
+            # Calculate approximate month boundaries (walk backwards)
             month_end = today.replace(day=1) - timedelta(days=1) if i > 0 else today
             if i > 0:
                 for _ in range(i - 1):
@@ -502,10 +714,24 @@ class AnalyticsService:
         
         return trends
 
+    # =================================================================
+    # Enhanced Analytics — Category Success Ratio
+    # =================================================================
+
     @staticmethod
     def get_category_success_ratio(user):
         """
-        Success ratio per category — completed vs total logs
+        Calculate the success ratio per habit category.
+
+        Success ratio = (completed logs / total logs) × 100 for every
+        habit in the category, giving a more granular view than the
+        consistency-based ``get_category_breakdown``.
+
+        Args:
+            user: The requesting ``User`` instance.
+
+        Returns:
+            list[dict]: Sorted by ``successRatio`` descending.
         """
         habits = Habit.objects.filter(
             user=user, status='active', is_deleted=False
@@ -513,7 +739,7 @@ class AnalyticsService:
         
         categories = {}
         for habit in habits:
-            cat = habit.category_name or 'General'
+            cat = habit.category_name or 'General'  # Default for uncategorised
             if cat not in categories:
                 categories[cat] = {
                     'completed': 0,
@@ -521,12 +747,14 @@ class AnalyticsService:
                     'habits': 0,
                 }
             
+            # Accumulate completed and total log counts for this category
             comp = HabitLog.objects.filter(habit=habit, status='completed').count()
             total = HabitLog.objects.filter(habit=habit).count()
             categories[cat]['completed'] += comp
             categories[cat]['total'] += total
             categories[cat]['habits'] += 1
         
+        # Build sorted result list
         result = []
         for cat, data in categories.items():
             ratio = round((data['completed'] / data['total'] * 100) if data['total'] > 0 else 0, 1)
@@ -541,10 +769,26 @@ class AnalyticsService:
         result.sort(key=lambda x: x['successRatio'], reverse=True)
         return result
 
+    # =================================================================
+    # Enhanced Analytics — Year-Level Productivity Heatmap
+    # =================================================================
+
     @staticmethod
     def get_productivity_heatmap(user, year):
         """
-        Year-level productivity heatmap — one intensity value per day
+        Generate a full-year productivity heatmap (GitHub-contribution style).
+
+        Each calendar day from Jan 1 to today (or Dec 31 if viewing a past
+        year) receives an ``intensity`` value [0.0, 1.0] representing the
+        fraction of active habits completed.
+
+        Args:
+            user: The requesting ``User`` instance.
+            year: Calendar year to generate the heatmap for.
+
+        Returns:
+            list[dict]: One entry per day with ``date``, ``intensity``,
+                        and ``completed``.
         """
         from calendar import monthrange
         habits = Habit.objects.filter(
@@ -555,16 +799,18 @@ class AnalyticsService:
             return []
         
         today = timezone.now().date()
-        start = timezone.datetime(year, 1, 1).date()
-        end = min(timezone.datetime(year, 12, 31).date(), today)
-        
+        start = timezone.datetime(year, 1, 1).date()  # Jan 1
+        end = min(timezone.datetime(year, 12, 31).date(), today)  # Cap at today
+
         heatmap = []
         current = start
         while current <= end:
+            # Count completed logs for this day across all active habits
             completed = HabitLog.objects.filter(
                 habit__in=habits, date=current, status='completed'
             ).count()
-            
+
+            # Clamp intensity to [0.0, 1.0]
             intensity = round(min(1.0, completed / habit_count), 2)
             heatmap.append({
                 'date': current.isoformat(),

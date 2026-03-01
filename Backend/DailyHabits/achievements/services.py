@@ -1,6 +1,23 @@
 """
-Achievement Service
-Business logic for achievements, badges, and levels
+Achievements Service Layer
+===========================
+Business logic for the gamification / achievements subsystem.
+
+This module encapsulates all domain logic related to achievements, badge
+awards, XP progression, and level management.  It is the single source
+of truth for:
+
+* Seeding the canonical set of default achievements.
+* Evaluating whether a user has earned new achievements after an action.
+* Awarding XP and processing level-up transitions.
+* Composing response payloads consumed by the ``AchievementViewSet``.
+
+Design Notes:
+    - All public methods are either ``@classmethod`` or ``@staticmethod``
+      so the service can be used without instantiation.
+    - Achievement evaluation is intentionally eager: every active
+      achievement is checked on each call.  For high-traffic
+      deployments consider a queued / event-driven approach.
 """
 
 from django.db.models import Sum
@@ -10,14 +27,31 @@ from .models import Achievement, UserAchievement, UserLevel, Reward, UserReward
 from habits.models import Habit, HabitLog, Streak
 
 
+# =============================================================================
+# Achievement Service
+# =============================================================================
+
+
 class AchievementService:
     """
-    Service for achievement-related operations
+    Centralised service for achievement evaluation, awarding, and querying.
+
+    This class groups all achievement-related business logic and should be
+    the only entry-point used by views and other services to interact with
+    the achievements subsystem.
     """
+
+    # =========================================================================
+    # Default Achievement Definitions
+    # =========================================================================
+    # The ACHIEVEMENT_DEFINITIONS list serves as the seed data for the
+    # ``Achievement`` table.  Call ``seed_achievements()`` to upsert them.
+    # Each entry maps to one ``Achievement`` model row.
     
-    # Achievement definitions - can be seeded to database
     ACHIEVEMENT_DEFINITIONS = [
-        # Streak achievements
+        # -----------------------------------------------------------------
+        # Streak-based achievements  (earned per-habit)
+        # -----------------------------------------------------------------
         {
             'name': 'First Step',
             'description': 'Complete a habit for the first time',
@@ -88,8 +122,10 @@ class AchievementService:
             'icon': 0xE838,
             'color': 0xFFFF4500,  # Orange Red
         },
-        
-        # Completion achievements
+
+        # -----------------------------------------------------------------
+        # Completion-based achievements  (earned once, across all habits)
+        # -----------------------------------------------------------------
         {
             'name': 'Getting Started',
             'description': 'Complete 10 habits total',
@@ -140,8 +176,10 @@ class AchievementService:
             'icon': 0xE876,
             'color': 0xFFFF4500,
         },
-        
-        # Consistency achievements
+
+        # -----------------------------------------------------------------
+        # Consistency-based achievements  (percentage thresholds)
+        # -----------------------------------------------------------------
         {
             'name': 'Consistent Starter',
             'description': 'Achieve 70% consistency for a week',
@@ -172,8 +210,10 @@ class AchievementService:
             'icon': 0xE8E5,
             'color': 0xFFFFD700,
         },
-        
-        # Special achievements
+
+        # -----------------------------------------------------------------
+        # Special / Contextual achievements  (time-of-day, comebacks, etc.)
+        # -----------------------------------------------------------------
         {
             'name': 'Early Bird',
             'description': 'Complete a habit before 6 AM',
@@ -235,14 +275,25 @@ class AchievementService:
             'color': 0xFFC0C0C0,
         },
     ]
-    
+
+    # =========================================================================
+    # Database Seeding
+    # =========================================================================
+
     @classmethod
     def seed_achievements(cls):
         """
-        Seed default achievements to database
+        Seed (upsert) default achievements into the database.
+
+        Uses ``get_or_create`` keyed on ``name`` so the method is
+        idempotent — safe to run on every deployment or migration.
+
+        Returns:
+            int: Number of *newly created* achievement rows.
         """
         created_count = 0
         for defn in cls.ACHIEVEMENT_DEFINITIONS:
+            # get_or_create ensures idempotency: existing rows are untouched
             achievement, created = Achievement.objects.get_or_create(
                 name=defn['name'],
                 defaults={
@@ -259,20 +310,39 @@ class AchievementService:
                 created_count += 1
         
         return created_count
-    
+
+    # =========================================================================
+    # Achievement Evaluation & Awarding
+    # =========================================================================
+
     @staticmethod
     def check_and_award_achievements(user, habit=None, trigger_type=None):
         """
-        Check and award any earned achievements
-        Returns list of newly earned achievements
+        Evaluate all active achievements and award any that the user has earned.
+
+        This is the primary entry-point called after a habit completion,
+        streak update, or manual check.  It iterates every active
+        achievement definition and tests the user’s current stats against
+        the required thresholds.
+
+        Args:
+            user:         The ``User`` instance to evaluate.
+            habit:        (Optional) The specific ``Habit`` that triggered
+                          the check — required for streak-type achievements.
+            trigger_type: (Optional) A string hint for the event type
+                          (currently unused; reserved for future filtering).
+
+        Returns:
+            list[UserAchievement]: Newly created ``UserAchievement`` rows.
         """
         newly_earned = []
-        
-        # Get all active achievements
+
+        # Fetch all active achievement definitions once
         achievements = Achievement.objects.filter(is_active=True)
-        
+
         for achievement in achievements:
-            # Skip if already earned (for non-habit-specific ones)
+            # ----- Skip already-earned achievements --------------------------
+            # Non-streak achievements are global (one per user).
             if achievement.achievement_type != 'streak':
                 if UserAchievement.objects.filter(
                     user=user, 
@@ -280,18 +350,19 @@ class AchievementService:
                 ).exists():
                     continue
             else:
-                # For streak achievements, check per habit
+                # Streak achievements are per-habit; check the specific habit
                 if habit and UserAchievement.objects.filter(
                     user=user, 
                     achievement=achievement,
                     habit=habit
                 ).exists():
                     continue
-            
-            # Check if earned
+
+            # ----- Evaluate whether the achievement is earned ----------------
             earned = False
             earned_value = 0
-            
+
+            # Streak check: compare habit’s current streak to target
             if achievement.achievement_type == 'streak' and habit:
                 try:
                     streak = habit.streak
@@ -300,7 +371,8 @@ class AchievementService:
                         earned_value = streak.current_streak
                 except Streak.DoesNotExist:
                     pass
-            
+
+            # Completion check: total completed habit-logs across all habits
             elif achievement.achievement_type == 'completion':
                 total = HabitLog.objects.filter(
                     habit__user=user, 
@@ -309,7 +381,8 @@ class AchievementService:
                 if total >= achievement.target_value:
                     earned = True
                     earned_value = total
-            
+
+            # Milestone check: number of habits the user has created
             elif achievement.achievement_type == 'milestone':
                 # Habit creation milestones
                 habit_count = Habit.objects.filter(
@@ -320,42 +393,76 @@ class AchievementService:
                     earned = True
                     earned_value = habit_count
             
+            # ----- Award the achievement if earned --------------------------
             if earned:
+                # Persist the earned achievement
                 user_achievement = UserAchievement.objects.create(
                     user=user,
                     achievement=achievement,
+                    # Link the habit only for streak-type badges
                     habit=habit if achievement.achievement_type == 'streak' else None,
                     earned_value=earned_value,
                 )
                 newly_earned.append(user_achievement)
-                
-                # Add XP
+
+                # Grant XP for the newly earned achievement
                 AchievementService.add_user_xp(user, achievement.points)
-        
+
         return newly_earned
-    
+
+    # =========================================================================
+    # XP & Level Helpers
+    # =========================================================================
+
     @staticmethod
     def add_user_xp(user, amount):
         """
-        Add XP to user and handle level ups
+        Add XP to a user and trigger level-ups if applicable.
+
+        Lazily creates the ``UserLevel`` row on first call via
+        ``get_or_create``.
+
+        Args:
+            user:   The ``User`` instance.
+            amount: XP points to add.
+
+        Returns:
+            bool: True if the user leveled up at least once.
         """
         level, created = UserLevel.objects.get_or_create(user=user)
         leveled_up = level.add_xp(amount)
         return leveled_up
-    
+
+    # =========================================================================
+    # Query / Read Helpers (used by views)
+    # =========================================================================
+
     @staticmethod
     def get_user_achievements(user):
         """
-        Get user's achievement summary
+        Build a complete list of achievements with the user’s earned status.
+
+        Returns all visible (non-hidden) active achievements, each
+        annotated with whether the given user has earned it and, if so,
+        the timestamp and metric value at the time of award.
+
+        Args:
+            user: The ``User`` instance.
+
+        Returns:
+            list[dict]: Achievement dicts suitable for JSON serialisation.
         """
+        # Pre-fetch all earned achievements in a single query
         earned = UserAchievement.objects.filter(user=user).select_related('achievement')
         all_achievements = Achievement.objects.filter(is_active=True, is_hidden=False)
-        
+
+        # Build a set of earned IDs for O(1) lookups
         earned_ids = set(ua.achievement_id for ua in earned)
         
         achievements_data = []
         for achievement in all_achievements:
             is_earned = achievement.id in earned_ids
+            # Locate the matching UserAchievement (if any) from the prefetched set
             user_achievement = next(
                 (ua for ua in earned if ua.achievement_id == achievement.id), 
                 None
@@ -377,11 +484,19 @@ class AchievementService:
             })
         
         return achievements_data
-    
+
     @staticmethod
     def get_user_level(user):
         """
-        Get user's level information
+        Retrieve the user’s current level and XP information.
+
+        Lazily creates the ``UserLevel`` row if it does not exist.
+
+        Args:
+            user: The ``User`` instance.
+
+        Returns:
+            dict: Level information payload for JSON serialisation.
         """
         level, created = UserLevel.objects.get_or_create(user=user)
         
@@ -398,7 +513,14 @@ class AchievementService:
     @staticmethod
     def get_recent_achievements(user, limit=5):
         """
-        Get recently earned achievements
+        Fetch the most recently earned achievements for a user.
+
+        Args:
+            user:  The ``User`` instance.
+            limit: Maximum number of achievements to return (default 5).
+
+        Returns:
+            list[dict]: Recent achievement dicts ordered newest-first.
         """
         recent = UserAchievement.objects.filter(
             user=user

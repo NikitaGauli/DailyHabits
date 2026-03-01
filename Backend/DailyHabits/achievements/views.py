@@ -1,6 +1,20 @@
 """
-Achievement Views
-API endpoints for achievements, badges, and levels
+Achievements Views
+===================
+Django REST Framework ViewSet exposing the achievements API.
+
+This module provides the HTTP layer for the gamification subsystem,
+delegating all business logic to ``AchievementService``.  All endpoints
+require authentication and return JSON payloads consumed by the
+Flutter front-end.
+
+Endpoints (all under ``/api/achievements/``):
+    GET  /                  — List all achievements with earned status.
+    GET  /level/            — Current user level and XP details.
+    GET  /recent/           — Most recently earned achievements.
+    GET  /summary/          — Combined level + stats + recent achievements.
+    POST /check/            — Manually trigger an achievement evaluation.
+    POST /seed/             — Seed default achievements (staff only).
 """
 
 from rest_framework import viewsets, status
@@ -12,27 +26,42 @@ from .services import AchievementService
 from .models import Achievement, UserAchievement
 
 
+# =============================================================================
+# Achievement ViewSet
+# =============================================================================
+
+
 class AchievementViewSet(viewsets.ViewSet):
     """
-    ViewSet for achievement endpoints
+    ViewSet for achievement-related API endpoints.
+
+    Uses a plain ``ViewSet`` (not ``ModelViewSet``) because responses
+    are assembled by the service layer rather than simple CRUD on a
+    single model.
     """
     permission_classes = [IsAuthenticated]
-    
+
+    # -----------------------------------------------------------------
+    # List all achievements
+    # -----------------------------------------------------------------
+
     def list(self, request):
         """
         GET /api/achievements/
-        List all achievements with user's earned status
+
+        Return every active achievement annotated with the authenticated
+        user’s earned status, grouped by achievement type.
         """
         achievements = AchievementService.get_user_achievements(request.user)
-        
-        # Group by type
+
+        # Group achievements by type for sectioned UI display
         grouped = {}
         for achievement in achievements:
             type_key = achievement['type']
             if type_key not in grouped:
                 grouped[type_key] = []
             grouped[type_key].append(achievement)
-        
+
         return Response({
             'success': True,
             'achievements': achievements,
@@ -40,12 +69,18 @@ class AchievementViewSet(viewsets.ViewSet):
             'totalCount': len(achievements),
             'earnedCount': sum(1 for a in achievements if a['isEarned']),
         })
-    
+
+    # -----------------------------------------------------------------
+    # User level & XP
+    # -----------------------------------------------------------------
+
     @action(detail=False, methods=['get'])
     def level(self, request):
         """
         GET /api/achievements/level/
-        Get user's current level and XP
+
+        Return the authenticated user’s current level, XP balance,
+        and progress percentage toward the next level.
         """
         level_info = AchievementService.get_user_level(request.user)
         
@@ -53,36 +88,50 @@ class AchievementViewSet(viewsets.ViewSet):
             'success': True,
             **level_info
         })
-    
+
+    # -----------------------------------------------------------------
+    # Recently earned achievements
+    # -----------------------------------------------------------------
+
     @action(detail=False, methods=['get'])
     def recent(self, request):
         """
-        GET /api/achievements/recent/
-        Get recently earned achievements
+        GET /api/achievements/recent/?limit=5
+
+        Return the most recently earned achievements for the user.
+        Accepts an optional ``limit`` query parameter (max 20).
         """
         limit = int(request.query_params.get('limit', 5))
-        limit = min(limit, 20)  # Cap at 20
-        
+        limit = min(limit, 20)  # Cap at 20 to prevent excessive payloads
+
         recent = AchievementService.get_recent_achievements(request.user, limit)
-        
+
         return Response({
             'success': True,
             'achievements': recent
         })
-    
+
+    # -----------------------------------------------------------------
+    # Achievement summary (dashboard widget)
+    # -----------------------------------------------------------------
+
     @action(detail=False, methods=['get'])
     def summary(self, request):
         """
         GET /api/achievements/summary/
-        Get achievement summary with level info
+
+        Composite endpoint returning level info, aggregate stats broken
+        down by rarity tier, and the three most recent achievements.
+        Designed for the dashboard summary card.
         """
         user = request.user
-        
+
+        # Fetch all data needed for the summary composite payload
         achievements = AchievementService.get_user_achievements(user)
         level_info = AchievementService.get_user_level(user)
         recent = AchievementService.get_recent_achievements(user, 3)
-        
-        # Stats by rarity
+
+        # Compute per-rarity earned/total breakdown
         rarity_stats = {}
         for a in achievements:
             rarity = a['rarity']
@@ -91,7 +140,7 @@ class AchievementViewSet(viewsets.ViewSet):
             rarity_stats[rarity]['total'] += 1
             if a['isEarned']:
                 rarity_stats[rarity]['earned'] += 1
-        
+
         return Response({
             'success': True,
             'level': level_info,
@@ -102,12 +151,19 @@ class AchievementViewSet(viewsets.ViewSet):
             },
             'recentAchievements': recent,
         })
-    
+
+    # -----------------------------------------------------------------
+    # Manual achievement check
+    # -----------------------------------------------------------------
+
     @action(detail=False, methods=['post'])
     def check(self, request):
         """
         POST /api/achievements/check/
-        Manually trigger achievement check
+
+        Manually trigger an achievement evaluation for the authenticated
+        user.  Returns any newly earned achievements.  Useful for
+        catch-up checks or front-end refresh flows.
         """
         newly_earned = AchievementService.check_and_award_achievements(request.user)
         
@@ -124,12 +180,19 @@ class AchievementViewSet(viewsets.ViewSet):
             } for ua in newly_earned],
             'count': len(newly_earned),
         })
-    
+
+    # -----------------------------------------------------------------
+    # Seed default achievements (admin only)
+    # -----------------------------------------------------------------
+
     @action(detail=False, methods=['post'])
     def seed(self, request):
         """
         POST /api/achievements/seed/
-        Seed default achievements (admin only)
+
+        Populate the ``Achievement`` table with the default set of
+        badge definitions.  Restricted to staff users.  Idempotent —
+        existing achievements are not duplicated.
         """
         if not request.user.is_staff:
             return Response({

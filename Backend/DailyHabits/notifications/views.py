@@ -1,6 +1,24 @@
 """
-Notifications Views
-API endpoints for Inbox, Smart Tips, notification settings, and reminders
+Notification Views
+==================
+Django REST Framework ViewSets that expose the notification subsystem
+over a RESTful JSON API.
+
+ViewSets
+--------
+- :class:`NotificationViewSet`            — CRUD + list / mark-read / snooze
+  for inbox notifications.
+- :class:`SmartTipViewSet`                — List / like / save / dismiss
+  personalized smart tips.
+- :class:`NotificationSettingsViewSet`    — Retrieve and update per-user
+  notification preferences.
+- :class:`HabitReminderViewSet`           — CRUD + toggle for per-habit
+  recurring reminders.
+- :class:`NotificationIntelligenceViewSet`— Read-only analytics endpoints
+  (smart suggestions, streak risks, weekly nudges, delivery gate).
+
+All endpoints require authentication via ``IsAuthenticated`` and scope
+querysets to the requesting user to enforce data isolation.
 """
 
 from rest_framework import viewsets, status
@@ -18,20 +36,40 @@ from .serializers import (
 )
 
 
+# =============================================================================
+#  NOTIFICATION VIEWSET — inbox notification management
+# =============================================================================
+
 class NotificationViewSet(viewsets.ModelViewSet):
     """
-    ViewSet for Inbox notification management
+    Full CRUD ViewSet for user inbox notifications.
+
+    Standard DRF endpoints:
+        - ``GET    /notifications/``             — List (with optional filters).
+        - ``GET    /notifications/{id}/``        — Retrieve single notification.
+        - ``DELETE /notifications/{id}/``        — Delete a notification.
+
+    Custom actions:
+        - ``GET    /notifications/unread/``      — Unread count.
+        - ``POST   /notifications/{id}/mark-read/`` — Mark one as read.
+        - ``POST   /notifications/mark-all-read/``  — Bulk mark-as-read.
+        - ``POST   /notifications/{id}/dismiss/``   — Dismiss.
+        - ``POST   /notifications/{id}/snooze/``    — Snooze for *N* minutes.
     """
     permission_classes = [IsAuthenticated]
     serializer_class = NotificationSerializer
 
     def get_queryset(self):
+        """Return notifications for the authenticated user with related objects."""
         return Notification.objects.filter(
             user=self.request.user
         ).select_related('habit', 'from_user', 'group')
 
     def list(self, request):
+        """List notifications with optional ``type`` and ``is_read`` query-param filters."""
         queryset = self.get_queryset()
+
+        # Optional filters from query params
         notification_type = request.query_params.get('type')
         is_read = request.query_params.get('is_read')
 
@@ -43,8 +81,10 @@ class NotificationViewSet(viewsets.ModelViewSet):
             else:
                 queryset = queryset.exclude(status='read')
 
+        # Cap at 50 most recent notifications
         notifications = queryset[:50]
 
+        # Build the response payload with denormalized related fields
         return Response({
             'success': True,
             'notifications': [{
@@ -74,11 +114,13 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['get'])
     def unread(self, request):
+        """Return the total count of unread (non-read, non-dismissed) notifications."""
         count = self.get_queryset().exclude(status__in=['read', 'dismissed']).count()
         return Response({'success': True, 'unreadCount': count})
 
     @action(detail=True, methods=['post'], url_path='mark-read')
     def mark_read(self, request, pk=None):
+        """Mark a single notification as read by its primary key."""
         try:
             notification = self.get_queryset().get(pk=pk)
             notification.mark_as_read()
@@ -88,11 +130,13 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
     @action(detail=False, methods=['post'], url_path='mark-all-read')
     def mark_all_read(self, request):
+        """Bulk-mark all unread/unsent notifications as read."""
         updated = self.get_queryset().exclude(status__in=['read', 'dismissed']).update(status='read', read_at=timezone.now())
         return Response({'success': True, 'message': f'Marked {updated} notifications as read', 'count': updated})
 
     @action(detail=True, methods=['post'])
     def dismiss(self, request, pk=None):
+        """Dismiss a notification (removes it from the active inbox)."""
         try:
             notification = self.get_queryset().get(pk=pk)
             notification.status = 'dismissed'
@@ -102,6 +146,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
             return Response({'success': False, 'message': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
 
     def destroy(self, request, *args, **kwargs):
+        """Permanently delete a notification."""
         try:
             notification = self.get_queryset().get(pk=kwargs['pk'])
             notification.delete()
@@ -111,6 +156,7 @@ class NotificationViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def snooze(self, request, pk=None):
+        """Snooze a notification for *N* minutes (default 30)."""
         try:
             notification = self.get_queryset().get(pk=pk)
             minutes = int(request.data.get('minutes', 30))
@@ -120,16 +166,40 @@ class NotificationViewSet(viewsets.ModelViewSet):
             return Response({'success': False, 'message': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
+# =============================================================================
+#  SMART TIP VIEWSET — personalized guidance cards
+# =============================================================================
+
 class SmartTipViewSet(viewsets.ModelViewSet):
-    """Smart Tips - personalized habit guidance"""
+    """
+    ViewSet for personalized smart tips (non-urgent habit guidance).
+
+    Standard endpoints:
+        - ``GET    /smart-tips/``                — List active tips (auto-generates if needed).
+        - ``GET    /smart-tips/{id}/``           — Retrieve a single tip.
+
+    Custom actions:
+        - ``POST   /smart-tips/{id}/mark-read/`` — Mark as read.
+        - ``POST   /smart-tips/{id}/like/``      — Toggle like.
+        - ``POST   /smart-tips/{id}/save-tip/``  — Toggle bookmark.
+        - ``POST   /smart-tips/{id}/dismiss/``   — Dismiss from feed.
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = SmartTipSerializer
 
     def get_queryset(self):
+        """Return non-dismissed tips for the authenticated user."""
         return SmartTip.objects.filter(user=self.request.user, is_dismissed=False).select_related('habit')
 
     def list(self, request):
+        """
+        List active smart tips.
+
+        Triggers lazy tip generation via :meth:`SmartTipService.generate_tips_if_needed`
+        before querying, ensuring the feed is always fresh.
+        """
         from .services import SmartTipService
+        # Ensure the user has fresh tips before returning the list
         SmartTipService.generate_tips_if_needed(request.user)
         queryset = self.get_queryset()
         tips = queryset[:30]
@@ -155,6 +225,7 @@ class SmartTipViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='mark-read')
     def mark_read(self, request, pk=None):
+        """Mark a single smart tip as read."""
         try:
             tip = self.get_queryset().get(pk=pk)
             tip.is_read = True
@@ -165,6 +236,7 @@ class SmartTipViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def like(self, request, pk=None):
+        """Toggle the *liked* flag on a smart tip."""
         try:
             tip = self.get_queryset().get(pk=pk)
             tip.is_liked = not tip.is_liked
@@ -175,6 +247,7 @@ class SmartTipViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'], url_path='save-tip')
     def save_tip(self, request, pk=None):
+        """Toggle the *saved* (bookmarked) flag on a smart tip."""
         try:
             tip = self.get_queryset().get(pk=pk)
             tip.is_saved = not tip.is_saved
@@ -185,6 +258,7 @@ class SmartTipViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def dismiss(self, request, pk=None):
+        """Dismiss a tip so it no longer appears in the user's feed."""
         try:
             tip = SmartTip.objects.filter(user=request.user, pk=pk).first()
             if not tip:
@@ -196,11 +270,26 @@ class SmartTipViewSet(viewsets.ModelViewSet):
             return Response({'success': False, 'message': 'Tip not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
+# =============================================================================
+#  NOTIFICATION SETTINGS VIEWSET — per-user delivery preferences
+# =============================================================================
+
 class NotificationSettingsViewSet(viewsets.ViewSet):
-    """Notification settings"""
+    """
+    ViewSet for reading and updating notification delivery preferences.
+
+    Uses ``get_or_create`` to lazily initialise settings on first access,
+    so every user always has a complete settings object.
+
+    Endpoints:
+        - ``GET  /notification-settings/``               — Retrieve current settings.
+        - ``PUT  /notification-settings/update_settings/`` — Full update.
+        - ``PATCH /notification-settings/update_settings/`` — Partial update.
+    """
     permission_classes = [IsAuthenticated]
 
     def list(self, request):
+        """Return the current notification settings for the authenticated user."""
         settings_obj, _ = NotificationSettings.objects.get_or_create(user=request.user)
         return Response({
             'success': True,
@@ -227,8 +316,17 @@ class NotificationSettingsViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['put', 'patch'])
     def update_settings(self, request):
+        """
+        Update notification settings from a flat camelCase JSON payload.
+
+        The ``field_mapping`` dict translates front-end camelCase keys to
+        Django snake_case model fields.  Only keys present in the request
+        body are applied, making this safe for partial updates.
+        """
         settings_obj, _ = NotificationSettings.objects.get_or_create(user=request.user)
         data = request.data
+
+        # Map front-end camelCase field names → Django model snake_case fields
         field_mapping = {
             'notificationsEnabled': 'notifications_enabled',
             'soundEnabled': 'sound_enabled',
@@ -246,6 +344,7 @@ class NotificationSettingsViewSet(viewsets.ViewSet):
             'maxNotificationsPerDay': 'max_notifications_per_day',
             'defaultSnoozeMinutes': 'default_snooze_minutes',
         }
+        # Apply only the fields present in the request payload
         for api_field, model_field in field_mapping.items():
             if api_field in data:
                 setattr(settings_obj, model_field, data[api_field])
@@ -253,15 +352,33 @@ class NotificationSettingsViewSet(viewsets.ViewSet):
         return Response({'success': True, 'message': 'Settings updated successfully'})
 
 
+# =============================================================================
+#  HABIT REMINDER VIEWSET — per-habit recurring reminders
+# =============================================================================
+
 class HabitReminderViewSet(viewsets.ModelViewSet):
-    """Habit reminders"""
+    """
+    CRUD ViewSet for user-configured habit reminders.
+
+    Standard endpoints:
+        - ``GET    /habit-reminders/``            — List all reminders.
+        - ``POST   /habit-reminders/``            — Create a new reminder.
+        - ``PUT    /habit-reminders/{id}/``       — Full update.
+        - ``PATCH  /habit-reminders/{id}/``       — Partial update.
+        - ``DELETE /habit-reminders/{id}/``       — Delete.
+
+    Custom actions:
+        - ``POST   /habit-reminders/{id}/toggle/`` — Toggle enabled/disabled.
+    """
     permission_classes = [IsAuthenticated]
     serializer_class = HabitReminderSerializer
 
     def get_queryset(self):
+        """Return reminders for habits owned by the authenticated user."""
         return HabitReminder.objects.filter(habit__user=self.request.user)
 
     def list(self, request):
+        """List all reminders with their associated habit titles."""
         reminders = self.get_queryset().select_related('habit')
         return Response({
             'success': True,
@@ -280,6 +397,7 @@ class HabitReminderViewSet(viewsets.ModelViewSet):
 
     @action(detail=True, methods=['post'])
     def toggle(self, request, pk=None):
+        """Toggle a reminder's ``is_enabled`` flag on/off."""
         try:
             reminder = self.get_queryset().get(pk=pk)
             reminder.is_enabled = not reminder.is_enabled
@@ -289,30 +407,49 @@ class HabitReminderViewSet(viewsets.ModelViewSet):
             return Response({'success': False, 'message': 'Reminder not found'}, status=status.HTTP_404_NOT_FOUND)
 
 
+# =============================================================================
+#  NOTIFICATION INTELLIGENCE VIEWSET — AI-powered analytics
+# =============================================================================
+
 class NotificationIntelligenceViewSet(viewsets.ViewSet):
-    """AI-powered notification intelligence"""
+    """
+    Read-only ViewSet exposing the smart-analytics engine.
+
+    All methods delegate to :class:`~notifications.services.NotificationIntelligence`.
+
+    Endpoints:
+        - ``GET  /notification-intelligence/smart-suggestions/`` — Optimal reminder-time suggestions.
+        - ``GET  /notification-intelligence/streak-risks/``      — At-risk streak alerts.
+        - ``GET  /notification-intelligence/weekly-nudges/``     — Week-over-week performance nudges.
+        - ``POST /notification-intelligence/should-send/``       — Delivery-gate check.
+        - ``GET  /notification-intelligence/summary/``           — Aggregated intelligence payload.
+    """
     permission_classes = [IsAuthenticated]
 
     @action(detail=False, methods=['get'], url_path='smart-suggestions')
     def smart_suggestions(self, request):
+        """Return optimal reminder-time suggestions for habits lacking reminders."""
         from .services import NotificationIntelligence
         suggestions = NotificationIntelligence.get_smart_reminder_suggestions(request.user)
         return Response({'success': True, 'suggestions': suggestions})
 
     @action(detail=False, methods=['get'], url_path='streak-risks')
     def streak_risks(self, request):
+        """Return habits with active streaks at risk of breaking today."""
         from .services import NotificationIntelligence
         alerts = NotificationIntelligence.get_streak_risk_alerts(request.user)
         return Response({'success': True, 'alerts': alerts})
 
     @action(detail=False, methods=['get'], url_path='weekly-nudges')
     def weekly_nudges(self, request):
+        """Return week-over-week performance comparison nudges."""
         from .services import NotificationIntelligence
         nudges = NotificationIntelligence.get_weekly_performance_nudges(request.user)
         return Response({'success': True, 'nudges': nudges})
 
     @action(detail=False, methods=['post'], url_path='should-send')
     def should_send(self, request):
+        """Check whether the delivery gate allows sending a new notification."""
         from .services import NotificationIntelligence
         notification_type = request.data.get('notification_type', 'reminder')
         allowed = NotificationIntelligence.should_send_notification(request.user)
@@ -320,6 +457,7 @@ class NotificationIntelligenceViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'], url_path='summary')
     def intelligence_summary(self, request):
+        """Return a combined payload from all intelligence endpoints."""
         from .services import NotificationIntelligence
         summary = NotificationIntelligence.get_notification_summary(request.user)
         return Response({'success': True, **summary})

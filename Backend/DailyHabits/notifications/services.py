@@ -1,8 +1,26 @@
 """
 Notification Services
-NotificationCreator: Creates inbox notifications for events
-SmartTipService: Generates personalized smart tips
-NotificationIntelligence: Smart reminders, streak risk alerts, fatigue prevention
+=====================
+Business-logic layer for creating, managing, and intelligently delivering
+notifications and smart tips in the DailyHabits platform.
+
+Service Classes
+---------------
+- :class:`NotificationCreator`
+    Event-driven factory for inbox notifications.  Provides a generic
+    ``create()`` method with built-in 5-minute deduplication, plus
+    convenience shortcuts for every supported event type (friend requests,
+    streak milestones, achievements, etc.).
+
+- :class:`SmartTipService`
+    Generates personalised, non-urgent guidance tips based on the user's
+    recent habit activity.  Tips are capped at 2 per day to avoid
+    notification fatigue.
+
+- :class:`NotificationIntelligence`
+    Analytics engine that powers smart reminder suggestions, streak-risk
+    alerts, and weekly performance nudges.  Also enforces delivery rules
+    (quiet hours, daily caps, minimum cooldown between notifications).
 """
 
 from datetime import timedelta
@@ -13,17 +31,45 @@ from habits.models import Habit, HabitLog, Streak
 from notifications.models import Notification, SmartTip, NotificationSettings
 
 
-# ===========================================================================
-#  NOTIFICATION CREATOR - event-driven inbox notification creation
-# ===========================================================================
+# =============================================================================
+#  NOTIFICATION CREATOR — event-driven inbox notification factory
+# =============================================================================
 
 class NotificationCreator:
-    """Creates inbox notifications for system and social events."""
+    """
+    Creates inbox notifications for system and social events.
+
+    Every public method is a ``@staticmethod`` so the class can be used as a
+    lightweight namespace without instantiation::
+
+        NotificationCreator.friend_request(to_user=alice, from_user=bob)
+
+    A 5-minute deduplication window prevents the same notification from
+    being created twice in rapid succession (see :meth:`create`).
+    """
 
     @staticmethod
     def create(user, notification_type, title, message, **kwargs):
-        """Generic notification creation with dedup check."""
-        # Dedup: don't create duplicate within last 5 minutes
+        """
+        Generic notification creation with a 5-minute deduplication window.
+
+        Before inserting a new row the method checks whether an identical
+        notification (same user, type, and title) was already created in
+        the last 5 minutes.  If so, it returns ``None`` to avoid spam.
+
+        Args:
+            user: Recipient user instance.
+            notification_type: One of ``Notification.NOTIFICATION_TYPES``.
+            title: Short headline.
+            message: Full body text.
+            **kwargs: Optional overrides — ``habit``, ``achievement``,
+                ``from_user``, ``group``, ``icon_code``, ``color_value``,
+                ``action_type``, ``action_data``.
+
+        Returns:
+            The created :class:`Notification`, or ``None`` if deduplicated.
+        """
+        # Dedup: reject if an identical notification was created within the last 5 min
         recent = Notification.objects.filter(
             user=user,
             notification_type=notification_type,
@@ -50,6 +96,7 @@ class NotificationCreator:
 
     @staticmethod
     def friend_request(to_user, from_user):
+        """Create a *friend request received* notification for ``to_user``."""
         return NotificationCreator.create(
             user=to_user,
             notification_type='friend_request',
@@ -63,6 +110,7 @@ class NotificationCreator:
 
     @staticmethod
     def friend_accepted(to_user, from_user):
+        """Create a *friend request accepted* notification for ``to_user``."""
         return NotificationCreator.create(
             user=to_user,
             notification_type='friend_accepted',
@@ -76,6 +124,7 @@ class NotificationCreator:
 
     @staticmethod
     def group_join(to_user, member_user, group):
+        """Notify ``to_user`` that ``member_user`` joined the *group*."""
         return NotificationCreator.create(
             user=to_user,
             notification_type='group_join',
@@ -91,6 +140,7 @@ class NotificationCreator:
 
     @staticmethod
     def streak_milestone(user, habit, streak_count):
+        """Celebrate a streak milestone (e.g. 7, 30, 100 consecutive days)."""
         return NotificationCreator.create(
             user=user,
             notification_type='streak',
@@ -105,6 +155,7 @@ class NotificationCreator:
 
     @staticmethod
     def achievement_earned(user, achievement, habit=None):
+        """Notify the user that they unlocked a new achievement badge."""
         return NotificationCreator.create(
             user=user,
             notification_type='achievement',
@@ -119,6 +170,7 @@ class NotificationCreator:
 
     @staticmethod
     def habit_reminder(user, habit):
+        """Send a scheduled reminder for a specific habit."""
         return NotificationCreator.create(
             user=user,
             notification_type='reminder',
@@ -133,6 +185,7 @@ class NotificationCreator:
 
     @staticmethod
     def admin_announcement(user, title, message):
+        """Broadcast an administrator announcement to a single user."""
         return NotificationCreator.create(
             user=user,
             notification_type='admin',
@@ -145,6 +198,7 @@ class NotificationCreator:
 
     @staticmethod
     def security_alert(user, title, message):
+        """Deliver a security-related alert (password change, new device, etc.)."""
         return NotificationCreator.create(
             user=user,
             notification_type='security',
@@ -155,18 +209,180 @@ class NotificationCreator:
             action_type='settings',
         )
 
+    # ── Social habit-sharing notifications ────────────────────────────
 
-# ===========================================================================
-#  SMART TIP SERVICE - generates personalized tips
-# ===========================================================================
+    @staticmethod
+    def habit_shared(to_user, from_user, habit):
+        """Notify ``to_user`` that ``from_user`` shared a habit with them."""
+        return NotificationCreator.create(
+            user=to_user,
+            notification_type='social_like',
+            title='Habit Shared With You',
+            message=f'{from_user.name} shared "{habit.title}" with you!',
+            from_user=from_user,
+            habit=habit,
+            icon_code=0xE80D,
+            color_value=0xFF8B5CF6,
+            action_type='community',
+        )
+
+    @staticmethod
+    def friend_completed_habit(to_user, friend, habit):
+        """Notify ``to_user`` that a friend completed a shared habit."""
+        return NotificationCreator.create(
+            user=to_user,
+            notification_type='social_like',
+            title='Friend Completed a Habit!',
+            message=f'{friend.name} just completed "{habit.title}" 🎉',
+            from_user=friend,
+            habit=habit,
+            icon_code=0xE86C,
+            color_value=0xFF22C55E,
+            action_type='community',
+        )
+
+    @staticmethod
+    def encouragement_received(to_user, from_user, encourage_type, message_text='', habit=None):
+        """Notify ``to_user`` that ``from_user`` sent encouragement."""
+        emoji_map = {
+            'cheer': '🎉',
+            'motivate': '💪',
+            'celebrate': '🏆',
+            'remind': '⏰',
+        }
+        emoji = emoji_map.get(encourage_type, '💪')
+        body = message_text or f'{from_user.name} sent you encouragement! {emoji}'
+        return NotificationCreator.create(
+            user=to_user,
+            notification_type='social_like',
+            title=f'{emoji} Encouragement from {from_user.name}',
+            message=body,
+            from_user=from_user,
+            habit=habit,
+            icon_code=0xEA6E,
+            color_value=0xFFF59E0B,
+            action_type='community',
+        )
+
+    @staticmethod
+    def group_challenge_created(to_user, creator, group, challenge):
+        """Notify group member about a new group challenge."""
+        return NotificationCreator.create(
+            user=to_user,
+            notification_type='group_challenge',
+            title='New Group Challenge!',
+            message=f'{creator.name} created "{challenge.title}" in {group.name}',
+            from_user=creator,
+            group=group,
+            icon_code=0xE838,
+            color_value=0xFFF59E0B,
+            action_type='group_detail',
+            action_data={'groupId': group.id, 'challengeId': challenge.id},
+        )
+
+    @staticmethod
+    def group_challenge_completed(to_user, group, challenge):
+        """Notify group member that a challenge was completed."""
+        return NotificationCreator.create(
+            user=to_user,
+            notification_type='group_challenge',
+            title='Challenge Complete! 🏆',
+            message=f'Your group "{group.name}" completed "{challenge.title}"!',
+            group=group,
+            icon_code=0xE838,
+            color_value=0xFF22C55E,
+            action_type='group_detail',
+            action_data={'groupId': group.id, 'challengeId': challenge.id},
+        )
+
+    @staticmethod
+    def group_milestone(to_user, group, milestone_text):
+        """Notify group member about a group milestone (e.g. 100 total completions)."""
+        return NotificationCreator.create(
+            user=to_user,
+            notification_type='group_challenge',
+            title='Group Milestone! 🎯',
+            message=f'{group.name}: {milestone_text}',
+            group=group,
+            icon_code=0xE838,
+            color_value=0xFF8B5CF6,
+            action_type='group_detail',
+            action_data={'groupId': group.id},
+        )
+
+    @staticmethod
+    def habit_reaction_received(to_user, from_user, habit, reaction_type):
+        """Notify habit owner that someone reacted to their shared habit."""
+        emoji_map = {
+            'like': '👍', 'encourage': '💪', 'celebrate': '🎉',
+            'fire': '🔥', 'clap': '👏',
+        }
+        emoji = emoji_map.get(reaction_type, '👍')
+        return NotificationCreator.create(
+            user=to_user,
+            notification_type='social_like',
+            title=f'{emoji} {from_user.name} reacted!',
+            message=f'{from_user.name} reacted {emoji} to "{habit.title}"',
+            from_user=from_user,
+            habit=habit,
+            icon_code=0xE87E,
+            color_value=0xFFF59E0B,
+            action_type='habit_detail',
+            action_data={'habitId': habit.id},
+        )
+
+    @staticmethod
+    def habit_comment_received(to_user, from_user, habit, comment_preview):
+        """Notify habit owner that someone commented on their shared habit."""
+        return NotificationCreator.create(
+            user=to_user,
+            notification_type='social_comment',
+            title=f'{from_user.name} commented',
+            message=f'On "{habit.title}": {comment_preview[:80]}',
+            from_user=from_user,
+            habit=habit,
+            icon_code=0xE0B9,
+            color_value=0xFF3B82F6,
+            action_type='habit_detail',
+            action_data={'habitId': habit.id},
+        )
+
+
+# =============================================================================
+#  SMART TIP SERVICE — personalised, non-urgent habit guidance
+# =============================================================================
 
 class SmartTipService:
-    """Generates and manages personalized smart tips."""
+    """
+    Generates and manages personalized smart tips for users.
+
+    Tips are generated lazily — the service is invoked when the user opens
+    the Smart Tips screen and checks whether fresh tips are needed (fewer
+    than 2 non-dismissed tips created today).  This avoids unnecessary
+    background work while still keeping the feed fresh.
+
+    Tip generation categories (in order of priority):
+        1. Missed-habit encouragement
+        2. Near-streak-milestone nudges
+        3. Declining-consistency warnings
+        4. General wellness / motivational tips
+    """
 
     @staticmethod
     def generate_tips_if_needed(user):
-        """Generate fresh tips if user has fewer than 2 non-dismissed tips from today."""
+        """
+        Entry point: generate fresh tips if the user has fewer than 2
+        non-dismissed tips from today.
+
+        This method is idempotent — calling it multiple times on the same
+        day will not create duplicate tips thanks to per-type dedup checks
+        inside each generator.
+
+        Args:
+            user: The user to generate tips for.
+        """
         today = timezone.now().date()
+        # Count non-dismissed tips already created today
         recent_count = SmartTip.objects.filter(
             user=user,
             is_dismissed=False,
@@ -174,8 +390,9 @@ class SmartTipService:
         ).count()
 
         if recent_count >= 2:
-            return  # Enough tips for today
+            return  # Sufficient tips already exist for today
 
+        # Generate tips in priority order — each generator deduplicates internally
         SmartTipService._generate_missed_habit_tips(user)
         SmartTipService._generate_streak_milestone_tips(user)
         SmartTipService._generate_declining_tips(user)
@@ -183,7 +400,13 @@ class SmartTipService:
 
     @staticmethod
     def _generate_missed_habit_tips(user):
-        """Tips for habits missed yesterday."""
+        """
+        Create encouragement tips for habits the user missed yesterday.
+
+        Only the first 2 active habits are evaluated to keep the tip feed
+        concise.  A dedup check prevents the same tip from being created
+        twice on the same day.
+        """
         yesterday = (timezone.now() - timedelta(days=1)).date()
         habits = Habit.objects.filter(user=user, status='active', is_deleted=False)
 
@@ -211,14 +434,17 @@ class SmartTipService:
 
     @staticmethod
     def _generate_streak_milestone_tips(user):
-        """Tips for habits near streak milestones."""
+        """
+        Create celebration tips for habits that are exactly *one day* away
+        from a predefined streak milestone (7, 14, 21, 30, 50, 100 days).
+        """
         streaks = Streak.objects.filter(
             habit__user=user,
             habit__status='active',
             habit__is_deleted=False,
         ).select_related('habit')
 
-        milestones = [7, 14, 21, 30, 50, 100]
+        milestones = [7, 14, 21, 30, 50, 100]  # Predefined celebratory thresholds
         for streak in streaks:
             for milestone in milestones:
                 if streak.current_streak == milestone - 1:
@@ -241,7 +467,13 @@ class SmartTipService:
 
     @staticmethod
     def _generate_declining_tips(user):
-        """Tips for habits with declining consistency."""
+        """
+        Create gentle nudge tips for habits whose completion rate dropped
+        by more than 50 % compared to the previous week.
+
+        Compares completions in the last 7 days against the 7 days before
+        that for each active habit (capped at 5 habits).
+        """
         today = timezone.now().date()
         week_start = today - timedelta(days=7)
         two_weeks_ago = today - timedelta(days=14)
@@ -257,6 +489,7 @@ class SmartTipService:
                 status='completed'
             ).count()
 
+            # Flag if this week's completions dropped below 50% of last week
             if last_week > 0 and this_week < last_week * 0.5:
                 exists = SmartTip.objects.filter(
                     user=user, tip_type='declining', habit=habit,
@@ -276,15 +509,20 @@ class SmartTipService:
 
     @staticmethod
     def _generate_general_wellness_tips(user):
-        """General wellness tips if user has few tips today."""
+        """
+        Inject a random general-wellness tip if the user still has fewer
+        than 2 tips for today.  Tips are drawn from a curated pool of
+        evergreen motivational messages.
+        """
         today = timezone.now().date()
         today_count = SmartTip.objects.filter(
             user=user, created_at__date=today, is_dismissed=False,
         ).count()
 
         if today_count >= 2:
-            return
+            return  # Daily tip budget already met
 
+        # Curated pool of evergreen motivational tips
         tips_pool = [
             ('Consistency Over Perfection', 'Missing one day does not break your progress. What matters is showing up most days.'),
             ('Start Small, Build Big', 'If a habit feels hard, shrink it. 2 minutes of reading is better than 0 minutes.'),
@@ -293,6 +531,7 @@ class SmartTipService:
             ('Reflect Weekly', 'Take a moment each week to review your progress. Awareness drives improvement.'),
         ]
 
+        # Pick one tip at random and create it if it doesn't already exist today
         import random
         tip_data = random.choice(tips_pool)
         exists = SmartTip.objects.filter(
@@ -310,15 +549,40 @@ class SmartTipService:
             )
 
 
-# ===========================================================================
-#  NOTIFICATION INTELLIGENCE - existing smart analysis engine
-# ===========================================================================
+# =============================================================================
+#  NOTIFICATION INTELLIGENCE — smart analytics & delivery engine
+# =============================================================================
 
 class NotificationIntelligence:
-    """Smart notification engine for DailyHabits."""
+    """
+    Smart notification engine for DailyHabits.
+
+    Provides four key capabilities:
+
+    1. **Smart reminder suggestions** — Analyses past completion timestamps
+       to identify peak-productivity hours and suggest optimal reminder times
+       for habits that currently lack reminders.
+    2. **Streak-risk alerts** — Identifies habits with active streaks (≥ 3 days)
+       that haven't been completed today, ranked by urgency.
+    3. **Weekly performance nudges** — Compares this week's completions to
+       the previous week and generates encouraging or motivating messages.
+    4. **Delivery gating** — Enforces quiet hours, daily caps, and a
+       30-minute cooldown between consecutive notifications.
+    """
 
     @staticmethod
     def get_smart_reminder_suggestions(user):
+        """
+        Suggest optimal reminder times for habits without reminders.
+
+        Analyses the hour-of-day distribution of the user's past completions
+        to determine their peak productivity hour, then recommends that time
+        as the reminder for each unreminded active habit (up to 5).
+
+        Returns:
+            list[dict]: Suggestion dicts with ``habitId``, ``habitTitle``,
+            ``suggestedTime``, and ``reason``.
+        """
         habits = Habit.objects.filter(
             user=user, status='active', is_deleted=False, reminder_enabled=False
         )
@@ -327,17 +591,21 @@ class NotificationIntelligence:
         ).values_list('completed_at', flat=True)
 
         if not logs:
-            return []
+            return []  # No completion history — cannot infer optimal time
 
+        # Build hour-of-day frequency map from completion timestamps
         hour_counts = {}
         for dt in logs:
             hour = dt.hour
             hour_counts[hour] = hour_counts.get(hour, 0) + 1
 
         if not hour_counts:
-            return []
+            return []  # Safety guard — should not happen after the logs check above
 
+        # Determine the single most productive hour
         peak_hour = max(hour_counts, key=lambda k: hour_counts[k])
+
+        # Build suggestions for up to 5 habits lacking a reminder
         suggestions = []
         for habit in habits[:5]:
             suggestions.append({
@@ -350,6 +618,18 @@ class NotificationIntelligence:
 
     @staticmethod
     def get_streak_risk_alerts(user):
+        """
+        Identify habits with active streaks (≥ 3 days) not yet completed
+        today, sorted by urgency (hours remaining in the day).
+
+        Urgency levels:
+            - **high**: ≤ 4 hours remaining
+            - **medium**: ≤ 8 hours remaining
+            - **low**: > 8 hours remaining
+
+        Returns:
+            list[dict]: At-risk habit dicts sorted by urgency (highest first).
+        """
         today = timezone.now().date()
         now = timezone.now()
         habits = Habit.objects.filter(
@@ -359,16 +639,19 @@ class NotificationIntelligence:
         at_risk = []
         for habit in habits:
             try:
-                streak = habit.streak
+                streak = habit.streak  # type: ignore[attr-defined]
             except Streak.DoesNotExist:
                 continue
             if streak.current_streak < 3:
-                continue
+                continue  # Ignore insignificant streaks
+
+            # Check if the habit was already completed today
             completed_today = HabitLog.objects.filter(
                 habit=habit, date=today, status='completed'
             ).exists()
             if not completed_today:
-                hours_left = 24 - now.hour
+                hours_left = 24 - now.hour  # Approximate hours remaining in the day
+                # Classify urgency based on remaining time
                 urgency = 'high' if hours_left <= 4 else ('medium' if hours_left <= 8 else 'low')
                 at_risk.append({
                     'habitId': habit.id,
@@ -379,17 +662,29 @@ class NotificationIntelligence:
                     'message': f"Don't break your {streak.current_streak}-day streak on '{habit.title}'! Only {hours_left}h left today.",
                 })
 
+        # Sort by urgency: high → medium → low
         urgency_order = {'high': 0, 'medium': 1, 'low': 2}
         at_risk.sort(key=lambda x: urgency_order.get(x['urgency'], 3))
         return at_risk
 
     @staticmethod
     def get_weekly_performance_nudges(user):
+        """
+        Compare this week's habit completions to last week's and generate
+        motivational nudges.
+
+        Also highlights the user's "star habit" — the one with the most
+        completions in the current week.
+
+        Returns:
+            list[dict]: Nudge dicts with ``type``, ``title``, and ``message``.
+        """
         today = timezone.now().date()
         week_start = today - timedelta(days=today.weekday())
         last_week_start = week_start - timedelta(days=7)
 
         habits = Habit.objects.filter(user=user, status='active', is_deleted=False)
+        # Count completions for this week vs. last week
         this_week_count = HabitLog.objects.filter(
             habit__in=habits, date__range=[week_start, today], status='completed'
         ).count()
@@ -398,6 +693,7 @@ class NotificationIntelligence:
         ).count()
 
         nudges = []
+        # Determine the user's trajectory and craft an appropriate nudge
         if this_week_count > last_week_count:
             nudges.append({
                 'type': 'positive',
@@ -417,6 +713,7 @@ class NotificationIntelligence:
                 'message': 'You are matching last week performance. Push a little harder for new heights!',
             })
 
+        # Identify this week's "star" habit (most completions)
         best_habit = None
         best_count = 0
         for habit in habits:
@@ -437,36 +734,58 @@ class NotificationIntelligence:
 
     @staticmethod
     def should_send_notification(user):
+        """
+        Determine whether a new notification should be delivered to the user.
+
+        Enforces the following rules (in order):
+            1. Master notifications toggle must be enabled.
+            2. Current time must be outside quiet hours (if configured).
+            3. Daily notification cap must not be exceeded.
+            4. At least 30 minutes must have elapsed since the last notification.
+
+        Returns:
+            bool: ``True`` if the notification may be sent.
+        """
         try:
             settings = NotificationSettings.objects.get(user=user)
         except NotificationSettings.DoesNotExist:
             return True
 
         if not settings.notifications_enabled:
-            return False
+            return False  # Master kill-switch is off
 
+        # Rule 2: Suppress during quiet hours
         now = timezone.now().time()
         if settings.quiet_hours_enabled:
             if settings.quiet_hours_start and settings.quiet_hours_end:
                 if settings.quiet_hours_start <= now <= settings.quiet_hours_end:
-                    return False
+                    return False  # Currently within quiet-hours window
 
+        # Rule 3: Enforce daily notification cap
         today = timezone.now().date()
         today_count = Notification.objects.filter(
             user=user, created_at__date=today, status__in=['sent', 'pending']
         ).count()
         if today_count >= settings.max_notifications_per_day:
-            return False
+            return False  # Daily cap reached
 
+        # Rule 4: Enforce 30-minute cooldown between consecutive notifications
         last_notification = Notification.objects.filter(user=user).order_by('-created_at').first()
         if last_notification:
             time_diff = timezone.now() - last_notification.created_at
             if time_diff < timedelta(minutes=30):
-                return False
+                return False  # Too soon since last notification
         return True
 
     @staticmethod
     def get_notification_summary(user):
+        """
+        Aggregate all intelligence endpoints into a single summary payload.
+
+        Returns:
+            dict: Combined results from smart suggestions, streak risks,
+            weekly nudges, and the current delivery-gate status.
+        """
         return {
             'smartSuggestions': NotificationIntelligence.get_smart_reminder_suggestions(user),
             'streakRisks': NotificationIntelligence.get_streak_risk_alerts(user),
