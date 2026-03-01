@@ -21,6 +21,20 @@ import 'package:flutter/material.dart';
 //  COLOUR CONSTANTS
 // ═════════════════════════════════════════════════════════════════════════════
 
+/// Centralized color constants for the DailyHabits design system.
+///
+/// All color values are defined as static constants so they can be used in
+/// `const` contexts (e.g., [ColorScheme] construction).  For theme-aware
+/// access at runtime, prefer [ThemeColors] via `context.colors`.
+///
+/// The palette is organized into logical groups:
+/// - **Brand** — primary & secondary brand colors with light/dark variants.
+/// - **Surfaces** — background and card fills for each brightness.
+/// - **Borders** — subtle dividers and outlines.
+/// - **Text** — three tiers of text emphasis per brightness.
+/// - **Semantic** — success, warning, error, and info feedback colors.
+/// - **Category** — pre-assigned habit-category tints.
+/// - **Gradients** — reusable [LinearGradient] definitions.
 class AppColors {
   AppColors._();
 
@@ -125,13 +139,29 @@ class AppColors {
 //  THEME-AWARE COLOUR ACCESS — usage: context.colors.primary
 // ═════════════════════════════════════════════════════════════════════════════
 
+/// Brightness-aware color accessor that resolves to light or dark variants.
+///
+/// Instantiated internally via [ThemeColorsExtension]. Consumers should
+/// access it through `context.colors` — for example:
+///
+/// ```dart
+/// final bg = context.colors.bg;
+/// final text = context.colors.textPrimary;
+/// ```
+///
+/// Every getter selects between the appropriate light/dark constant from
+/// [AppColors] based on the current [Brightness].
 class ThemeColors {
+  /// The current theme brightness used to resolve color variants.
   final Brightness brightness;
   const ThemeColors._(this.brightness);
 
+  /// Whether the current theme is dark.
   bool get isDark => brightness == Brightness.dark;
 
-  // ── Brand ──────────────────────────────────────────────────────────────
+  // ── Brand ──────────────────────────────────────────────────────────
+
+  /// Primary brand color, slightly lightened in dark mode for contrast.
   Color get primary => isDark ? AppColors.primaryLight : AppColors.primary;
   Color get primaryLight => AppColors.primaryLight;
   Color get secondary => isDark ? AppColors.secondaryLight : AppColors.secondary;
@@ -186,8 +216,19 @@ class ThemeColors {
       : Colors.black.withValues(alpha: 0.04);
 }
 
+/// Convenience [BuildContext] extension that exposes theme-aware colors
+/// and a quick dark-mode check.
+///
+/// Usage:
+/// ```dart
+/// final cardColor = context.colors.card;
+/// if (context.isDarkMode) { /* … */ }
+/// ```
 extension ThemeColorsExtension on BuildContext {
+  /// Returns a [ThemeColors] instance matching the current [Brightness].
   ThemeColors get colors => ThemeColors._(Theme.of(this).brightness);
+
+  /// `true` when the active theme brightness is [Brightness.dark].
   bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
 }
 
@@ -195,13 +236,29 @@ extension ThemeColorsExtension on BuildContext {
 //  SPACING TOKENS
 // ═════════════════════════════════════════════════════════════════════════════
 
+/// Standardized spacing tokens used for padding, margins, and gaps.
+///
+/// Based on a 4-px grid to maintain consistent vertical and horizontal
+/// rhythm across every screen.
 class AppSpacing {
   AppSpacing._();
+
+  /// 4 px — minimal inner padding.
   static const double xs = 4;
+
+  /// 8 px — tight spacing between related elements.
   static const double sm = 8;
+
+  /// 12 px — default compact spacing.
   static const double md = 12;
+
+  /// 16 px — standard content separation.
   static const double lg = 16;
+
+  /// 24 px — generous section spacing.
   static const double xl = 24;
+
+  /// 32 px — large section or screen-level spacing.
   static const double xxl = 32;
 }
 
@@ -209,12 +266,26 @@ class AppSpacing {
 //  BORDER RADIUS
 // ═════════════════════════════════════════════════════════════════════════════
 
+/// Uniform border-radius tokens used across cards, buttons, and inputs.
+///
+/// Raw [double] values are provided for one-off use, along with pre-built
+/// [BorderRadius] constants (e.g., [smAll], [mdAll]) for convenience.
 class AppRadius {
   AppRadius._();
+
+  /// 8 px — subtle rounding (chips, tags).
   static const double sm = 8;
+
+  /// 12 px — default input / button rounding.
   static const double md = 12;
+
+  /// 16 px — card-level rounding.
   static const double lg = 16;
+
+  /// 24 px — large container rounding.
   static const double xl = 24;
+
+  /// 32 px — pill / sheet rounding.
   static const double xxl = 32;
 
   static const BorderRadius smAll = BorderRadius.all(Radius.circular(sm));
@@ -227,9 +298,17 @@ class AppRadius {
 //  SHADOWS
 // ═════════════════════════════════════════════════════════════════════════════
 
+/// Pre-defined elevation shadows for the DailyHabits design system.
+///
+/// Each factory returns a `List<BoxShadow>` suitable for [BoxDecoration].
+/// Context-aware variants automatically adjust opacity for dark mode.
 class AppShadows {
   AppShadows._();
 
+  /// A soft, context-aware shadow ideal for floating containers.
+  ///
+  /// Opacity is automatically reduced in dark mode to avoid
+  /// overly harsh elevation on dark surfaces.
   static List<BoxShadow> soft(BuildContext context) => [
         BoxShadow(
           color: context.isDarkMode
@@ -240,6 +319,8 @@ class AppShadows {
         ),
       ];
 
+  /// Dark-only variant of [soft] — useful when no [BuildContext] is
+  /// available (e.g., static decoration within initState).
   static List<BoxShadow> get softDark => [
         BoxShadow(
           color: Colors.black.withValues(alpha: 0.3),
@@ -248,6 +329,7 @@ class AppShadows {
         ),
       ];
 
+  /// Subtle card-level shadow that adapts to the current brightness.
   static List<BoxShadow> card(BuildContext context) => [
         BoxShadow(
           color: context.isDarkMode
@@ -258,6 +340,9 @@ class AppShadows {
         ),
       ];
 
+  /// A colored glow effect using the primary brand color.
+  ///
+  /// Best suited for CTAs and FABs that need to "pop" off the surface.
   static List<BoxShadow> get glow => [
         BoxShadow(
           color: AppColors.primary.withValues(alpha: 0.25),
@@ -272,50 +357,63 @@ class AppShadows {
 //  TEXT STYLES (base shapes — colour inherited from ThemeData)
 // ═════════════════════════════════════════════════════════════════════════════
 
+/// Base typographic styles for the DailyHabits design system.
+///
+/// These styles define **shape only** (size, weight, letter-spacing, height).
+/// Colors are intentionally omitted so they inherit from the active
+/// [ThemeData.textTheme], allowing automatic light/dark adaptation.
 class AppTextStyles {
   AppTextStyles._();
 
+  /// Headline 1 — 28 px, bold, tight letter-spacing.
   static const TextStyle h1 = TextStyle(
     fontSize: 28,
     fontWeight: FontWeight.w700,
     letterSpacing: -0.5,
   );
 
+  /// Headline 2 — 24 px, semi-bold.
   static const TextStyle h2 = TextStyle(
     fontSize: 24,
     fontWeight: FontWeight.w600,
     letterSpacing: -0.3,
   );
 
+  /// Headline 3 — 20 px, semi-bold.
   static const TextStyle h3 = TextStyle(
     fontSize: 20,
     fontWeight: FontWeight.w600,
   );
 
+  /// Large body text — 16 px, regular weight, relaxed line-height.
   static const TextStyle bodyLg = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w400,
     height: 1.5,
   );
 
+  /// Medium body text — 14 px, regular weight, relaxed line-height.
   static const TextStyle bodyMd = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w400,
     height: 1.5,
   );
 
+  /// Button label — 16 px, semi-bold with subtle letter-spacing.
   static const TextStyle button = TextStyle(
     fontSize: 16,
     fontWeight: FontWeight.w600,
     letterSpacing: 0.3,
   );
 
+  /// Label — 12 px, medium weight, wide letter-spacing (chips, tags).
   static const TextStyle label = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w500,
     letterSpacing: 0.4,
   );
 
+  /// Caption — 12 px, regular weight (timestamps, footnotes).
   static const TextStyle caption = TextStyle(
     fontSize: 12,
     fontWeight: FontWeight.w400,
@@ -326,10 +424,21 @@ class AppTextStyles {
 //  THEME DATA
 // ═════════════════════════════════════════════════════════════════════════════
 
+/// Application-level [ThemeData] factory for both light and dark modes.
+///
+/// Each getter returns a fully configured [ThemeData] using the tokens
+/// defined in [AppColors], [AppTextStyles], and [AppRadius].  These are
+/// consumed by [MaterialApp.theme] and [MaterialApp.darkTheme].
 class AppTheme {
   AppTheme._();
 
   // ── LIGHT THEME ────────────────────────────────────────────────────────
+
+  /// Returns the complete [ThemeData] for **light** mode.
+  ///
+  /// Configures Material 3 with the Inter font family and sets every
+  /// component theme (AppBar, cards, buttons, inputs, chips, switches,
+  /// progress indicators) to align with the DailyHabits design spec.
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
@@ -461,6 +570,12 @@ class AppTheme {
   }
 
   // ── DARK THEME ─────────────────────────────────────────────────────────
+
+  /// Returns the complete [ThemeData] for **dark** mode.
+  ///
+  /// Mirrors the structure of [lightTheme] but substitutes darker surface
+  /// colors, lighter text tones, and adjusted widget opacities for
+  /// comfortable viewing in low-light environments.
   static ThemeData get darkTheme {
     return ThemeData(
       useMaterial3: true,

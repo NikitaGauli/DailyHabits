@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <!--
     If you are serving your web app in a path other than the root, change the
     href value below to reflect the base path you are serving from.
@@ -25,6 +26,17 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black">
   <meta name="apple-mobile-web-app-title" content="dailyhabits">
   <link rel="apple-touch-icon" href="icons/Icon-192.png">
+
+  <!--
+    Google Sign-In for Web — Client ID Meta Tag
+    =============================================
+    Replace the content value below with your Web Client ID from
+    Google Cloud Console → APIs & Services → Credentials → OAuth 2.0 Client IDs.
+    This MUST be the same value as:
+      - GoogleAuthConfig.webClientId  (lib/config/google_auth_config.dart)
+      - GOOGLE_CLIENT_ID              (Backend/.env)
+  -->
+  <meta name="google-signin-client_id" content="YOUR_WEB_CLIENT_ID.apps.googleusercontent.com">
 
   <!-- Favicon -->
   <link rel="icon" type="image/png" href="favicon.png"/>
