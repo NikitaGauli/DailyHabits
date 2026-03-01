@@ -1,3 +1,21 @@
+// **upcoming_reminders.dart** — Upcoming Habit Reminders Widget
+//
+// Provides [UpcomingRemindersWidget], a vertical list that surfaces
+// the user's upcoming (future-time) habit reminders. Each item shows
+// the habit icon, title, and scheduled time inside a modern card.
+//
+// The widget gracefully collapses to [SizedBox.shrink] when the
+// reminder list is empty, making it safe to include unconditionally
+// in parent layouts.
+//
+// See also:
+//   - [Reminder] for the data model.
+//   - [HomeController._updateReminders] for the reminder computation logic.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import '../../../models/reminder.dart';
 

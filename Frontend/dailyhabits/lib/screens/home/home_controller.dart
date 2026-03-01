@@ -1,28 +1,112 @@
+// **home_controller.dart** — Business Logic Controller for the Home Screen
+//
+// This file contains [HomeController], the central [ChangeNotifier] that
+// manages all state and business logic for the home dashboard.
+//
+// Responsibilities include:
+//   - Fetching and caching the authenticated user profile.
+//   - Loading today's habits, progress metrics, and streak data.
+//   - Providing filtered habit lists via category selection.
+//   - Toggling habit completion and propagating server responses.
+//   - Computing upcoming reminders from habit reminder times.
+//   - Managing bottom-navigation tab state.
+//   - Coordinating the logout/reset cycle to ensure clean state
+//     transitions between user sessions.
+//
+// **Important:** [HomeController] is registered as a singleton via
+// `ChangeNotifierProvider` at app startup. Because it outlives individual
+// login sessions, `loadData()` must NOT be called in its constructor
+// (there is no auth token yet at that point). Instead, it is invoked from
+// `HomePage.initState()` after the user has been authenticated.
+//
+// See also:
+//   - [HomePage] for the UI that consumes this controller.
+//   - [HabitService] for REST API interactions.
+//   - [AuthService] for authentication and token management.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import '../../models/habit.dart';
 import '../../services/habit_service.dart';
 import '../../services/auth_service.dart';
+import '../../services/google_auth_service.dart';
 import '../../models/reminder.dart';
 
+// =============================================================================
+// HomeController
+// =============================================================================
+
+/// The primary state-management controller for the home screen.
+///
+/// Extends [ChangeNotifier] so that widgets wrapped in [Consumer] or
+/// `context.watch<HomeController>()` automatically rebuild when data changes.
+///
+/// This controller is intentionally a **singleton** within the widget tree.
+/// It does **not** call [loadData] in its constructor because the auth token
+/// may not yet be available.
 class HomeController extends ChangeNotifier {
+  // ===========================================================================
+  // Public State Fields
+  // ===========================================================================
+
+  /// Display name of the currently authenticated user.
   String userName = "User";
+
+  /// Number of consecutive days the user has completed all habits.
   int currentStreak = 0;
+
+  /// The user's all-time best streak in days.
   int bestStreak = 0;
+
+  /// Fraction of today's habits that have been completed (0.0 – 1.0).
   double todayProgress = 0.0;
+
+  /// Count of habits marked as completed today.
   int completedHabits = 0;
+
+  /// Total number of habits scheduled for today.
   int totalHabits = 0;
+
+  /// Index of the currently selected bottom-navigation tab.
   int selectedIndex = 0;
+
+  /// Habits specifically scheduled for today.
   List<Habit> todayHabits = [];
+
+  /// Complete list of the user's habits (used in "All Habits" views).
   List<Habit> allHabits = [];
+
+  /// Chronologically sorted list of upcoming reminders for today.
   List<Reminder> upcomingReminders = [];
+
+  /// Map of category names to their habit counts.
   Map<String, int> categoryMap = {};
+
+  /// Currently active category filter; `null` or `'All'` shows everything.
   String? selectedCategory;
 
+  // ===========================================================================
+  // Private Dependencies
+  // ===========================================================================
+
+  /// Service layer for habit CRUD and toggle operations.
   final HabitService _habitService = HabitService();
+
+  /// Service layer for authentication, user profile, and token management.
   final AuthService _authService = AuthService();
 
+  /// Whether the controller is currently performing an async data load.
   bool isLoading = true;
+
+  /// Raw summary map returned by the habits API (streaks, categories, etc.).
   Map<String, dynamic> summary = {};
+
+  // ===========================================================================
+  // Computed Properties
+  // ===========================================================================
 
   /// Filtered habits based on selected category
   List<Habit> get filteredHabits {
@@ -47,11 +131,25 @@ class HomeController extends ChangeNotifier {
   // the auth token is set — i.e. when HomePage.initState() fires.
   HomeController();
 
+  // ===========================================================================
+  // Category Selection
+  // ===========================================================================
+
+  /// Updates the active category filter and triggers a UI rebuild.
   void selectCategory(String? category) {
     selectedCategory = category;
     notifyListeners();
   }
 
+  // ===========================================================================
+  // Data Loading
+  // ===========================================================================
+
+  /// Fetches the authenticated user's profile, today's habits, all habits,
+  /// streak/summary metrics, and upcoming reminders from the backend.
+  ///
+  /// Called from `HomePage.initState()` and by pull-to-refresh.
+  /// Sets [isLoading] to `true` at start and `false` when finished.
   Future<void> loadData() async {
     isLoading = true;
     notifyListeners();
@@ -105,6 +203,10 @@ class HomeController extends ChangeNotifier {
     }
   }
 
+  // ===========================================================================
+  // Habit Actions
+  // ===========================================================================
+
   /// Toggle Habit Completion Status
   Future<Map<String, dynamic>?> toggleHabitAsync(Habit habit) async {
     try {
@@ -136,7 +238,9 @@ class HomeController extends ChangeNotifier {
     return null;
   }
 
-  /// Skip Habit
+  /// Marks a habit as skipped with the given [reason].
+  ///
+  /// On success the full data set is reloaded to reflect the change.
   Future<void> skipHabitAsync(Habit habit, String reason) async {
     try {
       final success = await _habitService.skipHabit(habit.id, reason: reason);
@@ -148,12 +252,20 @@ class HomeController extends ChangeNotifier {
     }
   }
 
+  // ===========================================================================
+  // Private Helpers
+  // ===========================================================================
+
+  /// Recomputes [totalHabits], [completedHabits], and [todayProgress]
+  /// based on the current state of [todayHabits].
   void _updateProgress() {
     totalHabits = todayHabits.length;
     completedHabits = todayHabits.where((h) => h.isCompleted).length;
     todayProgress = totalHabits > 0 ? completedHabits / totalHabits : 0.0;
   }
 
+  /// Scans [todayHabits] for incomplete habits that have a future reminder
+  /// time and populates [upcomingReminders] sorted chronologically.
   void _updateReminders() {
     upcomingReminders = [];
     final now = DateTime.now();
@@ -185,6 +297,13 @@ class HomeController extends ChangeNotifier {
     upcomingReminders.sort((a, b) => a.time.compareTo(b.time));
   }
 
+  // ===========================================================================
+  // CRUD Operations
+  // ===========================================================================
+
+  /// Creates a new habit via the API and reloads data on success.
+  ///
+  /// Rethrows errors so that the UI layer can display user-facing messages.
   Future<void> addNewHabit(Habit habit) async {
     try {
       await _habitService.createHabit(habit);
@@ -198,6 +317,9 @@ class HomeController extends ChangeNotifier {
     }
   }
 
+  /// Persists updates to an existing habit and reloads data.
+  ///
+  /// Rethrows errors for UI-level handling.
   Future<void> updateExistingHabit(Habit updatedHabit) async {
     try {
       await _habitService.updateHabit(updatedHabit);
@@ -208,6 +330,10 @@ class HomeController extends ChangeNotifier {
     }
   }
 
+  /// Permanently deletes the habit with the given [id].
+  ///
+  /// Optimistically removes it from [todayHabits] and recalculates progress
+  /// to provide immediate visual feedback.
   Future<void> removeHabit(String id) async {
     try {
       await _habitService.deleteHabit(id);
@@ -219,11 +345,17 @@ class HomeController extends ChangeNotifier {
     }
   }
 
+  // ===========================================================================
+  // Navigation
+  // ===========================================================================
+
+  /// Switches the active bottom-navigation tab to [index].
   void changeNavigationIndex(int index) {
     selectedIndex = index;
     notifyListeners();
   }
 
+  /// Finds and returns the habit matching [id], or `null` if not found.
   Habit? getHabitById(String id) {
     try {
       return todayHabits.firstWhere((h) => h.id == id);
@@ -231,6 +363,10 @@ class HomeController extends ChangeNotifier {
       return null;
     }
   }
+
+  // ===========================================================================
+  // Session Lifecycle
+  // ===========================================================================
 
   /// Clear all in-memory state so the next login starts fresh.
   void reset() {
@@ -251,9 +387,14 @@ class HomeController extends ChangeNotifier {
     // Do NOT call notifyListeners() here — logout() will handle navigation.
   }
 
+  /// Resets local state, revokes the auth token, and signs out of Google.
+  ///
+  /// The navigation to [LoginScreen] is handled by the calling UI layer
+  /// (typically `_HomePageState._logout`).
   Future<void> logout() async {
     reset();
-    await _authService.logout();
+    // Sign out from Google if the user was authenticated via Google OAuth
+    await GoogleAuthService().signOut();
     notifyListeners();
   }
 }

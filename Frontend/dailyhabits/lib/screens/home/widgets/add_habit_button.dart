@@ -1,5 +1,22 @@
+// **add_habit_button.dart** — Add New Habit Button Widget
+//
+// Provides [AddHabitButtonWidget], a full-width call-to-action button
+// that launches the habit creation flow. Features an accent background
+// gradient with a subtle shadow for visual prominence.
+//
+// See also:
+//   - [CreateEditHabitSheet] for the modal form opened by this button.
+//   - [HomeController.addNewHabit] for the persistence logic.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+
+/// ===============================================================
+/// AddHabitButtonWidget
 /// ===============================================================
 ///
 /// A reusable button widget to trigger the action of adding a new habit.

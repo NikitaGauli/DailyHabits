@@ -1,21 +1,16 @@
+// =============================================================================
+// calendar_widget.dart — Onboarding Calendar Illustration
+// =============================================================================
+// A purely decorative, non-interactive calendar grid used on the second
+// onboarding page to visually demonstrate habit-tracking progress.
+//
+// The widget renders a static June calendar with two highlighted days
+// (15 and 22) representing sample completions. It is intentionally
+// read-only and serves only as a storytelling aid.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
-
-/// ---------------------------------------------------------------------------
-/// CalendarWidget
-/// ---------------------------------------------------------------------------
-/// A lightweight, non-interactive calendar widget used within the onboarding
-/// flow to visually demonstrate progress tracking.
-///
-/// Purpose:
-///  • Illustrates habit consistency visually
-///  • Enhances onboarding storytelling
-///  • Matches the design prototype exactly
-///
-/// Notes:
-///  • This widget is intentionally static
-///  • Highlighted dates are illustrative only
-/// ---------------------------------------------------------------------------
 class CalendarWidget extends StatelessWidget {
   const CalendarWidget({super.key});
 

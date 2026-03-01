@@ -1,3 +1,21 @@
+// **header.dart** — Top Greeting Header Widget
+//
+// Provides [HeaderWidget], a presentational component that shows a
+// time-of-day greeting (Morning / Afternoon / Evening) along with the
+// user's name and a trailing menu button.
+//
+// This widget is purely **stateless** and derives the greeting from
+// [DateTime.now]. It is typically placed at the very top of the home
+// dashboard.
+//
+// See also:
+//   - [HomePage._buildGreetingHeader] for the inline alternative used
+//     by the current dashboard layout.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 
 /// ===============================================================

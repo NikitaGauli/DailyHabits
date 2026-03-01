@@ -1,5 +1,24 @@
+// **daily_summary.dart** — Daily Summary Card Widget
+//
+// Provides [DailySummaryWidget], a side-by-side card layout showing
+// the count of completed vs. remaining habits for the current day.
+//
+// Uses green and accent colour coding to visually distinguish
+// completed and pending tallies.
+//
+// See also:
+//   - [HomeController] for the data source.
+//   - [ProgressCardWidget] for the circular progress variant.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+
+/// ===============================================================
+/// DailySummaryWidget
 /// ===============================================================
 ///
 /// A widget that displays a summary of daily habit progress.

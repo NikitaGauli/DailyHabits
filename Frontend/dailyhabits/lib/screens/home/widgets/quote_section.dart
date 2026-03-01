@@ -1,5 +1,23 @@
+// **quote_section.dart** — Motivational Quote Widget
+//
+// Provides [QuoteSectionWidget], a decorative card that displays an
+// inspirational quote with its author. Features a left-side accent bar
+// and italic typography for visual emphasis.
+//
+// Both [quote] and [author] accept optional overrides; sensible defaults
+// are provided so the widget can be used with zero configuration.
+//
+// See also:
+//   - [HomePage] for usage in the dashboard layout.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+/// ===============================================================
+/// QuoteSectionWidget
 /// ===============================================================
 ///
 /// A reusable widget that displays a motivational quote with

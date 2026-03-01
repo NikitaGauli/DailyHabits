@@ -1,9 +1,40 @@
+// **home_page.dart** — Main Home Screen for DailyHabits
+//
+// This file serves as the primary entry point for the authenticated user
+// experience. It orchestrates the top-level navigation between six main
+// tabs (Dashboard, Gamification, Community, Notifications, Insights, Profile) via an
+// [IndexedStack] and a custom bottom navigation bar.
+//
+// The **Dashboard** tab is the default view. It renders the user's daily
+// habit list, a hero progress card, quick-stat tiles, category filter chips,
+// upcoming reminders, and a floating action button for creating new habits.
+//
+// The **Profile** tab is built inline with settings shortcuts for
+// Appearance, Privacy, Help & Support, and a secure logout flow.
+//
+// State is managed through [HomeController] (a [ChangeNotifier] provided
+// via the `provider` package). Data is eagerly refreshed in [initState] to
+// guarantee the current user's context after login/signup/logout.
+//
+// See also:
+//   - [HomeController] for business logic and data loading.
+//   - [CreateEditHabitSheet] for the modal habit creation/edit form.
+//   - [HabitDetailScreen] for individual habit drill-down.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/models/habit.dart';
 import 'package:dailyhabits/widgets/home/create_edit_habit_sheet.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
 import 'package:dailyhabits/screens/analytics/analytics_screen.dart';
 import 'package:dailyhabits/screens/settings/settings_screen.dart';
+import 'package:dailyhabits/screens/settings/settings_controller.dart';
+import 'package:dailyhabits/screens/settings/pages/appearance_page.dart';
+import 'package:dailyhabits/screens/settings/pages/privacy_policy_page.dart';
+import 'package:dailyhabits/screens/settings/pages/help_support_page.dart';
 import 'package:dailyhabits/screens/community/community_screen.dart';
 import 'package:dailyhabits/screens/notifications/notification_screen.dart';
 import 'package:dailyhabits/screens/notifications/notification_controller.dart';
@@ -11,7 +42,23 @@ import 'package:dailyhabits/screens/habits/habit_detail_screen.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:provider/provider.dart';
 import 'home_controller.dart';
+import 'package:dailyhabits/screens/gamification/gamification_screen.dart';
+import 'package:dailyhabits/screens/gamification/gamification_controller.dart';
+import 'package:dailyhabits/screens/gamification/widgets/xp_celebration_overlay.dart';
+import 'package:dailyhabits/models/gamification_models.dart';
 
+// =============================================================================
+// HomePage Widget
+// =============================================================================
+
+/// The root screen of the authenticated app experience.
+///
+/// [HomePage] manages five tabs through an [IndexedStack] and a custom
+/// bottom navigation bar. On first build it triggers a full data reload
+/// via [HomeController.loadData] to ensure user-specific freshness.
+///
+/// The widget uses [TickerProviderStateMixin] to drive an entrance
+/// animation on the greeting header.
 class HomePage extends StatefulWidget {
   const HomePage({super.key});
 
@@ -20,7 +67,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
+  /// Controller for the greeting header fade-in animation.
   late AnimationController _greetingAnim;
+
+  /// Curved fade animation derived from [_greetingAnim].
   late Animation<double> _greetingFade;
 
   @override
@@ -40,6 +90,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<HomeController>().loadData();
       context.read<NotificationController>().refreshBadge();
+      context.read<GamificationController>().loadData();
     });
   }
 
@@ -49,6 +100,12 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     super.dispose();
   }
 
+  /// Opens a modal bottom sheet for creating a new habit or editing an
+  /// existing one.
+  ///
+  /// When [habit] is `null`, the sheet operates in creation mode and calls
+  /// [HomeController.addNewHabit]. Otherwise it updates via
+  /// [HomeController.updateExistingHabit].
   void _showForm({Habit? habit, required HomeController controller}) {
     showModalBottomSheet(
       context: context,
@@ -67,6 +124,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  /// Performs a full logout flow.
+  ///
+  /// Clears in-memory state via [HomeController.logout], resets the
+  /// notification badge, and navigates to [LoginScreen] while removing
+  /// the entire navigation stack.
   void _logout(HomeController controller) async {
     await controller.logout();
     if (mounted) {
@@ -100,6 +162,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             index: controller.selectedIndex,
             children: [
               _buildDashboard(controller),
+              const GamificationScreen(),
               const CommunityScreen(),
               const NotificationScreen(),
               const AnalyticsScreen(),
@@ -121,9 +184,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  DASHBOARD (10/10 premium layout)
+  //  DASHBOARD — Primary tab with habits, progress, and reminders
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /// Builds the main dashboard view (tab index 0).
+  ///
+  /// Composed of seven vertical sections inside a pull-to-refresh wrapper:
+  ///   1. Greeting header with user avatar
+  ///   2. Hero progress card (gradient ring + bar)
+  ///   3. Quick stats row (Streak / Record / Done / Remaining)
+  ///   4. Category filter chips (only when >1 habit exists)
+  ///   5. "Today" section header with habit count badge
+  ///   6. Habit cards list (or empty-state placeholder)
+  ///   7. Upcoming reminders list
   Widget _buildDashboard(HomeController controller) {
     final tc = context.colors;
 
@@ -196,6 +269,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // ─── 1. GREETING HEADER ───────────────────────────────────────────────────
 
+  /// Builds the top greeting row with a time-of-day-aware salutation,
+  /// the user's display name, and a tappable avatar that navigates to
+  /// the Profile tab.
   Widget _buildGreetingHeader(HomeController controller) {
     final tc = context.colors;
     final hour = DateTime.now().hour;
@@ -261,6 +337,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // ─── 2. HERO PROGRESS CARD ───────────────────────────────────────────────
 
+  /// Renders the hero-style gradient progress card.
+  ///
+  /// Displays a circular progress ring (animated via [TweenAnimationBuilder]),
+  /// a textual summary ("X of Y completed"), and a linear progress bar.
+  /// The gradient shifts to a success colour when all habits are done.
   Widget _buildHeroProgressCard(HomeController controller) {
     final tc = context.colors;
     final pct = (controller.todayProgress * 100).toInt();
@@ -372,6 +453,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // ─── 3. QUICK STATS ROW ──────────────────────────────────────────────────
 
+  /// Builds a horizontal row of four compact stat cards:
+  /// **Streak**, **Record**, **Done**, and **Remaining**.
   Widget _buildQuickStatsRow(HomeController controller) {
     final tc = context.colors;
 
@@ -412,6 +495,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  /// A single stat tile showing an icon, numeric value, and descriptive label.
   Widget _buildStatCard({
     required IconData icon,
     required String label,
@@ -463,6 +547,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // ─── 4. CATEGORY FILTER CHIPS ─────────────────────────────────────────────
 
+  /// Builds a horizontally scrollable row of category filter chips.
+  ///
+  /// Tapping a chip calls [HomeController.selectCategory], which updates
+  /// [HomeController.filteredHabits] and triggers a UI rebuild.
   Widget _buildCategoryChips(HomeController controller) {
     final tc = context.colors;
     final cats = controller.categories;
@@ -507,6 +595,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // ─── 5. SECTION HEADER ────────────────────────────────────────────────────
 
+  /// A reusable section heading with an optional count badge and add button.
+  ///
+  /// - [title] — the section label (e.g. "Today", "Coming Up").
+  /// - [count] — if provided, displayed as a small pill badge.
+  /// - [onAdd] — if provided, a ⊕ icon button is shown on the trailing edge.
   Widget _buildSectionHeader({
     required String title,
     int? count,
@@ -558,8 +651,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  // ─── 6. HABIT CARD (premium) ──────────────────────────────────────────────
+  // ─── 6. HABIT CARD ────────────────────────────────────────────────────────
 
+  /// Builds a single habit card row inside a [Dismissible] wrapper.
+  ///
+  /// Features:
+  ///   - Swipe-to-delete with a confirmation dialog.
+  ///   - Tap navigates to [HabitDetailScreen] and refreshes on pop.
+  ///   - Circular toggle button for marking completion, with a snackbar.
+  ///   - Visual metadata: category pill, scheduled time, streak flame icon.
+  ///   - Strike-through styling when the habit is already completed.
   Widget _buildHabitCard(Habit habit, HomeController controller) {
     final tc = context.colors;
     final isDone = habit.isCompleted;
@@ -718,19 +819,32 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   final result = await controller.toggleHabitAsync(habit);
                   if (result != null && mounted) {
                     final isNowDone = result['isCompleted'] == true;
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          isNowDone
-                              ? '${habit.title} — done ✓'
-                              : '${habit.title} — unmarked',
+
+                    // Show XP celebration overlay if gamification data is present
+                    if (isNowDone && result['gamification'] != null) {
+                      final gamResult = GamificationResult.fromJson(
+                        result['gamification'] as Map<String, dynamic>,
+                      );
+                      if (mounted) {
+                        XPCelebrationOverlay.show(context, gamResult);
+                        // Refresh gamification dashboard in background
+                        context.read<GamificationController>().loadData();
+                      }
+                    } else {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            isNowDone
+                                ? '${habit.title} — done ✓'
+                                : '${habit.title} — unmarked',
+                          ),
+                          backgroundColor: isNowDone ? AppColors.success : tc.textMuted,
+                          duration: const Duration(seconds: 1),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                         ),
-                        backgroundColor: isNowDone ? AppColors.success : tc.textMuted,
-                        duration: const Duration(seconds: 1),
-                        behavior: SnackBarBehavior.floating,
-                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                      ),
-                    );
+                      );
+                    }
                   }
                 },
                 child: AnimatedContainer(
@@ -760,6 +874,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // ─── 7. REMINDERS LIST ────────────────────────────────────────────────────
 
+  /// Renders the list of upcoming (future-time) reminders for incomplete
+  /// habits, sorted chronologically. Each item shows a notification icon,
+  /// the habit title, and the scheduled time in a pill badge.
   Widget _buildRemindersList(HomeController controller) {
     final tc = context.colors;
 
@@ -811,6 +928,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // ─── EMPTY STATE ──────────────────────────────────────────────────────────
 
+  /// Displays a friendly empty-state illustration when the user has no
+  /// habits configured for today, prompting them to tap the FAB.
   Widget _buildEmptyState() {
     final tc = context.colors;
 
@@ -859,9 +978,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  BOTTOM NAV
+  //  BOTTOM NAVIGATION BAR
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /// Builds the custom five-tab bottom navigation bar.
+  ///
+  /// Tabs: Home · Community · Inbox (with unread badge) · Insights · Profile.
+  /// The Inbox item wraps its icon in a [Badge] widget driven by
+  /// [NotificationController.unreadCount].
   Widget _buildBottomNav(HomeController controller) {
     final tc = context.colors;
 
@@ -886,10 +1010,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
               _navItem(controller, Icons.home_rounded, 'Home', 0),
-              _navItem(controller, Icons.people_rounded, 'Community', 1),
-              _navItem(controller, Icons.notifications_rounded, 'Inbox', 2),
-              _navItem(controller, Icons.bar_chart_rounded, 'Insights', 3),
-              _navItem(controller, Icons.person_rounded, 'Profile', 4),
+              _navItem(controller, Icons.rocket_launch_rounded, 'Gamify', 1),
+              _navItem(controller, Icons.people_rounded, 'Community', 2),
+              _navItem(controller, Icons.notifications_rounded, 'Inbox', 3),
+              _navItem(controller, Icons.bar_chart_rounded, 'Insights', 4),
+              _navItem(controller, Icons.person_rounded, 'Profile', 5),
             ],
           ),
         ),
@@ -897,6 +1022,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  /// Builds a single bottom-nav item with active/inactive styling and an
+  /// optional notification badge (for the Inbox tab at index 2).
   Widget _navItem(
     HomeController controller,
     IconData icon,
@@ -919,8 +1046,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            // Wrap Inbox icon (index 2) with a badge
-            if (index == 2)
+            // Wrap Inbox icon (index 3) with a badge
+            if (index == 3)
               Consumer<NotificationController>(
                 builder: (context, notifCtrl, child) {
                   final count = notifCtrl.unreadCount;
@@ -965,9 +1092,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   }
 
   // ═══════════════════════════════════════════════════════════════════════════
-  //  PROFILE TAB
+  //  PROFILE TAB — User info, stats, settings shortcuts, and logout
   // ═══════════════════════════════════════════════════════════════════════════
 
+  /// Builds the Profile tab (tab index 4).
+  ///
+  /// Displays the user avatar, name, tagline, a stats row (Habits / Streak /
+  /// Record), quick-access settings options, and a logout button.
   Widget _buildProfile(HomeController controller) {
     final tc = context.colors;
 
@@ -1032,11 +1163,37 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             const SizedBox(height: 24),
 
             _profileOption(Icons.settings_rounded, 'Settings', 'Alerts, reminders, quiet hours', tc, onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => const SettingsScreen()));
+              Navigator.push(context, MaterialPageRoute(builder: (_) =>
+                ChangeNotifierProvider(
+                  create: (_) => SettingsController(),
+                  child: const SettingsScreen(),
+                ),
+              ));
             }),
-            _profileOption(Icons.palette_outlined, 'Appearance', 'Light, dark, or system theme', tc),
-            _profileOption(Icons.shield_outlined, 'Privacy', 'Manage your data', tc),
-            _profileOption(Icons.help_outline_rounded, 'Help & Support', 'FAQs and contact', tc),
+            _profileOption(Icons.palette_outlined, 'Appearance', 'Light, dark, or system theme', tc, onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) =>
+                ChangeNotifierProvider(
+                  create: (_) => SettingsController(),
+                  child: const AppearancePage(),
+                ),
+              ));
+            }),
+            _profileOption(Icons.shield_outlined, 'Privacy', 'Manage your data', tc, onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) =>
+                ChangeNotifierProvider(
+                  create: (_) => SettingsController(),
+                  child: const PrivacyPolicyPage(),
+                ),
+              ));
+            }),
+            _profileOption(Icons.help_outline_rounded, 'Help & Support', 'FAQs and contact', tc, onTap: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) =>
+                ChangeNotifierProvider(
+                  create: (_) => SettingsController(),
+                  child: const HelpSupportPage(),
+                ),
+              ));
+            }),
             const SizedBox(height: 24),
 
             SizedBox(
@@ -1059,6 +1216,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  /// Renders a single numeric stat with a label inside the profile stats row.
   Widget _profileStat(String value, String label, ThemeColors tc) {
     return Column(
       children: [
@@ -1076,6 +1234,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
+  /// Builds a tappable settings/option row with an icon, title, subtitle,
+  /// and a trailing chevron. Used for Settings, Appearance, Privacy, etc.
   Widget _profileOption(
     IconData icon,
     String title,

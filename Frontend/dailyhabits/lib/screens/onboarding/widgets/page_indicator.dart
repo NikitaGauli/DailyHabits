@@ -1,3 +1,13 @@
+// =============================================================================
+// page_indicator.dart — Animated Page Indicator
+// =============================================================================
+// A horizontal row of animated indicator dots used in the onboarding
+// carousel to communicate the current page position.
+//
+// The active dot stretches wider while inactive dots remain compact,
+// providing a smooth visual cue during page transitions.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 

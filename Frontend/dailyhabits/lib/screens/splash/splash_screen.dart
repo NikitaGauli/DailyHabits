@@ -1,3 +1,19 @@
+// =============================================================================
+// splash_screen.dart — Application Launch Splash
+// =============================================================================
+// The very first screen the user sees when opening the DailyHabits app.
+//
+// Responsibilities:
+//  • Plays branded entrance animations (logo scale, text slide, background
+//    gradient pulse).
+//  • Checks persistent storage for onboarding completion and authentication
+//    tokens.
+//  • Navigates to the correct destination after a 3-second showcase:
+//    – [OnboardingCarousel] if the user has never completed onboarding.
+//    – [LoginScreen] if onboarding is done but no auth token exists.
+//    – [HomePage] if the user is fully authenticated.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/screens/onboarding/onboarding_carousel.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
@@ -18,22 +34,28 @@ class SplashScreen extends StatefulWidget {
   State<SplashScreen> createState() => _SplashScreenState();
 }
 
+/// Internal state for [SplashScreen].
+///
+/// Manages three animation controllers:
+///  • `_logoController` – scale + fade for the app logo.
+///  • `_textController` – fade + slide for the app title.
+///  • `_backgroundController` – repeating gradient pulse.
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  // Animation controllers
+  // ─────────────────────── Animation Controllers ───────────────────────
   late final AnimationController _logoController;
   late final AnimationController _textController;
   late final AnimationController _backgroundController;
 
-  // Logo animations
+  // ───────────────────────── Logo Animations ─────────────────────────
   late final Animation<double> _logoScaleAnimation;
   late final Animation<double> _logoFadeAnimation;
 
-  // Text animations
+  // ───────────────────────── Text Animations ─────────────────────────
   late final Animation<double> _textFadeAnimation;
   late final Animation<Offset> _textSlideAnimation;
 
-  // Background animation
+  // ─────────────────────── Background Animation ───────────────────────
   late final Animation<double> _backgroundPulseAnimation;
 
   @override
@@ -57,7 +79,9 @@ class _SplashScreenState extends State<SplashScreen>
     super.dispose();
   }
 
-  // ----------------------- Animation Setup -----------------------
+  // ======================= Animation Setup =======================
+
+  /// Initialises all animation controllers and their tween curves.
   void _setupAnimations() {
     // Background pulse animation
     _backgroundController = AnimationController(
@@ -101,6 +125,8 @@ class _SplashScreenState extends State<SplashScreen>
         );
   }
 
+  /// Starts all animations in sequence: background loop first, then
+  /// logo, then text with a 400 ms stagger.
   void _playAnimations() {
     _backgroundController.repeat(reverse: true);
     _logoController.forward();
@@ -110,7 +136,10 @@ class _SplashScreenState extends State<SplashScreen>
     });
   }
 
-  // ----------------------- Navigation Logic -----------------------
+  // ======================= Navigation Logic =======================
+
+  /// Reads [SharedPreferences] to determine the user’s login state and
+  /// routes to the appropriate screen.
   Future<void> _checkLoginStatus() async {
     final prefs = await SharedPreferences.getInstance();
     final bool onboardingComplete =
@@ -128,11 +157,13 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
+  /// Helper to perform a push-replacement navigation to [page].
   void _navigateTo(Widget page) {
     Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => page));
   }
 
-  // ----------------------- UI Rendering -----------------------
+  // ======================= UI Rendering =======================
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -163,7 +194,10 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
-  // ----------------------- UI Components -----------------------
+  // ======================= UI Components =======================
+
+  /// Builds a [BoxDecoration] whose gradient colours subtly pulse using
+  /// the [_backgroundPulseAnimation] value.
   BoxDecoration _buildAnimatedGradient() {
     final isDark = context.isDarkMode;
     final startBase = isDark ? AppColors.darkBg : AppColors.lightBg;
@@ -191,6 +225,8 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
+  /// Animated app logo with elastic scale and fade transitions,
+  /// wrapped in a [Hero] for shared-element transitions.
   Widget _buildAnimatedLogo() {
     return FadeTransition(
       opacity: _logoFadeAnimation,
@@ -224,6 +260,7 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
+  /// Animated "DailyHabits" title with slide and fade transitions.
   Widget _buildAnimatedTitle() {
     return SlideTransition(
       position: _textSlideAnimation,
@@ -242,6 +279,8 @@ class _SplashScreenState extends State<SplashScreen>
     );
   }
 
+  /// Loading spinner and "Getting ready…" label shown at the bottom
+  /// of the splash screen.
   Widget _buildLoadingIndicator() {
     return FadeTransition(
       opacity: _textFadeAnimation,

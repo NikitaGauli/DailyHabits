@@ -1,3 +1,14 @@
+// =============================================================================
+// onboarding_page.dart — Onboarding Page Data Model & Widget
+// =============================================================================
+// Defines the [OnboardingPageData] configuration model and the
+// [OnboardingPageWidget] that renders a single onboarding page.
+//
+// Also contains two supporting private widgets:
+//  • [_GlassmorphicContainer] – frosted-glass visual container.
+//  • [_ImageContent] – placeholder image with optional overlay icon.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/screens/onboarding/widgets/calendar_widget.dart';
 import 'package:dailyhabits/theme/app_theme.dart';

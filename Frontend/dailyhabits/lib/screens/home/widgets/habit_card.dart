@@ -1,3 +1,21 @@
+// **habit_card.dart** — Individual Habit Card Widget
+//
+// Provides [HabitCardWidget], a reusable card component used on the home
+// dashboard to represent a single habit. It renders the habit icon, title,
+// time/category metadata, and a toggleable completion checkbox.
+//
+// This widget is **stateless** — all state (completion, streaks, etc.) is
+// owned by the parent controller and communicated through the [Habit] model
+// and callback closures.
+//
+// See also:
+//   - [Habit] for the data model.
+//   - [HomeController] / [HomePage] for usage context.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import '../../../models/habit.dart';
@@ -12,7 +30,7 @@ import '../../../models/habit.dart';
 /// and toggling completion.
 ///
 /// Parameters:
-/// - [habit]: The Habit object containing all habit details.
+/// - [habit]: The [Habit] object containing all habit details.
 /// - [onTap]: Callback function triggered when the card itself is tapped (e.g., to edit).
 /// - [onToggle]: Callback function triggered when the checkbox is tapped to mark completion.
 ///
@@ -26,13 +44,13 @@ import '../../../models/habit.dart';
 /// ```
 /// ===============================================================
 class HabitCardWidget extends StatelessWidget {
-  /// Habit data
+  /// The [Habit] data model driving this card's content.
   final Habit habit;
 
-  /// Action when the card is tapped
+  /// Action when the card body is tapped (typically navigates to detail/edit).
   final VoidCallback onTap;
 
-  /// Action when the checkbox is toggled
+  /// Action when the trailing checkbox is toggled (marks habit complete/incomplete).
   final VoidCallback onToggle;
 
   const HabitCardWidget({
@@ -64,7 +82,7 @@ class HabitCardWidget extends StatelessWidget {
             padding: const EdgeInsets.all(16),
             child: Row(
               children: [
-                // Icon container
+                // Icon container — coloured background with habit-specific icon
                 Container(
                   width: 48,
                   height: 48,
@@ -76,7 +94,8 @@ class HabitCardWidget extends StatelessWidget {
                 ),
                 const SizedBox(width: 16),
 
-                // Habit details: title and time/category
+                // Habit details — title (with strikethrough when done)
+                // and a secondary line showing time and category
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -105,7 +124,8 @@ class HabitCardWidget extends StatelessWidget {
                   ),
                 ),
 
-                // Completion checkbox
+                // Animated completion checkbox — transitions between an
+                // empty bordered square and a green check icon
                 GestureDetector(
                   onTap: onToggle,
                   child: AnimatedContainer(

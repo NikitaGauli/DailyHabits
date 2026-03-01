@@ -1,11 +1,33 @@
+// DailyHabits — Create / Edit Habit Bottom Sheet
+//
+// A full-featured modal bottom sheet that allows users to create a new habit
+// or edit an existing one.  Includes fields for title, description, time,
+// category, frequency, as well as interactive icon and color pickers.
+//
+// The sheet validates input via a [Form] and delegates persistence to the
+// caller-supplied [CreateEditHabitSheet.onSave] callback.
+//
+// See also:
+// - [Habit]      — the data model constructed by this sheet.
+// - [AppColors]  — predefined palette used by the color picker.
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:dailyhabits/models/habit.dart';
 
 /// A premium bottom sheet for creating or editing a habit.
-/// Features a glass-morphism style, icon picker, color picker, and smooth animations.
+///
+/// When [habit] is `null` the sheet operates in **create** mode; otherwise
+/// it pre-fills every field from the existing habit for **edit** mode.
+///
+/// The [onSave] future is awaited before dismissing the sheet, giving the
+/// caller a chance to perform async work (e.g., an API call).  Errors are
+/// caught and surfaced via a [SnackBar].
 class CreateEditHabitSheet extends StatefulWidget {
+  /// The existing habit to edit, or `null` to create a new one.
   final Habit? habit;
+
+  /// Async callback invoked with the new/updated [Habit] on form submission.
   final Future<void> Function(Habit) onSave;
 
   const CreateEditHabitSheet({super.key, this.habit, required this.onSave});
@@ -14,16 +36,26 @@ class CreateEditHabitSheet extends StatefulWidget {
   State<CreateEditHabitSheet> createState() => _CreateEditHabitSheetState();
 }
 
+// ==========================================================================
+//  State
+// ==========================================================================
+
 class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
+  // ── Form key & text controllers ─────────────────────────────────────
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _titleController;
   late TextEditingController _descriptionController;
   late TextEditingController _timeController;
+
+  // ── Selection state ───────────────────────────────────────────────
   late String _category;
   late IconData _selectedIcon;
   late Color _selectedColor;
   late String _frequency;
 
+  // ── Picker data sources ───────────────────────────────────────────
+
+  /// Available habit categories presented in the dropdown.
   final List<String> _categories = [
     'Mindfulness',
     'Health',
@@ -34,6 +66,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
     'Social',
   ];
 
+  /// Palette of selectable colors for the habit accent.
   final List<Color> _colors = [
     AppColors.accentTertiary,
     AppColors.accent,
@@ -44,6 +77,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
     const Color(0xFF06B6D4),
   ];
 
+  /// Selectable Material icons for the habit tile avatar.
   final List<IconData> _icons = [
     Icons.self_improvement,
     Icons.book,
@@ -57,6 +91,10 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
     Icons.bed,
   ];
 
+  // ── Lifecycle ─────────────────────────────────────────────────────
+
+  /// Initializes text controllers and picker defaults from the existing
+  /// [widget.habit] (edit mode) or falls back to sensible defaults (create).
   @override
   void initState() {
     super.initState();
@@ -71,6 +109,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
     _frequency = widget.habit?.frequency ?? 'daily';
   }
 
+  /// Disposes all [TextEditingController]s to prevent memory leaks.
   @override
   void dispose() {
     _titleController.dispose();
@@ -79,8 +118,13 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
     super.dispose();
   }
 
+  // ── Actions ──────────────────────────────────────────────────────
+
+  /// Validates the form, constructs a [Habit], invokes [widget.onSave],
+  /// and dismisses the sheet.  Shows a [SnackBar] on failure.
   Future<void> _handleSubmit() async {
     if (_formKey.currentState!.validate()) {
+      // Build the Habit model from the form fields
       final newHabit = Habit(
         id: widget.habit?.id ?? '', // ID handled by backend for creates
         title: _titleController.text.trim(),
@@ -112,10 +156,13 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
     }
   }
 
+  // ── Build ───────────────────────────────────────────────────────
+
   @override
   Widget build(BuildContext context) {
     final tc = context.colors;
-    // Glassy dark theme background
+
+    // Themed container with rounded top corners for bottom-sheet appearance
     return Container(
       decoration: BoxDecoration(
         color: tc.bg,
@@ -137,6 +184,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
             crossAxisAlignment: CrossAxisAlignment.start,
             mainAxisSize: MainAxisSize.min,
             children: [
+              // ── Drag handle indicator ─────────────────────────────────
               // Header
               Center(
                 child: Container(
@@ -159,6 +207,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
               ),
               const SizedBox(height: 24),
 
+              // ── Title input ─────────────────────────────────────────
               // Title Input
               _buildLabel('Title'),
               _buildTextField(
@@ -169,6 +218,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
 
               const SizedBox(height: 20),
 
+              // ── Description input ───────────────────────────────────
               // Description Input
               _buildLabel('Description (optional)'),
               _buildTextField(
@@ -180,6 +230,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
 
               const SizedBox(height: 20),
 
+              // ── Frequency dropdown ───────────────────────────────────
               // Frequency
               _buildLabel('Frequency'),
               Container(
@@ -224,6 +275,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
 
               const SizedBox(height: 20),
 
+              // ── Time of day input ────────────────────────────────────
               // Time Input
               _buildLabel('Time'),
               _buildTextField(
@@ -234,6 +286,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
 
               const SizedBox(height: 20),
 
+              // ── Category dropdown ────────────────────────────────────
               // Category Dropdown
               _buildLabel('Category'),
               Container(
@@ -273,6 +326,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
 
               const SizedBox(height: 20),
 
+              // ── Icon picker (horizontal scroll) ──────────────────────
               // Icon Picker
               _buildLabel('Icon'),
               SizedBox(
@@ -312,6 +366,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
 
               const SizedBox(height: 20),
 
+              // ── Color picker (horizontal scroll) ─────────────────────
               // Color Picker
               _buildLabel('Color'),
               SizedBox(
@@ -360,6 +415,7 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
 
               const SizedBox(height: 32),
 
+              // ── Submit button ────────────────────────────────────────
               // Save Button
               SizedBox(
                 width: double.infinity,
@@ -392,6 +448,9 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
     );
   }
 
+  // ── Private helpers ───────────────────────────────────────────────
+
+  /// Builds a small, semi-bold section label rendered above each form field.
   Widget _buildLabel(String label) {
     final tc = context.colors;
     return Padding(
@@ -407,6 +466,9 @@ class _CreateEditHabitSheetState extends State<CreateEditHabitSheet> {
     );
   }
 
+  /// Builds a themed [TextFormField] with an icon, hint text, and optional
+  /// multi-line support.  Single-line fields are required; multi-line fields
+  /// are optional.
   Widget _buildTextField({
     required TextEditingController controller,
     required String hint,

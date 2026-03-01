@@ -1,5 +1,25 @@
+// **progress_card.dart** — Daily Progress Card Widget
+//
+// Provides [ProgressCardWidget], a dashboard card that visualises the
+// user's daily habit completion rate. Features a circular progress
+// indicator, percentage label, and a current-streak badge.
+//
+// All values are passed in as constructor parameters — the widget is
+// purely presentational and carries no business logic.
+//
+// See also:
+//   - [HomeController] for the source of progress metrics.
+//   - [HomePage._buildHeroProgressCard] for the inline hero variant.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+
+/// ===============================================================
+/// ProgressCardWidget
 /// ===============================================================
 ///
 /// A reusable card widget that displays the user's daily progress

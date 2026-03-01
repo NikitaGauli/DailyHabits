@@ -1,5 +1,25 @@
+// **bottom_navigation.dart** — Custom Bottom Navigation Bar Widget
+//
+// Provides [BottomNavigationWidget], a five-tab bottom navigation bar
+// for the DailyHabits app. Tabs include Home, Statistics, Habits,
+// Rewards, and Settings.
+//
+// Selection state is managed externally via [selectedIndex] and
+// communicated back through [onIndexChanged].
+//
+// See also:
+//   - [HomePage._buildBottomNav] for the inline variant currently in use.
+//   - [HomeController.changeNavigationIndex] for tab switching logic.
+
+// =============================================================================
+// Imports
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+
+/// ===============================================================
+/// BottomNavigationWidget
 /// ===============================================================
 ///
 /// A customizable bottom navigation bar for the DailyHabits app.

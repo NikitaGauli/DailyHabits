@@ -1,3 +1,20 @@
+// =============================================================================
+// habit_detail_screen.dart — Individual Habit Detail View
+// =============================================================================
+// Full-page detail screen for a single [Habit].
+//
+// Displays:
+//  • Habit header (icon, title, description, category/frequency chips).
+//  • Completion toggle button (mark as done / undo).
+//  • Streak & progress statistics (current, best, completions, skips).
+//  • Consistency bars for the last 7 / 30 / 90 days.
+//  • Schedule information (time, frequency, reminders).
+//  • Recent activity history timeline.
+//
+// Provides in-place editing via [CreateEditHabitSheet] and deletion
+// with a confirmation dialog.
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/models/habit.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
@@ -6,8 +23,13 @@ import 'package:dailyhabits/widgets/home/create_edit_habit_sheet.dart';
 
 /// Detailed view for a single habit — stats, streak, history, notes.
 class HabitDetailScreen extends StatefulWidget {
+  /// The habit to display.
   final Habit habit;
+
+  /// Callback invoked after the habit’s completion state changes.
   final VoidCallback? onToggle;
+
+  /// Callback invoked after the habit is permanently deleted.
   final VoidCallback? onDelete;
 
   const HabitDetailScreen({
@@ -21,12 +43,24 @@ class HabitDetailScreen extends StatefulWidget {
   State<HabitDetailScreen> createState() => _HabitDetailScreenState();
 }
 
+/// Internal state for [HabitDetailScreen].
+///
+/// Owns the mutable [_habit] reference, server-fetched [_stats],
+/// and the 30-day [_history] list.
 class _HabitDetailScreenState extends State<HabitDetailScreen> {
+  /// Service layer for habit CRUD and analytics calls.
   final HabitService _habitService = HabitService();
 
+  /// Local mutable copy of the habit (updated after edits/toggles).
   late Habit _habit;
+
+  /// Aggregated statistics returned by the stats endpoint.
   Map<String, dynamic>? _stats;
+
+  /// Raw history entries for the last 30 days.
   List<Map<String, dynamic>> _history = [];
+
+  /// Whether the initial data load is in progress.
   bool _isLoading = true;
 
   @override
@@ -36,6 +70,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     _loadData();
   }
 
+  /// Fetches stats and 30-day history for the current habit.
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     try {
@@ -55,6 +90,9 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     }
   }
 
+  /// Opens the create/edit bottom sheet pre-populated with [_habit] data.
+  ///
+  /// On save, pushes the update to the server and refreshes local state.
   void _showEditSheet() {
     showModalBottomSheet(
       context: context,
@@ -73,6 +111,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     );
   }
 
+  /// Shows a destructive confirmation dialog and, upon acceptance,
+  /// deletes the habit from the server and pops the screen.
   Future<void> _confirmDelete() async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -168,7 +208,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
   }
 
   // ─── HEADER ────────────────────────────────────────────────────────────
-
+  /// Builds the habit header card with icon, title, description, and
+  /// metadata chips (category, frequency, priority).
   Widget _buildHabitHeader(ThemeColors tc) {
     return Container(
       padding: const EdgeInsets.all(20),
@@ -235,6 +276,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     );
   }
 
+  /// Reusable small chip with a tinted background.
   Widget _buildChip(String text, Color color, ThemeColors tc) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
@@ -253,7 +295,10 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
   }
 
   // ─── COMPLETION TOGGLE ─────────────────────────────────────────────────
-
+  /// Animated toggle button that marks the habit as done/undone for today.
+  ///
+  /// On tap, calls the toggle API and updates local state from the
+  /// server response (completion status and streak count).
   Widget _buildCompletionToggle(ThemeColors tc) {
     final isDone = _habit.isCompleted;
 
@@ -314,7 +359,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
   }
 
   // ─── STREAK ────────────────────────────────────────────────────────────
-
+  /// Builds the "Streak & Progress" section with a 2×2 grid of stat cards
+  /// (current streak, best streak, total completions, total skips).
   Widget _buildStreakSection(ThemeColors tc) {
     final streakData = _stats?['streak'] ?? {};
     final current = streakData['currentStreak'] ?? _habit.currentStreak;
@@ -381,6 +427,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     );
   }
 
+  /// Builds a single stat card with an icon, value, and label.
   Widget _buildStatCard({
     required IconData icon,
     required String label,
@@ -418,7 +465,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
   }
 
   // ─── CONSISTENCY ───────────────────────────────────────────────────────
-
+  /// Builds the "Consistency" section showing animated progress bars
+  /// for the 7-day, 30-day, and 90-day completion percentages.
   Widget _buildConsistencySection(ThemeColors tc) {
     final consistency = _stats?['consistency'] ?? {};
     final d7 = (consistency['7days'] ?? 0).toDouble();
@@ -442,9 +490,13 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     );
   }
 
+  /// Renders a single animated consistency progress bar.
+  ///
+  /// Bar colour is determined by the percentage: green (≥80%), teal (≥50%),
+  /// or amber (<50%).
   Widget _buildConsistencyBar(String label, double pct, ThemeColors tc) {
     final fraction = (pct / 100).clamp(0.0, 1.0);
-    // Use secondary (teal) for progress bar per spec
+    // Choose colour based on consistency level
     final barColor = pct >= 80
         ? tc.success
         : pct >= 50
@@ -501,7 +553,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
   }
 
   // ─── SCHEDULE INFO ─────────────────────────────────────────────────────
-
+  /// Displays the habit’s scheduling metadata: preferred time, frequency
+  /// pattern (daily / custom days), and reminder configuration.
   Widget _buildScheduleInfo(ThemeColors tc) {
     final dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
@@ -568,7 +621,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
   }
 
   // ─── RECENT HISTORY ────────────────────────────────────────────────────
-
+  /// Renders the "Recent Activity" section showing the last 10 history
+  /// entries (completed, skipped, or missed), or an empty-state message.
   Widget _buildRecentHistory(ThemeColors tc) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -601,6 +655,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     );
   }
 
+  /// Renders a single history entry row with a status icon, label,
+  /// optional notes, and the date string.
   Widget _buildHistoryTile(Map<String, dynamic> entry, ThemeColors tc) {
     final status = entry['status'] ?? 'unknown';
     final date = entry['date'] ?? '';

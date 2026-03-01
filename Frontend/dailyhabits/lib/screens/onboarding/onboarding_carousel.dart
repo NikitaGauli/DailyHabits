@@ -1,3 +1,23 @@
+// =============================================================================
+// onboarding_carousel.dart — First-Run Onboarding Flow
+// =============================================================================
+// Swipeable onboarding experience presented to first-time users.
+//
+// Contains three pages that introduce the core value propositions of the
+// DailyHabits application:
+//  1. **Build Better Habits** – daily tracking overview.
+//  2. **Track Your Progress** – charts, insights, and calendar demo.
+//  3. **Stay Motivated** – reminders, milestones, and rewards.
+//
+// Navigation controls:
+//  • Swipe gestures via [PageView].
+//  • Skip button (jumps to the last page).
+//  • Next / Get Started button.
+//
+// On completion the `onboardingComplete` flag is persisted to
+// [SharedPreferences] and the user is routed to [LoginScreen].
+// =============================================================================
+
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
 import 'package:dailyhabits/screens/onboarding/widgets/onboarding_page.dart';
@@ -18,10 +38,18 @@ class OnboardingCarousel extends StatefulWidget {
   State<OnboardingCarousel> createState() => _OnboardingCarouselState();
 }
 
+/// Internal state for [OnboardingCarousel].
+///
+/// Manages the [PageController], the current page index, and the
+/// static list of [OnboardingPageData] entries.
 class _OnboardingCarouselState extends State<OnboardingCarousel> {
+  /// Controls the horizontal [PageView].
   final PageController _pageController = PageController();
+
+  /// Zero-based index of the currently visible page.
   int _currentPage = 0;
 
+  /// Static configuration list defining all onboarding pages.
   final List<OnboardingPageData> _pages = const [
     OnboardingPageData(
       gradient: LinearGradient(
@@ -68,10 +96,13 @@ class _OnboardingCarouselState extends State<OnboardingCarousel> {
     super.dispose();
   }
 
+  /// Callback invoked by [PageView.onPageChanged].
   void _handlePageChange(int pageIndex) {
     setState(() => _currentPage = pageIndex);
   }
 
+  /// Advances to the next page, or completes onboarding if already on
+  /// the last page.
   void _handleNextAction() {
     if (_currentPage < _pages.length - 1) {
       _pageController.animateToPage(
@@ -84,6 +115,8 @@ class _OnboardingCarouselState extends State<OnboardingCarousel> {
     }
   }
 
+  /// Animates directly to the last page, allowing the user to skip
+  /// the remaining onboarding content.
   void _skipOnboarding() {
     _pageController.animateToPage(
       _pages.length - 1,
@@ -92,6 +125,8 @@ class _OnboardingCarouselState extends State<OnboardingCarousel> {
     );
   }
 
+  /// Persists the onboarding-complete flag and navigates to [LoginScreen]
+  /// with a fade transition.
   Future<void> _completeOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setBool('onboardingComplete', true);
@@ -160,7 +195,13 @@ class _OnboardingCarouselState extends State<OnboardingCarousel> {
   }
 }
 
-/// Primary Action Button
+// =============================================================================
+//  PRIMARY ACTION BUTTON
+// =============================================================================
+
+/// Full-width elevated button used at the bottom of the onboarding flow.
+///
+/// Displays a [label] ("Next" or "Get Started") with a forward-arrow icon.
 class _PrimaryActionButton extends StatelessWidget {
   const _PrimaryActionButton({required this.label, required this.onPressed});
 
