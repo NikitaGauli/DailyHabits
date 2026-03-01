@@ -1,16 +1,48 @@
+// =============================================================================
+// File: notification_service.dart
+// Description: Notification management service for the DailyHabits application.
+//              Handles inbox notifications, smart tips, notification settings,
+//              and AI-driven notification intelligence (smart suggestions,
+//              streak risk alerts, weekly nudges).
+// =============================================================================
+
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:dailyhabits/services/auth_service.dart';
 import 'package:dailyhabits/services/api_config.dart';
 import 'package:dailyhabits/models/notification_model.dart';
 
+// =============================================================================
+// Notification Service
+// =============================================================================
+
+/// Comprehensive notification service covering four subsystems:
+///
+/// 1. **Inbox Notifications** — Standard read/unread notification management.
+/// 2. **Smart Tips** — AI-curated tips with like, save, and dismiss actions.
+/// 3. **Settings** — User-configurable notification preferences.
+/// 4. **Notification Intelligence** — Proactive alerts including smart
+///    suggestions, streak-risk warnings, and weekly performance nudges.
+///
+/// All requests are authenticated via JWT tokens from [AuthService].
 class NotificationService {
+  // ---------------------------------------------------------------------------
+  // Dependencies & Configuration
+  // ---------------------------------------------------------------------------
+
+  /// Shared [AuthService] instance for retrieving the JWT token.
   final AuthService _authService = AuthService();
 
+  /// Base URL for standard notification endpoints.
   String get _baseUrl => '${ApiConfig.baseUrl}/notifications';
+
+  /// Base URL for notification preference settings.
   String get _settingsUrl => '${ApiConfig.baseUrl}/notification-settings';
+
+  /// Base URL for AI-generated smart tips.
   String get _smartTipsUrl => '${ApiConfig.baseUrl}/smart-tips';
 
+  /// Builds authenticated HTTP headers with JSON content type.
   Future<Map<String, String>> _getHeaders() async {
     final token = await _authService.getToken();
     return {
@@ -19,9 +51,14 @@ class NotificationService {
     };
   }
 
-  // ── Inbox Notifications ──────────────────────────────────────
+  // ---------------------------------------------------------------------------
+  // Inbox Notifications
+  // ---------------------------------------------------------------------------
 
-  /// Get notifications
+  /// Fetches all notifications for the authenticated user.
+  ///
+  /// Returns a list of [AppNotification] objects ordered by date (newest first).
+  /// Returns an empty list on failure.
   Future<List<AppNotification>> getNotifications() async {
     try {
       final headers = await _getHeaders();
@@ -44,7 +81,9 @@ class NotificationService {
     }
   }
 
-  /// Get unread count
+  /// Returns the count of unread notifications.
+  ///
+  /// Used by badge indicators in the UI. Returns `0` on failure.
   Future<int> getUnreadCount() async {
     try {
       final headers = await _getHeaders();
@@ -63,7 +102,9 @@ class NotificationService {
     }
   }
 
-  /// Mark as read
+  /// Marks a single notification as read by its [id].
+  ///
+  /// Returns `true` on success, `false` otherwise.
   Future<bool> markAsRead(int id) async {
     try {
       final headers = await _getHeaders();
@@ -77,7 +118,9 @@ class NotificationService {
     }
   }
 
-  /// Mark all as read
+  /// Marks all notifications as read for the authenticated user.
+  ///
+  /// Returns `true` on success, `false` otherwise.
   Future<bool> markAllAsRead() async {
     try {
       final headers = await _getHeaders();
@@ -91,7 +134,9 @@ class NotificationService {
     }
   }
 
-  /// Delete notification
+  /// Permanently deletes a notification by its [id].
+  ///
+  /// Accepts both HTTP 200 and 204 as successful responses.
   Future<bool> deleteNotification(int id) async {
     try {
       final headers = await _getHeaders();
@@ -105,7 +150,10 @@ class NotificationService {
     }
   }
 
-  /// Dismiss notification
+  /// Dismisses a notification by its [id] without deleting it.
+  ///
+  /// Dismissed notifications are hidden from the inbox but retained on the
+  /// server for analytics purposes.
   Future<bool> dismissNotification(int id) async {
     try {
       final headers = await _getHeaders();
@@ -119,9 +167,37 @@ class NotificationService {
     }
   }
 
-  // ── Smart Tips ───────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
+  // Smart Tips
+  // ---------------------------------------------------------------------------
 
-  /// Get smart tips
+  /// Fetches the full smart tips payload including intelligence metadata.
+  ///
+  /// Returns the raw response map containing tips, patterns, and contextual
+  /// data. Returns an empty map on failure.
+  Future<Map<String, dynamic>> getSmartTipsData() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('$_smartTipsUrl/'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return data;
+        }
+      }
+      return {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  /// Fetches the list of AI-generated smart tips as [SmartTip] objects.
+  ///
+  /// Returns an empty list on failure.
   Future<List<SmartTip>> getSmartTips() async {
     try {
       final headers = await _getHeaders();
@@ -144,7 +220,7 @@ class NotificationService {
     }
   }
 
-  /// Mark smart tip as read
+  /// Marks a smart tip as read by its [id].
   Future<bool> markTipRead(int id) async {
     try {
       final headers = await _getHeaders();
@@ -158,7 +234,7 @@ class NotificationService {
     }
   }
 
-  /// Toggle like on smart tip
+  /// Toggles the “liked” state on a smart tip identified by [id].
   Future<bool> toggleTipLike(int id) async {
     try {
       final headers = await _getHeaders();
@@ -172,7 +248,7 @@ class NotificationService {
     }
   }
 
-  /// Toggle save on smart tip
+  /// Toggles the “saved” (bookmarked) state on a smart tip identified by [id].
   Future<bool> toggleTipSave(int id) async {
     try {
       final headers = await _getHeaders();
@@ -186,7 +262,7 @@ class NotificationService {
     }
   }
 
-  /// Dismiss smart tip
+  /// Dismisses a smart tip by its [id], removing it from the active list.
   Future<bool> dismissTip(int id) async {
     try {
       final headers = await _getHeaders();
@@ -200,9 +276,14 @@ class NotificationService {
     }
   }
 
-  // ── Settings ─────────────────────────────────────────────────
+  // ---------------------------------------------------------------------------
+  // Notification Settings
+  // ---------------------------------------------------------------------------
 
-  /// Get settings
+  /// Retrieves the user’s notification preferences.
+  ///
+  /// Returns a [NotificationSettings] object, or `null` if the request fails
+  /// or no settings have been configured yet.
   Future<NotificationSettings?> getSettings() async {
     try {
       final headers = await _getHeaders();
@@ -223,7 +304,9 @@ class NotificationService {
     }
   }
 
-  /// Update settings
+  /// Persists the user’s updated notification [settings] to the backend.
+  ///
+  /// Returns `true` on success, `false` otherwise.
   Future<bool> updateSettings(NotificationSettings settings) async {
     try {
       final headers = await _getHeaders();
@@ -239,12 +322,18 @@ class NotificationService {
     }
   }
 
-  // ── Notification Intelligence ────────────────────────────────
+  // ---------------------------------------------------------------------------
+  // Notification Intelligence
+  // ---------------------------------------------------------------------------
 
+  /// Base URL for the AI-driven notification intelligence subsystem.
   String get _intelligenceUrl =>
       '${ApiConfig.baseUrl}/notification-intelligence';
 
-  /// Get smart reminder suggestions
+  /// Fetches AI-generated smart reminder suggestions.
+  ///
+  /// Suggestions are based on the user’s habit patterns, optimal completion
+  /// times, and historical engagement data. Returns an empty list on failure.
   Future<List<dynamic>> getSmartSuggestions() async {
     try {
       final headers = await _getHeaders();
@@ -262,7 +351,10 @@ class NotificationService {
     }
   }
 
-  /// Get streak risk alerts
+  /// Fetches habits that are at risk of losing their streak.
+  ///
+  /// Returns a list of at-risk habit entries with streak details and urgency
+  /// levels. Returns an empty list on failure.
   Future<List<dynamic>> getStreakRiskAlerts() async {
     try {
       final headers = await _getHeaders();
@@ -280,7 +372,10 @@ class NotificationService {
     }
   }
 
-  /// Get weekly performance nudges
+  /// Retrieves weekly performance nudges based on the user’s recent activity.
+  ///
+  /// Nudges include encouragement for improving habits, celebrating progress,
+  /// and corrective guidance. Returns an empty map on failure.
   Future<Map<String, dynamic>> getWeeklyNudges() async {
     try {
       final headers = await _getHeaders();
@@ -297,7 +392,10 @@ class NotificationService {
     }
   }
 
-  /// Get notification summary
+  /// Fetches a high-level summary of notification activity and engagement.
+  ///
+  /// Includes counts of read/unread notifications, tip interactions, and
+  /// delivery statistics. Returns an empty map on failure.
   Future<Map<String, dynamic>> getNotificationSummary() async {
     try {
       final headers = await _getHeaders();

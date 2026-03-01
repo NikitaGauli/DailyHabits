@@ -1,4 +1,25 @@
+// ==========================================================================
+// Reminder Model — Habit Reminder Data
+// ==========================================================================
+//
+// This file defines the [Reminder] model used to represent a scheduled
+// reminder associated with a habit.
+//
+// Responsibilities:
+// - Storing reminder-related data (title, time, visual metadata).
+// - Providing [fromJson] / [toJson] for API and local-storage serialization.
+//
+// Consumed by:
+// - Home Screen (Upcoming Reminders section).
+// - Notification scheduling service.
+// - Backend synchronization layer.
+// ==========================================================================
+
 import 'package:flutter/material.dart';
+
+// ==========================================================================
+// Reminder Model
+// ==========================================================================
 
 /// ===============================================================
 /// Reminder Model

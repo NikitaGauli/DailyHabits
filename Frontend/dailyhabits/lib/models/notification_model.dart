@@ -1,24 +1,89 @@
+// ==========================================================================
+// Notification Models — Alerts, Smart Tips & Notification Preferences
+// ==========================================================================
+//
+// This file defines the data models for the notification subsystem:
+//
+// - [AppNotification] — A single notification (reminder, social event, or
+//   system alert) with deep-link action metadata.
+// - [SmartTip] — An AI-generated contextual tip tied to a specific habit.
+// - [NotificationSettings] — User preferences controlling which
+//   notification types are enabled and quiet-hours configuration.
+//
+// All models support JSON deserialization from the backend API and provide
+// `copyWith` methods for immutable state updates in providers.
+// ==========================================================================
+
 import 'package:flutter/material.dart';
 
+// ==========================================================================
+// App Notification Model
+// ==========================================================================
+
+/// Represents a single notification dispatched to the user.
+///
+/// Notifications can originate from habit reminders, achievement unlocks,
+/// social interactions, or system events. The [actionType] and [actionData]
+/// fields enable deep-linking so tapping a notification navigates the user
+/// to the relevant screen.
+///
+/// Social notifications additionally carry [fromUserId], [fromUserName],
+/// [groupId], etc., to provide rich context in the notification card.
 class AppNotification {
+  /// Unique identifier for this notification.
   final int id;
+
+  /// Notification type — e.g., `"reminder"`, `"achievement"`, `"friend_request"`.
   final String type;
+
+  /// Short headline displayed in the notification card.
   final String title;
+
+  /// Detailed body text of the notification.
   final String message;
+
+  /// Read / unread / pending status string.
   final String status;
+
+  /// When the notification is (or was) scheduled to fire.
   final DateTime scheduledTime;
+
+  /// Actual send timestamp, or `null` if still pending.
   final DateTime? sentAt;
+
+  /// Material icon displayed in the notification card.
   final IconData icon;
+
+  /// Accent color used for the notification indicator.
   final Color color;
+
+  /// Optional related habit ID for contextual navigation.
   final int? habitId;
-  // Social / deep-link fields
+
+  // ---- Social / deep-link fields ----
+
+  /// Machine-readable action type for deep-linking (e.g., `"open_habit"`).
   final String actionType;
+
+  /// Additional key-value data required by the action handler.
   final Map<String, dynamic> actionData;
+
+  /// User ID of the sender (social notifications).
   final int? fromUserId;
+
+  /// Display name of the sending user.
   final String? fromUserName;
+
+  /// Profile image URL of the sending user.
   final String? fromUserImage;
+
+  /// Group ID for group-related notifications.
   final int? groupId;
+
+  /// Group name for group-related notifications.
   final String? groupName;
+
+  /// Title of the related habit (used in social challenge notifications).
   final String? habitTitle;
 
   AppNotification({
@@ -42,6 +107,10 @@ class AppNotification {
     this.habitTitle,
   });
 
+  /// Deserializes an [AppNotification] from a JSON map returned by the API.
+  ///
+  /// Handles missing or null fields defensively, defaulting [type] to
+  /// `"system"`, [status] to `"pending"`, and [actionData] to an empty map.
   factory AppNotification.fromJson(Map<String, dynamic> json) {
     return AppNotification(
       id: json['id'],
@@ -69,12 +138,24 @@ class AppNotification {
     );
   }
 
+  /// Whether this notification has been read by the user.
   bool get isRead => status == 'read';
+
+  /// Whether this notification originated from a social interaction.
+  ///
+  /// Checks against a known set of social notification types to determine
+  /// if the notification should be displayed in the social feed.
   bool get isSocial =>
       const ['friend_request', 'friend_accepted', 'group_join', 'group_approval',
         'group_challenge', 'social_like', 'social_comment'].contains(type);
+
+  /// Effective creation timestamp — prefers [sentAt], falls back to [scheduledTime].
   DateTime get createdAt => sentAt ?? scheduledTime;
 
+  /// Returns a copy of this notification with the given fields replaced.
+  ///
+  /// When [isRead] is `true`, the [status] is automatically set to `"read"`,
+  /// simplifying read-state toggling from the UI.
   AppNotification copyWith({
     int? id,
     String? type,
@@ -113,21 +194,54 @@ class AppNotification {
   }
 }
 
-// ─── Smart Tip Model ─────────────────────────────────────────────────────────
+// ==========================================================================
+// Smart Tip Model
+// ==========================================================================
 
+/// An AI-generated contextual tip related to a user’s habit performance.
+///
+/// Smart tips are surfaced in the notifications tab and can be liked, saved,
+/// or dismissed. Each tip is optionally linked to a [habitId] and carries
+/// interaction flags ([isRead], [isLiked], [isSaved], [isDismissed]) for
+/// state management.
 class SmartTip {
+  /// Unique identifier for this tip.
   final int id;
+
+  /// Tip category — e.g., `"streak"`, `"consistency"`, `"general"`.
   final String tipType;
+
+  /// Short headline of the tip.
   final String title;
+
+  /// Full tip message body.
   final String message;
+
+  /// Material icon for the tip card.
   final IconData icon;
+
+  /// Accent color for the tip card.
   final Color color;
+
+  /// Optional ID of the related habit.
   final int? habitId;
+
+  /// Optional title of the related habit.
   final String? habitTitle;
+
+  /// Whether the user has viewed this tip.
   final bool isRead;
+
+  /// Whether the user has liked this tip.
   final bool isLiked;
+
+  /// Whether the user has saved this tip for later.
   final bool isSaved;
+
+  /// Whether the user has dismissed this tip.
   final bool isDismissed;
+
+  /// Timestamp when the tip was generated.
   final DateTime createdAt;
 
   SmartTip({
@@ -146,10 +260,14 @@ class SmartTip {
     required this.createdAt,
   });
 
+  /// Deserializes a [SmartTip] from a JSON map.
+  ///
+  /// The backend may provide the category under either `"category"` or
+  /// `"tipType"` keys; both are handled with preference for `"category"`.
   factory SmartTip.fromJson(Map<String, dynamic> json) {
     return SmartTip(
-      id: json['id'],
-      tipType: json['tipType'] ?? 'general',
+      id: json['id'] ?? 0,
+      tipType: json['category'] ?? json['tipType'] ?? 'general',
       title: json['title'] ?? '',
       message: json['message'] ?? '',
       icon: IconData(json['iconCode'] ?? 0xE3AF, fontFamily: 'MaterialIcons'),
@@ -166,6 +284,7 @@ class SmartTip {
     );
   }
 
+  /// Returns a copy of this [SmartTip] with the given interaction flags replaced.
   SmartTip copyWith({
     bool? isRead,
     bool? isLiked,
@@ -190,15 +309,41 @@ class SmartTip {
   }
 }
 
+// ==========================================================================
+// Notification Settings Model
+// ==========================================================================
+
+/// User preferences controlling notification delivery.
+///
+/// Encapsulates toggles for each notification category (reminders,
+/// achievements, streaks, insights, quotes) and optional quiet-hours
+/// scheduling to suppress notifications during specified time windows.
 class NotificationSettings {
+  /// Master toggle — when `false`, all notifications are suppressed.
   final bool notificationsEnabled;
+
+  /// Whether habit reminder notifications are delivered.
   final bool habitReminders;
+
+  /// Whether achievement unlock notifications are delivered.
   final bool achievementNotifications;
+
+  /// Whether streak milestone alerts are delivered.
   final bool streakAlerts;
+
+  /// Whether insight notifications are delivered.
   final bool insightNotifications;
+
+  /// Whether daily motivational quote notifications are delivered.
   final bool motivationalQuotes;
+
+  /// Whether quiet hours are active.
   final bool quietHoursEnabled;
+
+  /// Start of the quiet-hours window (notifications muted).
   final TimeOfDay? quietHoursStart;
+
+  /// End of the quiet-hours window (notifications resume).
   final TimeOfDay? quietHoursEnd;
 
   NotificationSettings({
@@ -213,6 +358,10 @@ class NotificationSettings {
     this.quietHoursEnd,
   });
 
+  /// Deserializes [NotificationSettings] from a JSON map.
+  ///
+  /// All toggles default to `true` (enabled) except [quietHoursEnabled]
+  /// which defaults to `false`, matching the expected first-launch behavior.
   factory NotificationSettings.fromJson(Map<String, dynamic> json) {
     return NotificationSettings(
       notificationsEnabled: json['notificationsEnabled'] ?? true,
@@ -231,11 +380,16 @@ class NotificationSettings {
     );
   }
 
+  /// Parses a time string in `"HH:mm"` format into a [TimeOfDay].
   static TimeOfDay _parseTime(String timeStr) {
     final parts = timeStr.split(':');
     return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
   }
 
+  /// Serializes the settings to a JSON-compatible map for API requests.
+  ///
+  /// Quiet-hours times are formatted as `"H:m"` strings, or `null` when
+  /// not configured.
   Map<String, dynamic> toJson() {
     return {
       'notificationsEnabled': notificationsEnabled,
@@ -254,6 +408,7 @@ class NotificationSettings {
     };
   }
 
+  /// Returns a copy of these settings with the given fields replaced.
   NotificationSettings copyWith({
     bool? notificationsEnabled,
     bool? habitReminders,

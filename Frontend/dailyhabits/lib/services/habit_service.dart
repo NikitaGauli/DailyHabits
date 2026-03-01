@@ -1,3 +1,11 @@
+// =============================================================================
+// File: habit_service.dart
+// Description: Core habit management service for the DailyHabits application.
+//              Provides full CRUD operations, daily scheduling, completion
+//              toggling, skip tracking, category listing, and statistics
+//              retrieval through the Django REST Framework backend.
+// =============================================================================
+
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
@@ -5,13 +13,33 @@ import 'package:dailyhabits/services/auth_service.dart';
 import 'package:dailyhabits/services/api_config.dart';
 import 'package:dailyhabits/models/habit.dart';
 
+// =============================================================================
+// Habit Service
+// =============================================================================
+
+/// Service layer for all habit-related API interactions.
+///
+/// Provides methods to:
+/// - **CRUD** — Create, read, update, and delete habits.
+/// - **Daily schedule** — Fetch today’s habits with completion summaries.
+/// - **Completion** — Toggle completion status and skip habits.
+/// - **Categories** — Retrieve the list of default habit categories.
+/// - **Statistics** — Fetch per-habit stats, overall summaries, and history.
+///
+/// All requests require a valid JWT token obtained from [AuthService].
 class HabitService {
-  /// Centralized base URL from ApiConfig
+  // ---------------------------------------------------------------------------
+  // Configuration & Dependencies
+  // ---------------------------------------------------------------------------
+
+  /// Base URL for habit endpoints, derived from [ApiConfig].
   static String get baseUrl => '${ApiConfig.baseUrl}/habits';
 
+  /// Shared instance of [AuthService] used to retrieve the JWT token.
   final AuthService _authService = AuthService();
 
-  // Helper to get headers with token
+  /// Builds the standard HTTP headers including the JWT `Authorization` bearer
+  /// token and JSON content type.
   Future<Map<String, String>> _getHeaders() async {
     final token = await _authService.getToken();
     return {
@@ -20,7 +48,14 @@ class HabitService {
     };
   }
 
-  /// Fetch all habits
+  // ---------------------------------------------------------------------------
+  // Read Operations
+  // ---------------------------------------------------------------------------
+
+  /// Fetches all habits for the authenticated user.
+  ///
+  /// Returns a list of [Habit] objects parsed from the JSON array response.
+  /// Throws an [Exception] if the request fails or the server is unreachable.
   Future<List<Habit>> getHabits() async {
     try {
       final headers = await _getHeaders();
@@ -37,7 +72,13 @@ class HabitService {
     }
   }
 
-  /// Fetch today's scheduled habits
+  /// Fetches today’s scheduled habits along with a completion summary.
+  ///
+  /// Returns a map containing:
+  /// - `habits` — A `List<Habit>` of habits scheduled for today.
+  /// - `summary` — A map with today’s completion statistics (may be `null`).
+  ///
+  /// Returns an empty list and `null` summary on error instead of throwing.
   Future<Map<String, dynamic>> getTodayHabits() async {
     try {
       final headers = await _getHeaders();
@@ -63,7 +104,18 @@ class HabitService {
     }
   }
 
-  /// Create a new habit
+  // ---------------------------------------------------------------------------
+  // Create / Update / Delete Operations
+  // ---------------------------------------------------------------------------
+
+  /// Creates a new habit on the backend from the given [habit] model.
+  ///
+  /// Sends a `POST` request with the serialized habit JSON. Returns the
+  /// server-created [Habit] (including its assigned `id`).
+  ///
+  /// Handles two possible response shapes:
+  /// - `{ success: true, habit: {...} }` — standard wrapper.
+  /// - Direct habit JSON — fallback for simpler responses.
   Future<Habit> createHabit(Habit habit) async {
     try {
       final headers = await _getHeaders();
@@ -90,7 +142,14 @@ class HabitService {
     }
   }
 
-  /// Toggle completion for today
+  // ---------------------------------------------------------------------------
+  // Completion & Skip Operations
+  // ---------------------------------------------------------------------------
+
+  /// Toggles the completion status of a habit for today.
+  ///
+  /// Sends a `POST` to `/habits/{id}/toggle-complete/`. The backend flips the
+  /// current completion state and returns the updated status.
   Future<Map<String, dynamic>> toggleHabit(String id) async {
     try {
       final headers = await _getHeaders();
@@ -109,7 +168,9 @@ class HabitService {
     }
   }
 
-  /// Skip a habit for today
+  /// Marks a habit as skipped for today with an optional [reason].
+  ///
+  /// Returns `true` on success (HTTP 200), `false` otherwise.
   Future<bool> skipHabit(String id, {String reason = ''}) async {
     try {
       final headers = await _getHeaders();
@@ -128,7 +189,14 @@ class HabitService {
     }
   }
 
-  /// Get available categories
+  // ---------------------------------------------------------------------------
+  // Categories
+  // ---------------------------------------------------------------------------
+
+  /// Retrieves the list of default habit categories from the backend.
+  ///
+  /// Each category is a map containing at minimum a `name` and `icon` key.
+  /// Returns an empty list on failure.
   Future<List<Map<String, dynamic>>> getCategories() async {
     try {
       final headers = await _getHeaders();
@@ -149,7 +217,13 @@ class HabitService {
     }
   }
 
-  /// Fetch habit analytics/stats
+  // ---------------------------------------------------------------------------
+  // Statistics & History
+  // ---------------------------------------------------------------------------
+
+  /// Fetches detailed analytics and statistics for a single habit by [id].
+  ///
+  /// The returned map includes streak data, completion rate, and trend info.
   Future<Map<String, dynamic>> getStats(String id) async {
     try {
       final headers = await _getHeaders();
@@ -168,7 +242,10 @@ class HabitService {
     }
   }
 
-  /// Get overall stats summary
+  /// Retrieves the aggregate statistics summary across all user habits.
+  ///
+  /// Includes metrics such as total habits, overall completion rate, and
+  /// active streaks. Returns an empty map on failure.
   Future<Map<String, dynamic>> getStatsSummary() async {
     try {
       final headers = await _getHeaders();
@@ -186,7 +263,10 @@ class HabitService {
     }
   }
 
-  /// Fetch habit completion history
+  /// Fetches the completion history for a habit over the last [days] days.
+  ///
+  /// Defaults to a 30-day window. Returns a map containing a `history` list
+  /// with daily completion entries. Returns `{'history': []}` on failure.
   Future<Map<String, dynamic>> getHistory(String id, {int days = 30}) async {
     try {
       final headers = await _getHeaders();
@@ -204,7 +284,10 @@ class HabitService {
     }
   }
 
-  /// Update a habit
+  /// Updates an existing habit on the backend using a `PATCH` request.
+  ///
+  /// Sends only the fields present in [habit.toJson()]. Returns the updated
+  /// [Habit] as echoed back by the server.
   Future<Habit> updateHabit(Habit habit) async {
     try {
       final headers = await _getHeaders();
@@ -228,7 +311,9 @@ class HabitService {
     }
   }
 
-  /// Delete a habit
+  /// Permanently deletes the habit with the given [id] from the backend.
+  ///
+  /// Accepts both HTTP 200 and 204 as successful responses.
   Future<void> deleteHabit(String id) async {
     try {
       final headers = await _getHeaders();
