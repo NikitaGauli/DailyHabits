@@ -12,6 +12,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+import 'package:dailyhabits/theme/app_animations.dart';
+import 'package:dailyhabits/widgets/common/shimmer_loading.dart';
 import 'package:dailyhabits/widgets/common/glass_container.dart';
 import 'package:dailyhabits/screens/grow_together/grow_together_screen.dart';
 import 'community_controller.dart';
@@ -78,9 +80,18 @@ class _CommunityScreenState extends State<CommunityScreen>
                   _buildHeader(context, ctrl),
                   Expanded(
                     child: ctrl.isLoading && !_didInit
-                        ? Center(
-                            child: CircularProgressIndicator(
-                              color: context.colors.primary,
+                        ? ListView(
+                            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                            children: List.generate(
+                              4,
+                              (_) => const Padding(
+                                padding: EdgeInsets.only(bottom: 16),
+                                child: ShimmerBox(
+                                  width: double.infinity,
+                                  height: 120,
+                                  borderRadius: 20,
+                                ),
+                              ),
                             ),
                           )
                         : TabBarView(
@@ -125,9 +136,7 @@ class _CommunityScreenState extends State<CommunityScreen>
                 tooltip: 'Grow Together',
                 onPressed: () => Navigator.push(
                   context,
-                  MaterialPageRoute(
-                    builder: (_) => const GrowTogetherScreen(),
-                  ),
+                  AppPageRoute.slideUp(const GrowTogetherScreen()),
                 ),
                 icon: Icon(Icons.group_work_rounded, color: AppColors.secondary),
               ),

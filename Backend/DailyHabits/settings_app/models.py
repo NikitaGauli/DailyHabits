@@ -25,6 +25,10 @@ reminders are delivered via server-side scheduling and the in-app
 notification inbox.
 """
 
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from django.db import models
 from django.conf import settings
 from django.utils import timezone as tz
@@ -217,6 +221,9 @@ class LoginSession(models.Model):
         active = 'active' if self.is_active else 'inactive'
         return f'{self.device_name} ({self.platform}) - {active}'
 
+    if TYPE_CHECKING:
+        id: int
+
     def revoke(self):
         self.is_active = False
         self.logged_out_at = tz.now()
@@ -263,6 +270,9 @@ class SettingsAuditLog(models.Model):
             models.Index(fields=['user', '-created_at']),
         ]
 
+    if TYPE_CHECKING:
+        id: int
+
     def __str__(self):
         return f'{self.user.email} - {self.action} ({self.created_at})'
 
@@ -308,6 +318,9 @@ class ExportRequest(models.Model):
     class Meta:
         db_table = 'export_requests'
         ordering = ['-created_at']
+
+    if TYPE_CHECKING:
+        id: int
 
     def __str__(self):
         return f"Export {self.export_format} - {self.user.email} ({self.status})"
@@ -361,6 +374,9 @@ class FAQ(models.Model):
         db_table = 'faqs'
         ordering = ['sort_order', '-created_at']
 
+    if TYPE_CHECKING:
+        id: int
+
     def __str__(self):
         return self.question[:80]
 
@@ -398,6 +414,9 @@ class SupportTicket(models.Model):
     class Meta:
         db_table = 'support_tickets'
         ordering = ['-created_at']
+
+    if TYPE_CHECKING:
+        id: int
 
     def __str__(self):
         return f"#{self.pk} - {self.subject} ({self.status})"

@@ -60,22 +60,29 @@ void main() {
 /// initial screen ([SplashScreen]).
 ///
 /// Listens to [ThemeProvider] to reactively switch between light, dark, and
-/// system-controlled themes without a full app restart.
+/// system-controlled themes — **including the user's accent color** —
+/// without a full app restart.
 class MyApp extends StatelessWidget {
   const MyApp({super.key});
 
   @override
   Widget build(BuildContext context) {
-    // Obtain the current theme mode from the provider
+    // Obtain the current theme mode and accent color from the provider.
     final themeProvider = Provider.of<ThemeProvider>(context);
 
     return MaterialApp(
       debugShowCheckedModeBanner: false,
       title: 'DailyHabits',
 
-      // Light and dark ThemeData are defined centrally in AppTheme
-      theme: AppTheme.lightTheme,
-      darkTheme: AppTheme.darkTheme,
+      // Build ThemeData dynamically using the user's chosen accent color.
+      theme: AppTheme.lightTheme(
+        accent: themeProvider.accentColor,
+        accentLight: themeProvider.accentColorLight,
+      ),
+      darkTheme: AppTheme.darkTheme(
+        accent: themeProvider.accentColorLight,
+        accentDark: themeProvider.accentColor,
+      ),
       themeMode: themeProvider.themeMode,
 
       // All routing is handled in-app (OTP flow). No deep links needed.

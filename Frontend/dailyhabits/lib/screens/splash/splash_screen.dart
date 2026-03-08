@@ -19,6 +19,7 @@ import 'package:dailyhabits/screens/onboarding/onboarding_carousel.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
 import 'package:dailyhabits/screens/home/home_page.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+import 'package:dailyhabits/theme/app_animations.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// ---------------------------------------------------------------------------
@@ -157,9 +158,10 @@ class _SplashScreenState extends State<SplashScreen>
     }
   }
 
-  /// Helper to perform a push-replacement navigation to [page].
+  /// Helper to perform a push-replacement navigation to [page]
+  /// with a smooth fade transition.
   void _navigateTo(Widget page) {
-    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => page));
+    Navigator.pushReplacement(context, AppPageRoute.fade(page));
   }
 
   // ======================= UI Rendering =======================

@@ -247,9 +247,10 @@ class _GlassmorphicContainer extends StatelessWidget {
 /// ---------------------------------------------------------------------------
 /// Displays the main onboarding image with an optional overlay icon.
 ///
-/// Note:
-///  • Currently uses a placeholder icon
-///  • Can be replaced with Image.asset(imagePath) in production
+/// Design:
+///  • Gradient background with decorative floating orbs
+///  • Glowing hero icon with gradient circle and soft shadow
+///  • Subtle animated-look decorative dots for visual depth
 /// ---------------------------------------------------------------------------
 class _ImageContent extends StatelessWidget {
   const _ImageContent({
@@ -273,35 +274,133 @@ class _ImageContent extends StatelessWidget {
     return ClipRRect(
       borderRadius: BorderRadius.circular(32),
       child: Container(
-        color: tc.surface,
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              tc.accent.withValues(alpha: 0.07),
+              tc.surface,
+              tc.accent.withValues(alpha: 0.04),
+            ],
+          ),
+        ),
         child: Stack(
           fit: StackFit.expand,
           children: [
-            // Placeholder image representation
-            Center(
-              child: Icon(Icons.image_outlined, size: 60, color: tc.textMuted),
+            // ── Decorative background orbs ──
+            Positioned(
+              top: -18,
+              right: -18,
+              child: Container(
+                width: 90,
+                height: 90,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tc.accent.withValues(alpha: 0.08),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: -24,
+              left: -12,
+              child: Container(
+                width: 72,
+                height: 72,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tc.accent.withValues(alpha: 0.06),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 30,
+              left: 20,
+              child: Container(
+                width: 14,
+                height: 14,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tc.accent.withValues(alpha: 0.15),
+                ),
+              ),
+            ),
+            Positioned(
+              bottom: 40,
+              right: 28,
+              child: Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tc.accent.withValues(alpha: 0.12),
+                ),
+              ),
+            ),
+            Positioned(
+              top: 60,
+              right: 40,
+              child: Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: tc.accent.withValues(alpha: 0.2),
+                ),
+              ),
             ),
 
-            // Overlay icon (if provided)
+            // ── Hero icon with gradient glow ──
             if (overlayIcon != null)
               Center(
                 child: Container(
-                  width: iconSize + 20,
-                  height: iconSize + 20,
+                  width: iconSize + 40,
+                  height: iconSize + 40,
                   decoration: BoxDecoration(
-                    color: tc.card,
                     shape: BoxShape.circle,
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [
+                        tc.accent,
+                        tc.accent.withValues(alpha: 0.7),
+                      ],
+                    ),
                     boxShadow: [
                       BoxShadow(
-                        color: tc.textPrimary.withValues(alpha: 0.1),
-                        blurRadius: 20,
-                        offset: const Offset(0, 5),
+                        color: tc.accent.withValues(alpha: 0.35),
+                        blurRadius: 28,
+                        spreadRadius: 2,
+                        offset: const Offset(0, 8),
+                      ),
+                      BoxShadow(
+                        color: tc.accent.withValues(alpha: 0.15),
+                        blurRadius: 60,
+                        spreadRadius: 8,
                       ),
                     ],
                   ),
                   child: Icon(
                     overlayIcon,
                     size: iconSize,
+                    color: Colors.white,
+                  ),
+                ),
+              ),
+
+            // ── Fallback if no overlay icon ──
+            if (overlayIcon == null)
+              Center(
+                child: Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: tc.accent.withValues(alpha: 0.12),
+                  ),
+                  child: Icon(
+                    Icons.auto_awesome_rounded,
+                    size: 48,
                     color: tc.accent,
                   ),
                 ),

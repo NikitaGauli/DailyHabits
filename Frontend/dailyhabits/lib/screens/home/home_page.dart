@@ -26,6 +26,7 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'dart:async';
 import 'package:dailyhabits/models/habit.dart';
 import 'package:dailyhabits/widgets/home/create_edit_habit_sheet.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
@@ -38,8 +39,13 @@ import 'package:dailyhabits/screens/settings/pages/help_support_page.dart';
 import 'package:dailyhabits/screens/community/community_screen.dart';
 import 'package:dailyhabits/screens/notifications/notification_screen.dart';
 import 'package:dailyhabits/screens/notifications/notification_controller.dart';
+import 'package:dailyhabits/screens/notifications/widgets/notification_banner.dart';
 import 'package:dailyhabits/screens/habits/habit_detail_screen.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+import 'package:dailyhabits/theme/app_animations.dart';
+import 'package:dailyhabits/widgets/common/animated_completion.dart';
+import 'package:dailyhabits/widgets/common/shimmer_loading.dart';
+import 'package:dailyhabits/widgets/common/ui_components.dart';
 import 'package:provider/provider.dart';
 import 'home_controller.dart';
 import 'package:dailyhabits/screens/gamification/gamification_screen.dart';
@@ -73,6 +79,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   /// Curved fade animation derived from [_greetingAnim].
   late Animation<double> _greetingFade;
 
+  /// Timer that periodically refreshes the notification badge count.
+  Timer? _badgeTimer;
+
   @override
   void initState() {
     super.initState();
@@ -89,14 +98,37 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     // to the previous user.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       context.read<HomeController>().loadData();
-      context.read<NotificationController>().refreshBadge();
+      final notifCtrl = context.read<NotificationController>();
+      notifCtrl.refreshBadge();
+      notifCtrl.connectWebSocket();  // Establish real-time WebSocket connection
+
+      // Show an in-app banner whenever a real-time notification arrives
+      notifCtrl.onNewRealtimeNotification = (notification) {
+        if (mounted) {
+          NotificationBanner.show(context, notification: notification);
+        }
+      };
+
       context.read<GamificationController>().loadData();
+    });
+
+    // Refresh the notification badge every 60 seconds so the count stays
+    // current even when the user doesn't visit the Inbox tab.
+    _badgeTimer = Timer.periodic(const Duration(seconds: 60), (_) {
+      if (mounted) {
+        context.read<NotificationController>().refreshBadge();
+      }
     });
   }
 
   @override
   void dispose() {
+    _badgeTimer?.cancel();
     _greetingAnim.dispose();
+    // Clear the banner callback to avoid stale references
+    try {
+      context.read<NotificationController>().onNewRealtimeNotification = null;
+    } catch (_) {}
     super.dispose();
   }
 
@@ -135,7 +167,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       context.read<NotificationController>().reset();
       Navigator.pushAndRemoveUntil(
         context,
-        MaterialPageRoute(builder: (_) => const LoginScreen()),
+        AppPageRoute.fade(const LoginScreen()),
         (route) => false,
       );
     }
@@ -150,8 +182,53 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         if (controller.isLoading) {
           return Scaffold(
             backgroundColor: tc.bg,
-            body: Center(
-              child: CircularProgressIndicator(color: tc.primary),
+            body: SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 100),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Shimmer greeting header
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: const [
+                              ShimmerBox(width: 100, height: 14),
+                              SizedBox(height: 8),
+                              ShimmerBox(width: 160, height: 24),
+                            ],
+                          ),
+                        ),
+                        const ShimmerBox.circle(radius: 22),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+                    // Shimmer progress card
+                    const ShimmerBox(
+                      height: 120,
+                      borderRadius: 24,
+                    ),
+                    const SizedBox(height: 20),
+                    // Shimmer stats row
+                    Row(
+                      children: List.generate(4, (_) => const Expanded(
+                        child: Padding(
+                          padding: EdgeInsets.symmetric(horizontal: 4),
+                          child: ShimmerBox(
+                            height: 80,
+                            borderRadius: 16,
+                          ),
+                        ),
+                      )),
+                    ),
+                    const SizedBox(height: 24),
+                    // Shimmer habit cards
+                    const ShimmerHabitList(count: 4),
+                  ],
+                ),
+              ),
             ),
           );
         }
@@ -217,6 +294,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
               // ── 2. Hero Progress Card ──────────────────
               _buildHeroProgressCard(controller),
+              const SizedBox(height: 16),
+
+              // ── 2b. Motivational Message ───────────────
+              _buildMotivationalMessage(controller),
               const SizedBox(height: 20),
 
               // ── 3. Quick Stats Row ─────────────────────
@@ -453,94 +534,141 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
 
   // ─── 3. QUICK STATS ROW ──────────────────────────────────────────────────
 
-  /// Builds a horizontal row of four compact stat cards:
-  /// **Streak**, **Record**, **Done**, and **Remaining**.
+  /// Builds a horizontal row of four compact stat cards with gradient
+  /// accent backgrounds: **Streak**, **Record**, **Done**, and **Remaining**.
   Widget _buildQuickStatsRow(HomeController controller) {
-    final tc = context.colors;
-
     return Row(
       children: [
-        _buildStatCard(
-          icon: Icons.local_fire_department_rounded,
-          label: 'Streak',
-          value: '${controller.currentStreak}',
-          color: AppColors.warning,
-          tc: tc,
+        Expanded(
+          child: GradientStatChip(
+            icon: Icons.local_fire_department_rounded,
+            label: 'Streak',
+            value: '${controller.currentStreak}',
+            color: AppColors.warning,
+          ),
         ),
         const SizedBox(width: 10),
-        _buildStatCard(
-          icon: Icons.emoji_events_rounded,
-          label: 'Record',
-          value: '${controller.bestStreak}',
-          color: AppColors.secondary,
-          tc: tc,
+        Expanded(
+          child: GradientStatChip(
+            icon: Icons.emoji_events_rounded,
+            label: 'Record',
+            value: '${controller.bestStreak}',
+            color: AppColors.secondary,
+          ),
         ),
         const SizedBox(width: 10),
-        _buildStatCard(
-          icon: Icons.check_circle_rounded,
-          label: 'Done',
-          value: '${controller.completedHabits}',
-          color: AppColors.success,
-          tc: tc,
+        Expanded(
+          child: GradientStatChip(
+            icon: Icons.check_circle_rounded,
+            label: 'Done',
+            value: '${controller.completedHabits}',
+            color: AppColors.success,
+          ),
         ),
         const SizedBox(width: 10),
-        _buildStatCard(
-          icon: Icons.pending_actions_rounded,
-          label: 'Remaining',
-          value: '${controller.totalHabits - controller.completedHabits}',
-          color: tc.textMuted,
-          tc: tc,
+        Expanded(
+          child: GradientStatChip(
+            icon: Icons.pending_actions_rounded,
+            label: 'Left',
+            value: '${controller.totalHabits - controller.completedHabits}',
+            color: context.colors.textMuted,
+          ),
         ),
       ],
     );
   }
 
-  /// A single stat tile showing an icon, numeric value, and descriptive label.
-  Widget _buildStatCard({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-    required ThemeColors tc,
-  }) {
-    return Expanded(
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
-        decoration: BoxDecoration(
-          color: tc.card,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: tc.border.withValues(alpha: 0.2)),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withValues(alpha: 0.03),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
+  // ─── 3b. MOTIVATIONAL MESSAGE ──────────────────────────────────────────
+
+  /// Context-aware motivational message based on today's progress.
+  ///
+  /// Shows different messages based on completion percentage, streak,
+  /// and time of day — making the app feel alive and encouraging.
+  Widget _buildMotivationalMessage(HomeController controller) {
+    final tc = context.colors;
+    final pct = controller.todayProgress;
+    final streak = controller.currentStreak;
+
+    // Pick message and icon based on progress state
+    String message;
+    IconData icon;
+    Color accentColor;
+
+    if (controller.totalHabits == 0) {
+      message = 'Start building habits today! Add your first one below.';
+      icon = Icons.tips_and_updates_rounded;
+      accentColor = tc.info;
+    } else if (pct >= 1.0) {
+      final celebrations = [
+        'Perfect day! You\'re crushing it! 🎉',
+        'All done! Your consistency is incredible! 🌟',
+        'Every habit completed — you\'re unstoppable! 💪',
+        'Flawless! Keep this momentum going! 🔥',
+      ];
+      message = celebrations[DateTime.now().day % celebrations.length];
+      icon = Icons.celebration_rounded;
+      accentColor = AppColors.success;
+    } else if (pct >= 0.75) {
+      message = 'Almost there! Just a few more habits to go!';
+      icon = Icons.trending_up_rounded;
+      accentColor = AppColors.secondary;
+    } else if (pct >= 0.5) {
+      message = 'Halfway done — keep the momentum going!';
+      icon = Icons.speed_rounded;
+      accentColor = tc.primary;
+    } else if (streak > 7) {
+      message = '$streak-day streak! Don\'t break the chain!';
+      icon = Icons.local_fire_department_rounded;
+      accentColor = AppColors.warning;
+    } else {
+      final tips = [
+        'Small steps lead to big changes. Start now!',
+        'The best time to start is right now.',
+        'Every habit completed is a vote for your future self.',
+        'Consistency beats perfection. Keep showing up!',
+      ];
+      message = tips[DateTime.now().hour % tips.length];
+      icon = Icons.lightbulb_outline_rounded;
+      accentColor = tc.primary;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            accentColor.withValues(alpha: tc.isDark ? 0.12 : 0.06),
+            accentColor.withValues(alpha: tc.isDark ? 0.06 : 0.02),
           ],
         ),
-        child: Column(
-          children: [
-            Icon(icon, color: color, size: 22),
-            const SizedBox(height: 6),
-            Text(
-              value,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: accentColor.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(
+              color: accentColor.withValues(alpha: 0.15),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Icon(icon, color: accentColor, size: 22),
+          ),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Text(
+              message,
               style: TextStyle(
                 color: tc.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.w800,
-              ),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              label,
-              style: TextStyle(
-                color: tc.textMuted,
-                fontSize: 11,
+                fontSize: 13,
                 fontWeight: FontWeight.w500,
+                height: 1.4,
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
@@ -699,13 +827,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         onTap: () {
           Navigator.push(
             context,
-            MaterialPageRoute(
-              builder: (_) => HabitDetailScreen(
-                habit: habit,
-                onToggle: () => controller.loadData(),
-                onDelete: () => controller.loadData(),
-              ),
-            ),
+            AppPageRoute.slideRight(HabitDetailScreen(
+              habit: habit,
+              onToggle: () => controller.loadData(),
+              onDelete: () => controller.loadData(),
+            )),
           ).then((_) => controller.loadData());
         },
         child: AnimatedContainer(
@@ -831,6 +957,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         context.read<GamificationController>().loadData();
                       }
                     } else {
+                      // Show completion celebration for non-gamification completions
+                      if (isNowDone) {
+                        CompletionCelebration.show(context, color: habit.color);
+                      }
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
@@ -931,49 +1061,15 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   /// Displays a friendly empty-state illustration when the user has no
   /// habits configured for today, prompting them to tap the FAB.
   Widget _buildEmptyState() {
-    final tc = context.colors;
-
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(vertical: 48, horizontal: 24),
-      decoration: BoxDecoration(
-        color: tc.card,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: tc.border.withValues(alpha: 0.15)),
-      ),
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: tc.primary.withValues(alpha: 0.08),
-              shape: BoxShape.circle,
-            ),
-            child: Icon(
-              Icons.add_task_rounded,
-              size: 40,
-              color: tc.primary,
-            ),
-          ),
-          const SizedBox(height: 16),
-          Text(
-            'No habits yet',
-            style: AppTextStyles.h3.copyWith(
-              color: tc.textPrimary,
-              fontSize: 17,
-            ),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Tap + to add your first habit\nand build a daily routine.',
-            textAlign: TextAlign.center,
-            style: AppTextStyles.bodyMd.copyWith(
-              color: tc.textMuted,
-              height: 1.6,
-            ),
-          ),
-        ],
-      ),
+    return EmptyStateWidget(
+      icon: Icons.add_task_rounded,
+      title: 'No habits yet',
+      subtitle: 'Tap + to add your first habit\nand build a daily routine.',
+      actionLabel: 'Create Habit',
+      onAction: () {
+        final controller = context.read<HomeController>();
+        _showForm(controller: controller);
+      },
     );
   }
 
@@ -1022,8 +1118,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
     );
   }
 
-  /// Builds a single bottom-nav item with active/inactive styling and an
-  /// optional notification badge (for the Inbox tab at index 2).
+  /// Builds a single bottom-nav item with active/inactive styling, an
+  /// animated indicator dot, and an optional notification badge (for the
+  /// Inbox tab at index 3).
   Widget _navItem(
     HomeController controller,
     IconData icon,
@@ -1037,10 +1134,13 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       onTap: () => controller.changeNavigationIndex(index),
       behavior: HitTestBehavior.opaque,
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
+        duration: AppDurations.short,
+        curve: AppCurves.smooth,
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
         decoration: BoxDecoration(
-          color: active ? tc.primary.withValues(alpha: 0.08) : Colors.transparent,
+          color: active
+              ? tc.primary.withValues(alpha: 0.08)
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(16),
         ),
         child: Column(
@@ -1077,12 +1177,25 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 size: 22,
               ),
             const SizedBox(height: 2),
-            Text(
-              label,
+            AnimatedDefaultTextStyle(
+              duration: AppDurations.short,
               style: TextStyle(
                 color: active ? tc.primary : tc.textMuted,
                 fontSize: 10,
                 fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              ),
+              child: Text(label),
+            ),
+            // Active indicator dot
+            AnimatedContainer(
+              duration: AppDurations.short,
+              curve: AppCurves.smooth,
+              margin: const EdgeInsets.only(top: 3),
+              width: active ? 4 : 0,
+              height: active ? 4 : 0,
+              decoration: BoxDecoration(
+                color: tc.primary,
+                shape: BoxShape.circle,
               ),
             ),
           ],
@@ -1163,7 +1276,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             const SizedBox(height: 24),
 
             _profileOption(Icons.settings_rounded, 'Settings', 'Alerts, reminders, quiet hours', tc, onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) =>
+              Navigator.push(context, AppPageRoute.slideRight(
                 ChangeNotifierProvider(
                   create: (_) => SettingsController(),
                   child: const SettingsScreen(),
@@ -1171,7 +1284,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ));
             }),
             _profileOption(Icons.palette_outlined, 'Appearance', 'Light, dark, or system theme', tc, onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) =>
+              Navigator.push(context, AppPageRoute.slideRight(
                 ChangeNotifierProvider(
                   create: (_) => SettingsController(),
                   child: const AppearancePage(),
@@ -1179,7 +1292,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ));
             }),
             _profileOption(Icons.shield_outlined, 'Privacy', 'Manage your data', tc, onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) =>
+              Navigator.push(context, AppPageRoute.slideRight(
                 ChangeNotifierProvider(
                   create: (_) => SettingsController(),
                   child: const PrivacyPolicyPage(),
@@ -1187,7 +1300,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ));
             }),
             _profileOption(Icons.help_outline_rounded, 'Help & Support', 'FAQs and contact', tc, onTap: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) =>
+              Navigator.push(context, AppPageRoute.slideRight(
                 ChangeNotifierProvider(
                   create: (_) => SettingsController(),
                   child: const HelpSupportPage(),

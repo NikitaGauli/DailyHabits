@@ -132,6 +132,11 @@ class FeedPost(models.Model):
             models.Index(fields=['-created_at', 'author']),
         ]
 
+    # Django auto-generates `_id` attributes for FK fields
+    if TYPE_CHECKING:
+        id: int
+        author_id: int
+
     def __str__(self):
         return f"{self.author.email}: {self.content[:50]}"
 

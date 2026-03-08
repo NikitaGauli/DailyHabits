@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../theme/app_theme.dart';
+import '../../theme/app_animations.dart';
+import '../../widgets/common/shimmer_loading.dart';
 import 'settings_controller.dart';
 import 'pages/appearance_page.dart';
 import 'pages/notifications_page.dart';
@@ -38,7 +40,20 @@ class SettingsScreen extends StatelessWidget {
         centerTitle: true,
       ),
       body: ctrl.isLoading
-          ? const Center(child: CircularProgressIndicator())
+          ? ListView(
+              padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 16),
+              children: List.generate(
+                8,
+                (_) => const Padding(
+                  padding: EdgeInsets.only(bottom: 12),
+                  child: ShimmerBox(
+                    width: double.infinity,
+                    height: 56,
+                    borderRadius: 12,
+                  ),
+                ),
+              ),
+            )
           : ctrl.error != null
               ? _ErrorView(error: ctrl.error!, onRetry: ctrl.loadAll)
               : ListView(
@@ -159,9 +174,7 @@ class SettingsScreen extends StatelessWidget {
                       title: 'Admin Dashboard',
                       subtitle: 'Manage users, reports, analytics',
                       onTap: () => Navigator.of(context).push(
-                        MaterialPageRoute(
-                          builder: (_) => const AdminScreen(),
-                        ),
+                        AppPageRoute.slideRight(const AdminScreen()),
                       ),
                     ),
 
@@ -175,8 +188,8 @@ class SettingsScreen extends StatelessWidget {
 
   void _push(BuildContext context, Widget page) {
     Navigator.of(context).push(
-      MaterialPageRoute(
-        builder: (_) => ChangeNotifierProvider.value(
+      AppPageRoute.slideRight(
+        ChangeNotifierProvider.value(
           value: context.read<SettingsController>(),
           child: page,
         ),
@@ -234,22 +247,58 @@ class _SettingsTile extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.colors;
-    return ListTile(
-      leading: Container(
-        width: 40,
-        height: 40,
-        decoration: BoxDecoration(
-          color: colors.primary.withValues(alpha: 0.1),
-          borderRadius: BorderRadius.circular(10),
+    return ScaleTapWidget(
+      onTap: onTap ?? () {},
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 2),
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Row(
+            children: [
+              // Tinted icon badge
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colors.primary.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(11),
+                ),
+                child: Icon(icon, color: colors.primary, size: 21),
+              ),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        color: colors.textPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      subtitle,
+                      style: TextStyle(fontSize: 12, color: colors.textMuted),
+                    ),
+                  ],
+                ),
+              ),
+              trailing ??
+                  Icon(
+                    Icons.chevron_right_rounded,
+                    color: colors.textMuted.withValues(alpha: 0.5),
+                    size: 20,
+                  ),
+            ],
+          ),
         ),
-        child: Icon(icon, color: colors.primary, size: 22),
       ),
-      title: Text(title,
-          style: TextStyle(fontWeight: FontWeight.w500, color: colors.textPrimary)),
-      subtitle: Text(subtitle,
-          style: TextStyle(fontSize: 13, color: colors.textSecondary)),
-      trailing: trailing ?? Icon(Icons.chevron_right, color: colors.textMuted),
-      onTap: onTap,
     );
   }
 }

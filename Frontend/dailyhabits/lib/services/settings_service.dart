@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import 'package:dailyhabits/services/auth_service.dart';
+import 'package:dailyhabits/services/api_config.dart';
 import 'package:dailyhabits/models/settings_models.dart';
 
 /// Service layer for all settings-related API operations.
@@ -10,6 +11,9 @@ import 'package:dailyhabits/models/settings_models.dart';
 /// account deletion.
 class SettingsService {
   final AuthService _auth = AuthService();
+
+  /// Resolves a relative API path to a full URL using [ApiConfig.baseUrl].
+  static Uri _url(String path) => Uri.parse('${ApiConfig.baseUrl}$path');
 
   Future<Map<String, String>> _headers() async {
     final token = await _auth.getToken();
@@ -25,7 +29,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.get(
-        Uri.parse('/user-settings/'),
+        _url('/user-settings/'),
         headers: h,
       );
       if (r.statusCode == 200) {
@@ -44,9 +48,29 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.put(
-        Uri.parse('/user-settings/update_settings/'),
+        _url('/user-settings/update_settings/'),
         headers: h,
         body: jsonEncode(fields),
+      );
+      return r.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  // --- Color Preference (dedicated endpoint) --------------------------
+
+  /// Saves the user's accent color preference via the dedicated
+  /// `POST /api/user-settings/color/` endpoint.
+  ///
+  /// Returns `true` on success, `false` on validation or network errors.
+  Future<bool> updateColorPreference(String color) async {
+    try {
+      final h = await _headers();
+      final r = await http.post(
+        _url('/user-settings/color/'),
+        headers: h,
+        body: jsonEncode({'color': color}),
       );
       return r.statusCode == 200;
     } catch (_) {
@@ -60,7 +84,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.get(
-        Uri.parse('/privacy-settings/'),
+        _url('/privacy-settings/'),
         headers: h,
       );
       if (r.statusCode == 200) {
@@ -79,7 +103,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.put(
-        Uri.parse('/privacy-settings/update_settings/'),
+        _url('/privacy-settings/update_settings/'),
         headers: h,
         body: jsonEncode(fields),
       );
@@ -95,7 +119,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.get(
-        Uri.parse('/security-settings/'),
+        _url('/security-settings/'),
         headers: h,
       );
       if (r.statusCode == 200) {
@@ -114,7 +138,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.put(
-        Uri.parse('/security-settings/update_settings/'),
+        _url('/security-settings/update_settings/'),
         headers: h,
         body: jsonEncode(fields),
       );
@@ -131,7 +155,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.post(
-        Uri.parse('/security-settings/change_password/'),
+        _url('/security-settings/change_password/'),
         headers: h,
         body: jsonEncode({
           'currentPassword': currentPassword,
@@ -150,7 +174,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.get(
-        Uri.parse('/login-sessions/'),
+        _url('/login-sessions/'),
         headers: h,
       );
       if (r.statusCode == 200) {
@@ -171,7 +195,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.post(
-        Uri.parse('/login-sessions//revoke/'),
+        _url('/login-sessions/$sessionId/revoke/'),
         headers: h,
       );
       return r.statusCode == 200;
@@ -184,7 +208,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.post(
-        Uri.parse('/login-sessions/revoke_all/'),
+        _url('/login-sessions/revoke_all/'),
         headers: h,
       );
       return r.statusCode == 200;
@@ -198,8 +222,8 @@ class SettingsService {
   Future<List<AuditLogEntry>> getAuditLogs({String? category}) async {
     try {
       final h = await _headers();
-      var url = '/settings-audit-logs/';
-      if (category != null) url += '?category=';
+      var url = '${ApiConfig.baseUrl}/settings-audit-logs/';
+      if (category != null) url += '?category=$category';
       final r = await http.get(Uri.parse(url), headers: h);
       if (r.statusCode == 200) {
         final data = jsonDecode(r.body);
@@ -221,7 +245,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.get(
-        Uri.parse('/auth/profile/'),
+        _url('/auth/profile/'),
         headers: h,
       );
       if (r.statusCode == 200) {
@@ -238,7 +262,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.patch(
-        Uri.parse('/auth/profile/'),
+        _url('/auth/profile/'),
         headers: h,
         body: jsonEncode(fields),
       );
@@ -254,7 +278,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.get(
-        Uri.parse('/exports/'),
+        _url('/exports/'),
         headers: h,
       );
       if (r.statusCode == 200) {
@@ -279,7 +303,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.post(
-        Uri.parse('/exports/request/'),
+        _url('/exports/request/'),
         headers: h,
         body: jsonEncode({
           'format': format,
@@ -294,7 +318,7 @@ class SettingsService {
   }
 
   Future<String?> getExportDownloadUrl(int exportId) async {
-    return '/exports/download/?id=';
+    return '${ApiConfig.baseUrl}/exports/download/?id=$exportId';
   }
 
   // ─── Privacy Policy ────────────────────────────────────────────
@@ -303,7 +327,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.get(
-        Uri.parse('/privacy-policy/'),
+        _url('/privacy-policy/'),
         headers: h,
       );
       if (r.statusCode == 200) {
@@ -324,7 +348,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.get(
-        Uri.parse('/faqs/'),
+        _url('/faqs/'),
         headers: h,
       );
       if (r.statusCode == 200) {
@@ -347,7 +371,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.get(
-        Uri.parse('/support-tickets/'),
+        _url('/support-tickets/'),
         headers: h,
       );
       if (r.statusCode == 200) {
@@ -374,7 +398,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.post(
-        Uri.parse('/support-tickets/'),
+        _url('/support-tickets/'),
         headers: h,
         body: jsonEncode({
           'subject': subject,
@@ -396,7 +420,7 @@ class SettingsService {
     try {
       final h = await _headers();
       final r = await http.post(
-        Uri.parse('/auth/request-deletion/'),
+        _url('/auth/request-deletion/'),
         headers: h,
         body: jsonEncode({'reason': reason}),
       );

@@ -165,6 +165,86 @@ class NotificationViewSet(viewsets.ModelViewSet):
         except Notification.DoesNotExist:
             return Response({'success': False, 'message': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
 
+    # ── Friend request actions (from notification) ────────────────────
+
+    @action(detail=True, methods=['post'], url_path='accept-friend')
+    def accept_friend(self, request, pk=None):
+        """Accept a friend request directly from a notification.
+
+        Finds the pending Friendship from the notification's ``from_user``
+        to the authenticated user, accepts it, marks the notification read,
+        and creates a ``friend_accepted`` notification for the sender.
+        """
+        from social.models import Friendship
+        from notifications.services import NotificationCreator
+
+        try:
+            notification = self.get_queryset().get(pk=pk, notification_type='friend_request')
+        except Notification.DoesNotExist:
+            return Response({'success': False, 'message': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not notification.from_user:
+            return Response({'success': False, 'message': 'Invalid friend request notification'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Find the pending friendship
+        friendship = Friendship.objects.filter(
+            from_user=notification.from_user,
+            to_user=request.user,
+            status='pending',
+        ).first()
+
+        if not friendship:
+            return Response({'success': False, 'message': 'Friend request not found or already handled'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Accept the friendship
+        friendship.status = 'accepted'
+        friendship.save()
+
+        # Mark this notification as read
+        notification.mark_as_read()
+
+        # Notify the sender that their request was accepted
+        NotificationCreator.friend_accepted(to_user=notification.from_user, from_user=request.user)
+
+        return Response({'success': True, 'message': 'Friend request accepted'})
+
+    @action(detail=True, methods=['post'], url_path='reject-friend')
+    def reject_friend(self, request, pk=None):
+        """Reject a friend request directly from a notification.
+
+        Finds the pending Friendship, rejects it, and marks the
+        notification as dismissed.
+        """
+        from social.models import Friendship
+
+        try:
+            notification = self.get_queryset().get(pk=pk, notification_type='friend_request')
+        except Notification.DoesNotExist:
+            return Response({'success': False, 'message': 'Notification not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        if not notification.from_user:
+            return Response({'success': False, 'message': 'Invalid friend request notification'}, status=status.HTTP_400_BAD_REQUEST)
+
+        # Find the pending friendship
+        friendship = Friendship.objects.filter(
+            from_user=notification.from_user,
+            to_user=request.user,
+            status='pending',
+        ).first()
+
+        if not friendship:
+            return Response({'success': False, 'message': 'Friend request not found or already handled'}, status=status.HTTP_404_NOT_FOUND)
+
+        # Reject the friendship
+        friendship.status = 'rejected'
+        friendship.save()
+
+        # Dismiss this notification
+        notification.status = 'dismissed'
+        notification.save(update_fields=['status'])
+
+        return Response({'success': True, 'message': 'Friend request rejected'})
+
 
 # =============================================================================
 #  SMART TIP VIEWSET — personalized guidance cards

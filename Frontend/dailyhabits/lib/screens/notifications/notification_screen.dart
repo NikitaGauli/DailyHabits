@@ -17,6 +17,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+import 'package:dailyhabits/theme/app_animations.dart';
+import 'package:dailyhabits/widgets/common/shimmer_loading.dart';
 import 'package:dailyhabits/screens/notifications/notification_controller.dart';
 import 'package:dailyhabits/screens/notifications/widgets/notification_tile.dart';
 import 'package:dailyhabits/screens/notifications/widgets/smart_tip_card.dart';
@@ -198,9 +200,19 @@ class _InboxTab extends StatelessWidget {
     return Consumer<NotificationController>(
       builder: (context, ctrl, _) {
         if (ctrl.isInboxLoading) {
-          return Center(
-            child: CircularProgressIndicator(
-                color: context.colors.primary),
+          return ListView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+            children: List.generate(
+              5,
+              (_) => const Padding(
+                padding: EdgeInsets.only(bottom: 12),
+                child: ShimmerBox(
+                  width: double.infinity,
+                  height: 80,
+                  borderRadius: 16,
+                ),
+              ),
+            ),
           );
         }
 
@@ -224,6 +236,12 @@ class _InboxTab extends StatelessWidget {
                 notification: notification,
                 onTap: () => _handleTap(context, notification, ctrl),
                 onDismiss: () => ctrl.deleteNotification(notification.id),
+                onAcceptFriend: notification.type == 'friend_request'
+                    ? () => ctrl.acceptFriendRequest(notification.id)
+                    : null,
+                onRejectFriend: notification.type == 'friend_request'
+                    ? () => ctrl.rejectFriendRequest(notification.id)
+                    : null,
               );
             },
           ),
@@ -267,7 +285,7 @@ class _InboxTab extends StatelessWidget {
       case 'settings':
         Navigator.push(
           context,
-          MaterialPageRoute(builder: (_) => const SettingsScreen()),
+          AppPageRoute.slideRight(const SettingsScreen()),
         );
         break;
       default:

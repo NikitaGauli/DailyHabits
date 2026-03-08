@@ -168,6 +168,44 @@ class NotificationService {
   }
 
   // ---------------------------------------------------------------------------
+  // Friend Request Actions (from notification)
+  // ---------------------------------------------------------------------------
+
+  /// Accepts a friend request directly from a notification.
+  ///
+  /// The backend finds the pending friendship associated with the
+  /// notification's sender and accepts it.
+  Future<bool> acceptFriendRequest(int notificationId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/$notificationId/accept-friend/'),
+        headers: headers,
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  /// Rejects a friend request directly from a notification.
+  ///
+  /// The backend finds the pending friendship associated with the
+  /// notification's sender and rejects it.
+  Future<bool> rejectFriendRequest(int notificationId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/$notificationId/reject-friend/'),
+        headers: headers,
+      );
+      return response.statusCode == 200;
+    } catch (e) {
+      return false;
+    }
+  }
+
+  // ---------------------------------------------------------------------------
   // Smart Tips
   // ---------------------------------------------------------------------------
 

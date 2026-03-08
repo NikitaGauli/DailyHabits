@@ -1,10 +1,50 @@
 /*
  * DailyHabits Super Admin — Custom CSS
  * =====================================
- * Extends the Jazzmin theme with platform-specific tweaks.
+ * Extends the Jazzmin theme with platform-specific styling, dark mode
+ * support, polished animations, and modern design tokens.
+ *
+ * Sections:
+ *   1. Custom Properties (CSS Variables)
+ *   2. Sidebar & Navigation
+ *   3. Content Area
+ *   4. Action Buttons
+ *   5. Tables & Change Lists
+ *   6. Dashboard Canvas
+ *   7. Dark Mode Override
+ *   8. Micro-interactions & Animations
+ *   9. Responsive Layout
+ *   10. Scrollbar & Utility
  */
 
-/* ── Sidebar brand accent ────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════
+   1. CUSTOM PROPERTIES
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --dh-primary: #6366f1;
+  --dh-primary-hover: #4f46e5;
+  --dh-primary-light: rgba(99, 102, 241, 0.1);
+  --dh-success: #10b981;
+  --dh-warning: #f59e0b;
+  --dh-danger: #ef4444;
+  --dh-info: #3b82f6;
+  --dh-bg: #f1f5f9;
+  --dh-surface: #ffffff;
+  --dh-text: #1e293b;
+  --dh-text-secondary: #64748b;
+  --dh-border: #e2e8f0;
+  --dh-shadow-sm: 0 1px 3px rgba(0,0,0,0.06);
+  --dh-shadow-md: 0 4px 12px rgba(0,0,0,0.08);
+  --dh-shadow-lg: 0 8px 24px rgba(0,0,0,0.12);
+  --dh-radius-sm: 8px;
+  --dh-radius-md: 12px;
+  --dh-radius-lg: 16px;
+  --dh-transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   2. SIDEBAR & NAVIGATION
+   ═══════════════════════════════════════════════════════════════════════ */
 .main-sidebar .brand-link {
   border-bottom: 1px solid rgba(255,255,255,0.1);
 }
@@ -12,56 +52,188 @@
   font-weight: 700;
   letter-spacing: 0.5px;
 }
+/* Smooth nav link hover */
+.main-sidebar .nav-link {
+  transition: all var(--dh-transition);
+  border-radius: var(--dh-radius-sm);
+  margin: 2px 8px;
+}
+.main-sidebar .nav-link:hover {
+  background: rgba(255,255,255,0.08);
+  padding-left: 20px;
+}
 
-/* ── Navbar accent ───────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════
+   3. NAVBAR & CONTENT AREA
+   ═══════════════════════════════════════════════════════════════════════ */
 .main-header.navbar {
-  border-bottom: 3px solid #6366f1;
+  border-bottom: 3px solid var(--dh-primary);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
 }
-
-/* ── Content area ────────────────────────────────────────── */
 .content-wrapper {
-  background: #f1f5f9 !important;
+  background: var(--dh-bg) !important;
 }
 
-/* ── Action buttons ──────────────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════
+   4. ACTION BUTTONS
+   ═══════════════════════════════════════════════════════════════════════ */
 .btn-primary {
-  background-color: #6366f1 !important;
-  border-color: #6366f1 !important;
+  background-color: var(--dh-primary) !important;
+  border-color: var(--dh-primary) !important;
+  transition: all var(--dh-transition);
 }
 .btn-primary:hover {
-  background-color: #4f46e5 !important;
-  border-color: #4f46e5 !important;
+  background-color: var(--dh-primary-hover) !important;
+  border-color: var(--dh-primary-hover) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+.btn-primary:active {
+  transform: translateY(0);
 }
 
-/* ── Model change list panels ────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════
+   5. TABLES & CHANGE LISTS
+   ═══════════════════════════════════════════════════════════════════════ */
 #changelist .results table {
   border-collapse: collapse;
 }
 #changelist .results table th {
   background: #f8fafc;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 2px solid var(--dh-border);
+  font-size: 0.8rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--dh-text-secondary);
 }
 #changelist .results table td {
   border-bottom: 1px solid #f1f5f9;
+  transition: background var(--dh-transition);
+}
+#changelist .results table tr:hover td {
+  background: var(--dh-primary-light);
 }
 
-/* ── Dashboard canvas sizing ─────────────────────────────── */
+/* ═══════════════════════════════════════════════════════════════════════
+   6. DASHBOARD CANVAS
+   ═══════════════════════════════════════════════════════════════════════ */
 .dh-chart-card canvas {
   max-height: 250px;
 }
 
-/* ── Responsive tweaks ───────────────────────────────────── */
-@media (max-width: 768px) {
-  .dh-kpi-grid {
-    grid-template-columns: repeat(2, 1fr);
+/* ═══════════════════════════════════════════════════════════════════════
+   7. DARK MODE
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (prefers-color-scheme: dark) {
+  :root {
+    --dh-bg: #0f172a;
+    --dh-surface: #1e293b;
+    --dh-text: #f1f5f9;
+    --dh-text-secondary: #94a3b8;
+    --dh-border: #334155;
+    --dh-shadow-sm: 0 1px 3px rgba(0,0,0,0.2);
+    --dh-shadow-md: 0 4px 12px rgba(0,0,0,0.3);
   }
-  .dh-quick-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .content-wrapper { background: var(--dh-bg) !important; }
+  /* Dashboard cards dark mode */
+  .dh-kpi-card,
+  .dh-chart-card,
+  .dh-quick-link {
+    background: var(--dh-surface) !important;
+    color: var(--dh-text) !important;
   }
+  .dh-kpi-value { color: var(--dh-text) !important; }
+  .dh-kpi-label { color: var(--dh-text-secondary) !important; }
+  .dh-section-title { color: var(--dh-text) !important; border-bottom-color: var(--dh-border) !important; }
+  .dh-table th { background: var(--dh-surface) !important; color: var(--dh-text-secondary) !important; border-bottom-color: var(--dh-border) !important; }
+  .dh-table td { color: var(--dh-text) !important; border-bottom-color: var(--dh-border) !important; }
+  .dh-table tr:hover td { background: rgba(99, 102, 241, 0.08) !important; }
+  #changelist .results table th { background: var(--dh-surface); color: var(--dh-text-secondary); border-bottom-color: var(--dh-border); }
+  #changelist .results table td { border-bottom-color: var(--dh-border); }
 }
 
-/* ── Scrollbar styling ───────────────────────────────────── */
-::-webkit-scrollbar { width: 6px; }
-::-webkit-scrollbar-track { background: #f1f5f9; }
+/* ═══════════════════════════════════════════════════════════════════════
+   8. MICRO-INTERACTIONS & ANIMATIONS
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Fade-in animation for dashboard content */
+@keyframes dh-fade-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.dh-dashboard { animation: dh-fade-in 0.4s ease-out; }
+.dh-dashboard .dh-section { animation: dh-fade-in 0.5s ease-out backwards; }
+.dh-dashboard .dh-section:nth-child(2) { animation-delay: 0.05s; }
+.dh-dashboard .dh-section:nth-child(3) { animation-delay: 0.1s; }
+.dh-dashboard .dh-section:nth-child(4) { animation-delay: 0.15s; }
+.dh-dashboard .dh-section:nth-child(5) { animation-delay: 0.2s; }
+
+/* KPI card number count-up effect */
+.dh-kpi-card {
+  transition: transform var(--dh-transition), box-shadow var(--dh-transition);
+}
+.dh-kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--dh-shadow-lg);
+}
+
+/* Quick link ripple hover */
+.dh-quick-link {
+  transition: all var(--dh-transition);
+  position: relative;
+  overflow: hidden;
+}
+.dh-quick-link::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: var(--dh-primary);
+  opacity: 0;
+  transition: opacity var(--dh-transition);
+  z-index: 0;
+  border-radius: inherit;
+}
+.dh-quick-link:hover::after { opacity: 1; }
+.dh-quick-link:hover { color: #fff; transform: translateY(-2px); box-shadow: 0 4px 16px rgba(99,102,241,0.25); }
+.dh-quick-link > * { position: relative; z-index: 1; }
+
+/* Smooth badge transitions */
+.dh-badge { transition: all var(--dh-transition); }
+
+/* Chart card subtle lift */
+.dh-chart-card {
+  transition: transform var(--dh-transition), box-shadow var(--dh-transition);
+}
+.dh-chart-card:hover {
+  box-shadow: var(--dh-shadow-md);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   9. RESPONSIVE LAYOUT
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .dh-kpi-grid { grid-template-columns: repeat(2, 1fr); }
+  .dh-quick-grid { grid-template-columns: repeat(2, 1fr); }
+  .dh-chart-grid { grid-template-columns: 1fr; }
+  .dh-two-col { grid-template-columns: 1fr; }
+}
+@media (max-width: 480px) {
+  .dh-kpi-grid { grid-template-columns: 1fr; }
+  .dh-quick-grid { grid-template-columns: 1fr; }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   10. SCROLLBAR & UTILITY
+   ═══════════════════════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: var(--dh-bg); }
 ::-webkit-scrollbar-thumb { background: #94a3b8; border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: #64748b; }
+
+/* Focus visible ring for accessibility */
+*:focus-visible {
+  outline: 2px solid var(--dh-primary);
+  outline-offset: 2px;
+  border-radius: 2px;
+}

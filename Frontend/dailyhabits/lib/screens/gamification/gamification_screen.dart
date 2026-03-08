@@ -10,6 +10,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+import 'package:dailyhabits/widgets/common/shimmer_loading.dart';
 import 'package:dailyhabits/models/gamification_models.dart';
 import 'gamification_controller.dart';
 import 'widgets/xp_progress_ring.dart';
@@ -80,8 +81,30 @@ class _GamificationViewState extends State<_GamificationView>
         if (ctrl.isLoading && ctrl.dashboard == null) {
           return Scaffold(
             backgroundColor: tc.bg,
-            body: Center(
-              child: CircularProgressIndicator(color: tc.primary),
+            body: SafeArea(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const ShimmerBox(width: 160, height: 26, borderRadius: 8),
+                    const SizedBox(height: 20),
+                    const ShimmerBox(width: double.infinity, height: 140, borderRadius: 24),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: const [
+                        Expanded(child: ShimmerBox(width: double.infinity, height: 90, borderRadius: 16)),
+                        SizedBox(width: 12),
+                        Expanded(child: ShimmerBox(width: double.infinity, height: 90, borderRadius: 16)),
+                      ],
+                    ),
+                    const SizedBox(height: 20),
+                    const ShimmerBox(width: double.infinity, height: 120, borderRadius: 20),
+                    const SizedBox(height: 16),
+                    const ShimmerBox(width: double.infinity, height: 120, borderRadius: 20),
+                  ],
+                ),
+              ),
             ),
           );
         }

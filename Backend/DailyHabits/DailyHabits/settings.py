@@ -60,6 +60,9 @@ GOOGLE_CLIENT_ID = os.environ.get('GOOGLE_CLIENT_ID', '')
 # APPLICATION DEFINITION
 # =============================================================================
 INSTALLED_APPS = [
+    # --- Daphne ASGI server (must precede django.contrib.staticfiles) ---
+    'daphne',
+
     # --- Jazzmin (must precede django.contrib.admin) ---
     'jazzmin',
 
@@ -76,6 +79,7 @@ INSTALLED_APPS = [
     'rest_framework_simplejwt',                   # JWT authentication
     'rest_framework_simplejwt.token_blacklist',   # Token revocation support
     'corsheaders',                                # Cross-Origin Resource Sharing
+    'channels',                                   # Django Channels (WebSocket support)
 
     # --- Project apps (domain modules) ---
     'authentication',   # Custom user model, registration, login & token management
@@ -132,6 +136,32 @@ TEMPLATES = [
 
 # WSGI entry point used by traditional synchronous servers (Gunicorn, uWSGI).
 WSGI_APPLICATION = 'DailyHabits.wsgi.application'
+
+# =============================================================================
+# ASGI & CHANNEL LAYER CONFIGURATION (Django Channels / WebSockets)
+# =============================================================================
+# ASGI entry point used by Daphne / Uvicorn for HTTP + WebSocket support.
+ASGI_APPLICATION = 'DailyHabits.asgi.application'
+
+# Channel layer backend — provides the message-passing infrastructure for
+# WebSocket group communication (broadcasting notifications to user groups).
+#
+# Development:  InMemoryChannelLayer (single-process, no external dependency)
+# Production:   Switch to RedisChannelLayer for multi-process / multi-server:
+#
+#     CHANNEL_LAYERS = {
+#         'default': {
+#             'BACKEND': 'channels_redis.core.RedisChannelLayer',
+#             'CONFIG': {
+#                 'hosts': [os.environ.get('REDIS_URL', 'redis://127.0.0.1:6379/0')],
+#             },
+#         },
+#     }
+CHANNEL_LAYERS = {
+    'default': {
+        'BACKEND': 'channels.layers.InMemoryChannelLayer',
+    },
+}
 
 # =============================================================================
 # DATABASE CONFIGURATION

@@ -1,7 +1,7 @@
 // =============================================================================
 // File: admin_notifications_page.dart
-// Description: Notification campaigns page — list campaigns, send/cancel,
-//              create new campaigns.
+// Description: Modern notification campaigns page — campaign cards with
+//              delivery metrics, create dialog, send/cancel actions.
 // =============================================================================
 
 import 'package:flutter/material.dart';
@@ -22,51 +22,52 @@ class AdminNotificationsPage extends StatelessWidget {
           return const Center(child: CircularProgressIndicator());
         }
         if (page == null || page.results.isEmpty) {
-          return Center(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                const Icon(Icons.campaign_outlined,
-                    size: 64, color: AppColors.lightTextMuted),
-                const SizedBox(height: 12),
-                const Text('No campaigns yet'),
-                if (ctrl.hasPermission('notifications.send'))
-                  Padding(
-                    padding: const EdgeInsets.only(top: 16),
-                    child: FilledButton.icon(
-                      icon: const Icon(Icons.add),
-                      label: const Text('Create Campaign'),
-                      onPressed: () => _showCreateDialog(context, ctrl),
-                    ),
-                  ),
-              ],
-            ),
-          );
+          return _EmptyCampaigns(ctrl: ctrl);
         }
+
+        final drafts = page.results.where((c) => c.status == 'draft').length;
+        final sent = page.results.where((c) => c.status == 'sent' || c.status == 'sending').length;
+
         return Column(
           children: [
-            // Action bar
+            // ─── Header ───
             Padding(
-              padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 0),
               child: Row(
                 children: [
-                  Text('${page.count} campaigns',
-                      style: Theme.of(context).textTheme.titleMedium),
+                  Text('Campaigns',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleLarge
+                          ?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(width: 10),
+                  _Badge('${page.count} total', AppColors.primary),
+                  const SizedBox(width: 6),
+                  _Badge('$drafts drafts', AppColors.lightTextMuted),
+                  const SizedBox(width: 6),
+                  _Badge('$sent sent', AppColors.success),
                   const Spacer(),
                   if (ctrl.hasPermission('notifications.send'))
                     FilledButton.icon(
-                      icon: const Icon(Icons.add, size: 18),
+                      style: FilledButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 18, vertical: 12),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10)),
+                      ),
+                      icon: const Icon(Icons.add_rounded, size: 18),
                       label: const Text('New Campaign'),
                       onPressed: () => _showCreateDialog(context, ctrl),
                     ),
                 ],
               ),
             ),
+            const SizedBox(height: 16),
             Expanded(
               child: ListView.builder(
                 padding: const EdgeInsets.symmetric(horizontal: 24),
                 itemCount: page.results.length,
-                itemBuilder: (context, i) =>
+                itemBuilder: (_, i) =>
                     _CampaignCard(campaign: page.results[i], ctrl: ctrl),
               ),
             ),
@@ -86,36 +87,72 @@ class AdminNotificationsPage extends StatelessWidget {
       context: context,
       builder: (_) => StatefulBuilder(
         builder: (ctx, setState) => AlertDialog(
-          title: const Text('New Campaign'),
+          shape:
+              RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          title: Row(
+            children: [
+              Container(
+                width: 36,
+                height: 36,
+                decoration: BoxDecoration(
+                  color: AppColors.primary.withValues(alpha: 0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.campaign_rounded,
+                    size: 20, color: AppColors.primary),
+              ),
+              const SizedBox(width: 12),
+              const Text('New Campaign'),
+            ],
+          ),
           content: SizedBox(
-            width: 420,
+            width: 440,
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 TextField(
                   controller: nameCtrl,
-                  decoration: const InputDecoration(labelText: 'Campaign Name'),
+                  decoration: InputDecoration(
+                    labelText: 'Campaign Name',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.all(14),
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 TextField(
                   controller: titleCtrl,
-                  decoration:
-                      const InputDecoration(labelText: 'Notification Title'),
+                  decoration: InputDecoration(
+                    labelText: 'Notification Title',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.all(14),
+                  ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 TextField(
                   controller: bodyCtrl,
-                  decoration:
-                      const InputDecoration(labelText: 'Notification Body'),
+                  decoration: InputDecoration(
+                    labelText: 'Message Body',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.all(14),
+                  ),
                   maxLines: 3,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 14),
                 DropdownButtonFormField<String>(
                   initialValue: audience,
-                  decoration:
-                      const InputDecoration(labelText: 'Target Audience'),
+                  decoration: InputDecoration(
+                    labelText: 'Target Audience',
+                    border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(10)),
+                    contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 14, vertical: 12),
+                  ),
                   items: const [
-                    DropdownMenuItem(value: 'all', child: Text('All Users')),
+                    DropdownMenuItem(
+                        value: 'all', child: Text('All Users')),
                     DropdownMenuItem(
                         value: 'active', child: Text('Active Users')),
                     DropdownMenuItem(
@@ -146,99 +183,219 @@ class AdminNotificationsPage extends StatelessWidget {
   }
 }
 
-class _CampaignCard extends StatelessWidget {
+// =============================================================================
+// Campaign Card
+// =============================================================================
+
+class _CampaignCard extends StatefulWidget {
   final NotificationCampaign campaign;
   final AdminController ctrl;
   const _CampaignCard({required this.campaign, required this.ctrl});
 
   @override
+  State<_CampaignCard> createState() => _CampaignCardState();
+}
+
+class _CampaignCardState extends State<_CampaignCard> {
+  bool _hovering = false;
+
+  @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(20),
-      decoration: BoxDecoration(
-        color: isDark ? AppColors.darkCard : AppColors.lightCard,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-            color: isDark ? AppColors.darkBorder : AppColors.lightBorder),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Header
-          Row(
-            children: [
-              Expanded(
-                child: Text(campaign.name,
-                    style: const TextStyle(
-                        fontWeight: FontWeight.w700, fontSize: 15)),
-              ),
-              _CampaignStatusBadge(status: campaign.status),
-            ],
+    final campaign = widget.campaign;
+    final ctrl = widget.ctrl;
+
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovering = true),
+      onExit: (_) => setState(() => _hovering = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        margin: const EdgeInsets.only(bottom: 14),
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: isDark ? AppColors.darkCard : AppColors.lightCard,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: _hovering
+                ? AppColors.primary.withValues(alpha: 0.3)
+                : isDark
+                    ? AppColors.darkBorder
+                    : AppColors.lightBorder,
           ),
-          const SizedBox(height: 8),
-
-          Text(campaign.title,
-              style: const TextStyle(fontWeight: FontWeight.w600)),
-          const SizedBox(height: 4),
-          Text(campaign.body,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                  color: isDark
-                      ? AppColors.darkTextSecondary
-                      : AppColors.lightTextSecondary)),
-          const SizedBox(height: 12),
-
-          // Metrics
-          Row(
-            children: [
-              _MetricChip(
-                  label: 'Recipients', value: '${campaign.totalRecipients}'),
-              const SizedBox(width: 16),
-              _MetricChip(
-                  label: 'Delivered', value: '${campaign.deliveredCount}'),
-              const SizedBox(width: 16),
-              _MetricChip(
-                  label: 'Open Rate',
-                  value: '${campaign.openRate.toStringAsFixed(1)}%'),
-            ],
-          ),
-
-          // Actions
-          if (campaign.status == 'draft' || campaign.status == 'scheduled') ...[
-            const SizedBox(height: 12),
+          boxShadow: _hovering
+              ? [
+                  BoxShadow(
+                    color: AppColors.primary.withValues(alpha: 0.06),
+                    blurRadius: 12,
+                    offset: const Offset(0, 4),
+                  ),
+                ]
+              : [
+                  BoxShadow(
+                    color: Colors.black.withValues(alpha: 0.02),
+                    blurRadius: 4,
+                  ),
+                ],
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Header
             Row(
               children: [
+                Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: _statusColor(campaign.status).withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(_statusIcon(campaign.status),
+                      size: 20, color: _statusColor(campaign.status)),
+                ),
+                const SizedBox(width: 14),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(campaign.name,
+                          style: const TextStyle(
+                              fontWeight: FontWeight.w700, fontSize: 15)),
+                      const SizedBox(height: 2),
+                      Text(campaign.title,
+                          style: TextStyle(
+                              fontSize: 13,
+                              color: isDark
+                                  ? AppColors.darkTextSecondary
+                                  : AppColors.lightTextSecondary)),
+                    ],
+                  ),
+                ),
+                _StatusBadge(status: campaign.status),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // Body preview
+            Text(campaign.body,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                    fontSize: 13,
+                    color: isDark
+                        ? AppColors.darkTextSecondary
+                        : AppColors.lightTextSecondary,
+                    height: 1.4)),
+            const SizedBox(height: 16),
+
+            // Metrics row
+            Row(
+              children: [
+                _MetricTile(
+                  icon: Icons.people_rounded,
+                  label: 'Recipients',
+                  value: '${campaign.totalRecipients}',
+                  color: AppColors.primary,
+                ),
+                const SizedBox(width: 16),
+                _MetricTile(
+                  icon: Icons.check_circle_rounded,
+                  label: 'Delivered',
+                  value: '${campaign.deliveredCount}',
+                  color: AppColors.success,
+                ),
+                const SizedBox(width: 16),
+                _MetricTile(
+                  icon: Icons.remove_red_eye_rounded,
+                  label: 'Open Rate',
+                  value: '${campaign.openRate.toStringAsFixed(1)}%',
+                  color: AppColors.info,
+                ),
+                const Spacer(),
+                // Actions
                 if (campaign.status == 'draft' &&
                     ctrl.hasPermission('notifications.send'))
                   FilledButton.icon(
-                    icon: const Icon(Icons.send, size: 16),
+                    style: FilledButton.styleFrom(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
+                    icon: const Icon(Icons.send_rounded, size: 16),
                     label: const Text('Send'),
                     onPressed: () => ctrl.sendCampaign(campaign.id),
                   ),
-                if (campaign.status == 'scheduled') ...[
-                  const SizedBox(width: 8),
+                if (campaign.status == 'scheduled')
                   OutlinedButton(
                     style: OutlinedButton.styleFrom(
-                        foregroundColor: AppColors.error),
+                      foregroundColor: AppColors.error,
+                      side: BorderSide(
+                          color: AppColors.error.withValues(alpha: 0.3)),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 10),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
+                    ),
                     onPressed: () => ctrl.sendCampaign(campaign.id),
                     child: const Text('Cancel'),
                   ),
-                ],
               ],
             ),
           ],
-        ],
+        ),
       ),
+    );
+  }
+
+  Color _statusColor(String status) {
+    return switch (status) {
+      'sent' || 'sending' => AppColors.success,
+      'scheduled' => AppColors.info,
+      'draft' => AppColors.lightTextMuted,
+      'cancelled' => AppColors.error,
+      _ => AppColors.lightTextSecondary,
+    };
+  }
+
+  IconData _statusIcon(String status) {
+    return switch (status) {
+      'sent' || 'sending' => Icons.check_circle_rounded,
+      'scheduled' => Icons.schedule_rounded,
+      'draft' => Icons.edit_note_rounded,
+      'cancelled' => Icons.cancel_rounded,
+      _ => Icons.campaign_rounded,
+    };
+  }
+}
+
+// =============================================================================
+// Shared Widgets
+// =============================================================================
+
+class _Badge extends StatelessWidget {
+  final String label;
+  final Color color;
+  const _Badge(this.label, this.color);
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Text(label,
+          style: TextStyle(
+              fontSize: 11, fontWeight: FontWeight.w700, color: color)),
     );
   }
 }
 
-class _CampaignStatusBadge extends StatelessWidget {
+class _StatusBadge extends StatelessWidget {
   final String status;
-  const _CampaignStatusBadge({required this.status});
+  const _StatusBadge({required this.status});
 
   @override
   Widget build(BuildContext context) {
@@ -252,32 +409,97 @@ class _CampaignStatusBadge extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: color.withValues(alpha: 0.12),
+        color: color.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(20),
       ),
-      child: Text(status,
-          style: TextStyle(
-              color: color, fontSize: 12, fontWeight: FontWeight.w600)),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 6,
+            height: 6,
+            decoration: BoxDecoration(shape: BoxShape.circle, color: color),
+          ),
+          const SizedBox(width: 6),
+          Text(status,
+              style: TextStyle(
+                  color: color, fontSize: 11, fontWeight: FontWeight.w600)),
+        ],
+      ),
     );
   }
 }
 
-class _MetricChip extends StatelessWidget {
+class _MetricTile extends StatelessWidget {
+  final IconData icon;
   final String label;
   final String value;
-  const _MetricChip({required this.label, required this.value});
+  final Color color;
+  const _MetricTile(
+      {required this.icon,
+      required this.label,
+      required this.value,
+      required this.color});
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
+    return Row(
+      mainAxisSize: MainAxisSize.min,
       children: [
-        Text(value,
-            style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
-        Text(label,
-            style: const TextStyle(
-                fontSize: 11, color: AppColors.lightTextSecondary)),
+        Icon(icon, size: 16, color: color),
+        const SizedBox(width: 6),
+        Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(value,
+                style:
+                    const TextStyle(fontWeight: FontWeight.w700, fontSize: 14)),
+            Text(label,
+                style: const TextStyle(
+                    fontSize: 10, color: AppColors.lightTextSecondary)),
+          ],
+        ),
       ],
+    );
+  }
+}
+
+class _EmptyCampaigns extends StatelessWidget {
+  final AdminController ctrl;
+  const _EmptyCampaigns({required this.ctrl});
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 72,
+            height: 72,
+            decoration: BoxDecoration(
+              color: AppColors.primary.withValues(alpha: 0.08),
+              shape: BoxShape.circle,
+            ),
+            child: const Icon(Icons.campaign_outlined,
+                size: 40, color: AppColors.primary),
+          ),
+          const SizedBox(height: 16),
+          const Text('No campaigns yet',
+              style: TextStyle(fontSize: 18, fontWeight: FontWeight.w700)),
+          const SizedBox(height: 4),
+          Text('Create your first notification campaign',
+              style: TextStyle(color: AppColors.lightTextSecondary)),
+          if (ctrl.hasPermission('notifications.send')) ...[
+            const SizedBox(height: 20),
+            FilledButton.icon(
+              icon: const Icon(Icons.add_rounded, size: 18),
+              label: const Text('Create Campaign'),
+              onPressed: () {},
+            ),
+          ],
+        ],
+      ),
     );
   }
 }

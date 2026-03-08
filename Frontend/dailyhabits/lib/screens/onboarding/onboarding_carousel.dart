@@ -61,8 +61,8 @@ class _OnboardingCarouselState extends State<OnboardingCarousel> {
       title: 'Build Better Habits',
       description:
           'Track your daily progress and achieve\nyour goals one step at a time',
-      overlayIcon: Icons.adjust_outlined,
-      iconSize: 80,
+      overlayIcon: Icons.rocket_launch_rounded,
+      iconSize: 52,
     ),
     OnboardingPageData(
       gradient: LinearGradient(
@@ -73,7 +73,8 @@ class _OnboardingCarouselState extends State<OnboardingCarousel> {
       imagePath: 'assets/images/onboarding_progress.png',
       title: 'Track Your Progress',
       description: 'Visualize your journey with beautiful\ncharts and insights',
-      showCalendar: true,
+      overlayIcon: Icons.insights_rounded,
+      iconSize: 52,
     ),
     OnboardingPageData(
       gradient: LinearGradient(
@@ -84,8 +85,8 @@ class _OnboardingCarouselState extends State<OnboardingCarousel> {
       imagePath: 'assets/images/onboarding_motivated.png',
       title: 'Stay Motivated',
       description: 'Get personalized reminders and celebrate\nevery milestone',
-      overlayIcon: Icons.emoji_events_outlined,
-      iconSize: 80,
+      overlayIcon: Icons.emoji_events_rounded,
+      iconSize: 52,
       isLastPage: true,
     ),
   ];

@@ -30,3 +30,13 @@ class NotificationsConfig(AppConfig):
     default_auto_field = 'django.db.models.BigAutoField'
     name = 'notifications'
     verbose_name = 'Notifications & Reminders'
+
+    def ready(self):
+        """
+        Connect signal handlers when the app is fully loaded.
+
+        Imports :mod:`notifications.signals` to register the ``post_save``
+        handler that broadcasts new notifications over the WebSocket
+        channel layer.
+        """
+        import notifications.signals  # noqa: F401

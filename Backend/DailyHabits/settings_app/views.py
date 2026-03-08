@@ -13,8 +13,34 @@ from django.http import HttpResponse
 from django.utils import timezone
 from rest_framework import viewsets, status
 from rest_framework.decorators import action
+from rest_framework.renderers import BaseRenderer, JSONRenderer
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
+
+
+# =========================================================================
+#  CUSTOM RENDERERS  (allow DRF content negotiation for binary downloads)
+# =========================================================================
+
+class PdfRenderer(BaseRenderer):
+    """Pass-through renderer that satisfies DRF content negotiation for PDF."""
+    media_type = 'application/pdf'
+    format = 'pdf'
+    charset = None
+    render_style = 'binary'
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
+
+
+class CsvRenderer(BaseRenderer):
+    """Pass-through renderer that satisfies DRF content negotiation for CSV."""
+    media_type = 'text/csv'
+    format = 'csv'
+    charset = 'utf-8'
+
+    def render(self, data, accepted_media_type=None, renderer_context=None):
+        return data
 
 from .models import (
     UserSettings, PrivacySettings, SecuritySettings,
@@ -70,6 +96,93 @@ class UserSettingsViewSet(viewsets.ViewSet):
                 'autoArchiveDays': obj.auto_archive_days,
                 'defaultHabitVisibility': obj.default_habit_visibility,
             },
+        })
+
+    # -----------------------------------------------------------------
+    #  Dedicated Color Preference Endpoint
+    # -----------------------------------------------------------------
+
+    # Whitelist of allowed accent colors — must stay in sync with the
+    # Flutter `_accentColors` map in appearance_page.dart.
+    ALLOWED_COLORS = frozenset([
+        'indigo', 'blue', 'teal', 'green', 'amber',
+        'orange', 'rose', 'purple', 'pink', 'cyan',
+    ])
+
+    @action(detail=False, methods=['post'], url_path='color')
+    def update_color(self, request):
+        """
+        POST /api/user-settings/color/
+
+        Accept a single ``color`` value, validate it against the allowed
+        palette, persist it for the authenticated user, and return a
+        standardised success response.
+
+        Request body::
+
+            { "color": "green" }
+
+        Success response (200)::
+
+            {
+                "status": "success",
+                "message": "Color preference updated",
+                "preferred_color": "green"
+            }
+
+        Validation error (400)::
+
+            {
+                "status": "error",
+                "message": "Invalid color. Allowed: indigo, blue, …",
+                "allowed_colors": ["indigo", "blue", …]
+            }
+        """
+        color = request.data.get('color', '').strip().lower()
+
+        if not color:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': 'The "color" field is required.',
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        if color not in self.ALLOWED_COLORS:
+            return Response(
+                {
+                    'status': 'error',
+                    'message': (
+                        f'Invalid color "{color}". '
+                        f'Allowed: {", ".join(sorted(self.ALLOWED_COLORS))}'
+                    ),
+                    'allowed_colors': sorted(self.ALLOWED_COLORS),
+                },
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        obj, _ = UserSettings.objects.get_or_create(user=request.user)
+        old_color = obj.accent_color
+        obj.accent_color = color
+        obj.save(update_fields=['accent_color', 'updated_at'])
+
+        # Audit trail
+        if old_color != color:
+            SettingsAuditLog.log(
+                user=request.user,
+                category='appearance',
+                action='update_color_preference',
+                description=f'Accent color changed from {old_color} to {color}',
+                old_value={'accentColor': old_color},
+                new_value={'accentColor': color},
+                request=request,
+            )
+
+        return Response({
+            'status': 'success',
+            'message': 'Color preference updated',
+            'preferred_color': color,
         })
 
     @action(detail=False, methods=['put', 'patch'])
@@ -362,8 +475,20 @@ class SettingsAuditLogViewSet(viewsets.ViewSet):
 # =========================================================================
 
 class ExportViewSet(viewsets.ViewSet):
-    """User data-export lifecycle management."""
+    """
+    User data-export lifecycle management.
+
+    Endpoints:
+        GET  /api/exports/                — List past export requests.
+        POST /api/exports/request/        — Queue a new CSV / JSON / PDF export.
+        GET  /api/exports/download/?id=N  — Download a completed export.
+        GET  /api/exports/habit-report/   — Generate & stream a PDF analytics
+                                            report on-the-fly (no queue).
+    """
     permission_classes = [IsAuthenticated]
+    # Include PDF & CSV renderers so DRF's content negotiation does NOT
+    # reject requests with Accept: application/pdf (HTTP 406).
+    renderer_classes = [JSONRenderer, PdfRenderer, CsvRenderer]
 
     def list(self, request):
         exports = ExportRequest.objects.filter(user=request.user)[:20]
@@ -418,6 +543,12 @@ class ExportViewSet(viewsets.ViewSet):
 
     @action(detail=False, methods=['get'])
     def download(self, request):
+        """
+        Download a previously completed export.
+
+        For PDF exports the report is generated server-side via ReportLab
+        and streamed as ``application/pdf``.
+        """
         export_id = request.query_params.get('id')
         if not export_id:
             return Response({'success': False, 'message': 'id required'}, status=status.HTTP_400_BAD_REQUEST)
@@ -432,12 +563,16 @@ class ExportViewSet(viewsets.ViewSet):
         logs = HabitLog.objects.filter(
             habit__user=request.user, date__range=[export_req.date_from, export_req.date_to],
         ).select_related('habit').order_by('date')
+
+        # ── JSON download ─────────────────────────────────────────────
         if export_req.export_format == 'json':
             data = self._build_export_data(request.user, habits, logs, export_req)
             response = HttpResponse(json.dumps(data, indent=2, default=str), content_type='application/json')
             response['Content-Disposition'] = f'attachment; filename="dailyhabits_export_{export_req.date_from}_{export_req.date_to}.json"'
             return response
-        elif export_req.export_format == 'csv':
+
+        # ── CSV download ──────────────────────────────────────────────
+        if export_req.export_format == 'csv':
             buffer = io.StringIO()
             writer = csv.writer(buffer)
             writer.writerow(['Date', 'Habit', 'Category', 'Status', 'Streak', 'Notes'])
@@ -446,23 +581,213 @@ class ExportViewSet(viewsets.ViewSet):
             response = HttpResponse(buffer.getvalue(), content_type='text/csv')
             response['Content-Disposition'] = f'attachment; filename="dailyhabits_export_{export_req.date_from}_{export_req.date_to}.csv"'
             return response
-        data = self._build_export_data(request.user, habits, logs, export_req)
-        return Response({'success': True, 'format': 'pdf', 'data': data})
+
+        # ── PDF download (ReportLab) ──────────────────────────────────
+        from .pdf_report_service import generate_habit_report_pdf
+        try:
+            pdf_bytes = generate_habit_report_pdf(request.user)
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = (
+                f'attachment; filename="dailyhabits_report_'
+                f'{export_req.date_from}_{export_req.date_to}.pdf"'
+            )
+            return response
+        except Exception as exc:
+            return Response(
+                {'success': False, 'message': f'PDF generation failed: {exc}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+    # -----------------------------------------------------------------
+    #  Dedicated Habit Report PDF Endpoint (instant, no queue)
+    # -----------------------------------------------------------------
+
+    @action(detail=False, methods=['get'], url_path='habit-report')
+    def habit_report(self, request):
+        """
+        GET /api/exports/habit-report/
+
+        Generates a professional Habit Analytics Report PDF on-the-fly
+        using ReportLab and streams it back as a downloadable file.
+        No ``ExportRequest`` record is required — this is a direct,
+        one-shot report suitable for the Flutter "Export PDF" button.
+
+        Response:
+            200: ``application/pdf`` binary stream with
+                 ``Content-Disposition: attachment``.
+            500: JSON error envelope if PDF generation fails.
+        """
+        from .pdf_report_service import generate_habit_report_pdf
+        try:
+            pdf_bytes = generate_habit_report_pdf(request.user)
+        except Exception as exc:
+            return Response(
+                {'success': False, 'message': f'PDF generation failed: {exc}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
+        # Audit trail for traceability
+        SettingsAuditLog.log(
+            user=request.user,
+            category='export',
+            action='generate_habit_report',
+            description='Generated habit analytics PDF report',
+            request=request,
+        )
+
+        today = timezone.now().strftime('%Y-%m-%d')
+        response = HttpResponse(pdf_bytes, content_type='application/pdf')
+        response['Content-Disposition'] = (
+            f'attachment; filename="DailyHabits_Report_{today}.pdf"'
+        )
+        # Expose Content-Disposition header to the Flutter/browser client
+        response['Access-Control-Expose-Headers'] = 'Content-Disposition'
+        return response
 
     def _generate_export(self, export_req):
         export_req.status = 'completed'
         export_req.completed_at = timezone.now()
         export_req.save()
 
+    # -----------------------------------------------------------------
+    #  Direct CSV / JSON Export (instant, no queue)
+    # -----------------------------------------------------------------
+
+    @action(detail=False, methods=['get'], url_path='export-data')
+    def export_data(self, request):
+        """
+        GET /api/exports/export-data/?format=csv&dateFrom=YYYY-MM-DD&dateTo=YYYY-MM-DD
+
+        Generates a CSV or JSON file on-the-fly and streams it as a
+        downloadable attachment.  Mirrors the ``habit-report`` endpoint
+        but for tabular / structured formats.
+
+        Query params:
+            format   — ``csv`` or ``json`` (required)
+            dateFrom — start date ISO-8601 (required)
+            dateTo   — end date ISO-8601 (required)
+
+        Response:
+            200: binary stream (text/csv or application/json) with
+                 ``Content-Disposition: attachment``.
+            400: JSON error for missing / invalid parameters.
+            500: JSON error on generation failure.
+        """
+        fmt = request.query_params.get('format', '').lower()
+        date_from = request.query_params.get('dateFrom')
+        date_to = request.query_params.get('dateTo')
+
+        if fmt not in ('csv', 'json'):
+            return Response(
+                {'success': False, 'message': 'format must be csv or json'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        if not date_from or not date_to:
+            return Response(
+                {'success': False, 'message': 'dateFrom and dateTo are required'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            from habits.models import Habit, HabitLog
+            habits = Habit.objects.filter(
+                user=request.user,
+                is_deleted=False,
+                created_at__date__lte=date_to,
+            )
+            logs = HabitLog.objects.filter(
+                habit__user=request.user,
+                date__range=[date_from, date_to],
+            ).select_related('habit').order_by('date')
+
+            if fmt == 'json':
+                data = self._build_export_data_direct(
+                    request.user, habits, logs, date_from, date_to,
+                )
+                body = json.dumps(data, indent=2, default=str)
+                response = HttpResponse(body, content_type='application/json')
+                response['Content-Disposition'] = (
+                    f'attachment; filename="dailyhabits_export_{date_from}_{date_to}.json"'
+                )
+            else:  # csv
+                buffer = io.StringIO()
+                writer = csv.writer(buffer)
+                writer.writerow([
+                    'Date', 'Habit', 'Category', 'Status', 'Streak', 'Notes',
+                ])
+                for log in logs:
+                    writer.writerow([
+                        log.date.isoformat(),
+                        log.habit.title,
+                        log.habit.category_name,
+                        log.status,
+                        log.habit.current_streak,
+                        log.notes or '',
+                    ])
+                response = HttpResponse(
+                    buffer.getvalue(), content_type='text/csv',
+                )
+                response['Content-Disposition'] = (
+                    f'attachment; filename="dailyhabits_export_{date_from}_{date_to}.csv"'
+                )
+
+            response['Access-Control-Expose-Headers'] = 'Content-Disposition'
+
+            # Audit trail
+            SettingsAuditLog.log(
+                user=request.user,
+                category='export',
+                action='export_data_direct',
+                description=f'{fmt.upper()} export from {date_from} to {date_to}',
+                request=request,
+            )
+            return response
+
+        except Exception as exc:
+            return Response(
+                {'success': False, 'message': f'Export failed: {exc}'},
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
+
     @staticmethod
-    def _build_export_data(user, habits, logs, export_req):
-        from habits.models import Streak
+    def _build_export_data_direct(user, habits, logs, date_from, date_to):
+        """Build JSON export dict without requiring an ExportRequest record."""
         return {
-            'user': {'email': user.email, 'name': user.name, 'exportedAt': timezone.now().isoformat()},
-            'period': {'from': export_req.date_from.isoformat(), 'to': export_req.date_to.isoformat()},
-            'habits': [{'title': h.title, 'category': h.category_name, 'frequency': h.frequency, 'currentStreak': h.current_streak, 'bestStreak': h.best_streak, 'status': h.status, 'createdAt': h.created_at.isoformat()} for h in habits],
-            'logs': [{'date': l.date.isoformat(), 'habit': l.habit.title, 'status': l.status, 'completedAt': l.completed_at.isoformat() if l.completed_at else None, 'notes': l.notes or ''} for l in logs[:2000]],
-            'summary': {'totalHabits': habits.count(), 'totalLogs': logs.count(), 'completedLogs': logs.filter(status='completed').count()},
+            'user': {
+                'email': user.email,
+                'name': user.name,
+                'exportedAt': timezone.now().isoformat(),
+            },
+            'period': {'from': date_from, 'to': date_to},
+            'habits': [
+                {
+                    'title': h.title,
+                    'category': h.category_name,
+                    'frequency': h.frequency,
+                    'currentStreak': h.current_streak,
+                    'bestStreak': h.best_streak,
+                    'status': h.status,
+                    'createdAt': h.created_at.isoformat(),
+                }
+                for h in habits
+            ],
+            'logs': [
+                {
+                    'date': l.date.isoformat(),
+                    'habit': l.habit.title,
+                    'status': l.status,
+                    'completedAt': (
+                        l.completed_at.isoformat() if l.completed_at else None
+                    ),
+                    'notes': l.notes or '',
+                }
+                for l in logs[:2000]
+            ],
+            'summary': {
+                'totalHabits': habits.count(),
+                'totalLogs': logs.count(),
+                'completedLogs': logs.filter(status='completed').count(),
+            },
         }
 
 

@@ -14,6 +14,8 @@ import 'package:dailyhabits/screens/analytics/widgets/streak_card.dart';
 import 'package:dailyhabits/screens/analytics/widgets/calendar_heatmap.dart';
 import 'package:dailyhabits/screens/analytics/widgets/trend_chart.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+import 'package:dailyhabits/theme/app_animations.dart';
+import 'package:dailyhabits/widgets/common/shimmer_loading.dart';
 
 /// Top-level entry point for the Analytics feature.
 ///
@@ -50,12 +52,39 @@ class _AnalyticsView extends StatelessWidget {
     final tc = context.colors;
     final controller = Provider.of<AnalyticsController>(context);
 
-    // Show a loading spinner until the initial dashboard payload arrives
+    // Show shimmer skeleton until the initial dashboard payload arrives
     if (controller.isLoading && controller.dashboardData == null) {
       return Scaffold(
         backgroundColor: tc.bg,
-        body: Center(
-          child: CircularProgressIndicator(color: tc.primary),
+        body: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header shimmer
+                const ShimmerBox(width: 120, height: 26, borderRadius: 8),
+                const SizedBox(height: 6),
+                const ShimmerBox(width: 200, height: 14, borderRadius: 6),
+                const SizedBox(height: 24),
+                // Overview card shimmer
+                const ShimmerBox(width: double.infinity, height: 150, borderRadius: 24),
+                const SizedBox(height: 20),
+                // Streak card shimmer
+                const ShimmerBox(width: double.infinity, height: 100, borderRadius: 20),
+                const SizedBox(height: 24),
+                // Category shimmer
+                const ShimmerBox(width: 120, height: 18, borderRadius: 6),
+                const SizedBox(height: 12),
+                const ShimmerBox(width: double.infinity, height: 140, borderRadius: 20),
+                const SizedBox(height: 24),
+                // Chart shimmer
+                const ShimmerBox(width: 120, height: 18, borderRadius: 6),
+                const SizedBox(height: 12),
+                const ShimmerBox(width: double.infinity, height: 200, borderRadius: 20),
+              ],
+            ),
+          ),
         ),
       );
     }
@@ -404,16 +433,21 @@ class _AnalyticsView extends StatelessWidget {
                     ],
                   ),
                 ),
-                // Progress bar
+                // Animated progress bar
                 SizedBox(
                   width: 80,
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(4),
-                    child: LinearProgressIndicator(
-                      value: rate / 100.0,
-                      minHeight: 6,
-                      backgroundColor: tc.surfaceVariant,
-                      valueColor: AlwaysStoppedAnimation(color),
+                    child: TweenAnimationBuilder<double>(
+                      tween: Tween(begin: 0, end: rate / 100.0),
+                      duration: AppDurations.dramatic,
+                      curve: AppCurves.smooth,
+                      builder: (_, val, _) => LinearProgressIndicator(
+                        value: val,
+                        minHeight: 6,
+                        backgroundColor: tc.surfaceVariant,
+                        valueColor: AlwaysStoppedAnimation(color),
+                      ),
                     ),
                   ),
                 ),

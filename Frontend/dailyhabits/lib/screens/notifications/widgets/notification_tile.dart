@@ -19,8 +19,8 @@ import 'package:intl/intl.dart';
 
 /// A single notification row in the inbox list.
 ///
-/// Delegates dismissal and tap handling to the parent via callbacks,
-/// keeping this widget purely presentational.
+/// Delegates dismissal, friend-request actions, and tap handling to the
+/// parent via callbacks, keeping this widget purely presentational.
 class NotificationTile extends StatelessWidget {
   /// The notification data to display.
   final AppNotification notification;
@@ -31,11 +31,19 @@ class NotificationTile extends StatelessWidget {
   /// Called when the user swipes to dismiss the tile.
   final VoidCallback? onDismiss;
 
+  /// Called when the user accepts a friend request from this notification.
+  final VoidCallback? onAcceptFriend;
+
+  /// Called when the user declines a friend request from this notification.
+  final VoidCallback? onRejectFriend;
+
   const NotificationTile({
     super.key,
     required this.notification,
     this.onTap,
     this.onDismiss,
+    this.onAcceptFriend,
+    this.onRejectFriend,
   });
 
   /// Formats a [DateTime] as a human-friendly relative string:
@@ -157,6 +165,32 @@ class NotificationTile extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                     ),
+                    // Friend request action buttons
+                    if (_showFriendActions) ...[
+                      const SizedBox(height: 10),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _FriendActionButton(
+                              label: 'Accept',
+                              icon: Icons.check_rounded,
+                              color: const Color(0xFF22C55E),
+                              onTap: onAcceptFriend,
+                            ),
+                          ),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: _FriendActionButton(
+                              label: 'Decline',
+                              icon: Icons.close_rounded,
+                              color: tc.textMuted,
+                              outlined: true,
+                              onTap: onRejectFriend,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
                     // Show group or habit tag
                     if (notification.groupName != null ||
                         notification.habitTitle != null) ...[
@@ -291,5 +325,66 @@ class NotificationTile extends StatelessWidget {
         return Icons.notifications_rounded;
     }
   }
+
+  /// Whether to show accept/decline buttons for friend request notifications.
+  ///
+  /// Only shown for pending (unread) friend_request notifications that
+  /// have a sender attached.
+  bool get _showFriendActions =>
+      notification.type == 'friend_request' &&
+      !notification.isRead &&
+      notification.fromUserId != null;
 }
 
+// =============================================================================
+// _FriendActionButton — Compact action button for friend request tiles
+// =============================================================================
+
+/// A small, rounded action button used inside [NotificationTile]
+/// for accepting or declining friend requests.
+class _FriendActionButton extends StatelessWidget {
+  final String label;
+  final IconData icon;
+  final Color color;
+  final bool outlined;
+  final VoidCallback? onTap;
+
+  const _FriendActionButton({
+    required this.label,
+    required this.icon,
+    required this.color,
+    this.outlined = false,
+    this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 8),
+        decoration: BoxDecoration(
+          color: outlined ? Colors.transparent : color.withValues(alpha: 0.12),
+          borderRadius: BorderRadius.circular(10),
+          border: outlined
+              ? Border.all(color: color.withValues(alpha: 0.3), width: 1)
+              : null,
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(icon, size: 16, color: outlined ? color : color),
+            const SizedBox(width: 4),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+                color: outlined ? color : color,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }}

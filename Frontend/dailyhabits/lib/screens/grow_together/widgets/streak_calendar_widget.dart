@@ -587,7 +587,7 @@ class _StreakFreezeSection extends StatelessWidget {
                     ),
                   ),
                 ),
-              ),
+              ),  
               const SizedBox(width: 10),
               // Use Freeze Button
               Expanded(

@@ -18,6 +18,9 @@
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/models/habit.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
+import 'package:dailyhabits/theme/app_animations.dart';
+import 'package:dailyhabits/widgets/common/shimmer_loading.dart';
+import 'package:dailyhabits/widgets/common/animated_completion.dart';
 import 'package:dailyhabits/services/habit_service.dart';
 import 'package:dailyhabits/widgets/home/create_edit_habit_sheet.dart';
 
@@ -178,7 +181,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
         ],
       ),
       body: _isLoading
-          ? Center(child: CircularProgressIndicator(color: tc.secondary))
+          ? _buildShimmerSkeleton(tc)
           : RefreshIndicator(
               onRefresh: _loadData,
               color: tc.primary,
@@ -204,6 +207,69 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                 ),
               ),
             ),
+    );
+  }
+
+  // ─── SHIMMER SKELETON ──────────────────────────────────────────────────
+  /// Displays a shimmer loading skeleton that mirrors the detail layout
+  /// while data is being fetched from the API.
+  Widget _buildShimmerSkeleton(ThemeColors tc) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header skeleton
+          Row(
+            children: [
+              const ShimmerBox(width: 56, height: 56, borderRadius: 16),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: const [
+                    ShimmerBox(width: 160, height: 20, borderRadius: 6),
+                    SizedBox(height: 8),
+                    ShimmerBox(width: 100, height: 14, borderRadius: 6),
+                    SizedBox(height: 8),
+                    ShimmerBox(width: 200, height: 24, borderRadius: 8),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // Toggle skeleton
+          const ShimmerBox(width: double.infinity, height: 56, borderRadius: 18),
+          const SizedBox(height: 24),
+          // Stats skeleton
+          const ShimmerBox(width: 140, height: 18, borderRadius: 6),
+          const SizedBox(height: 14),
+          Row(
+            children: const [
+              Expanded(child: ShimmerBox(width: double.infinity, height: 90, borderRadius: 16)),
+              SizedBox(width: 12),
+              Expanded(child: ShimmerBox(width: double.infinity, height: 90, borderRadius: 16)),
+            ],
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: const [
+              Expanded(child: ShimmerBox(width: double.infinity, height: 90, borderRadius: 16)),
+              SizedBox(width: 12),
+              Expanded(child: ShimmerBox(width: double.infinity, height: 90, borderRadius: 16)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          // Consistency skeleton
+          const ShimmerBox(width: 120, height: 18, borderRadius: 6),
+          const SizedBox(height: 14),
+          for (int i = 0; i < 3; i++) ...[
+            const ShimmerBox(width: double.infinity, height: 44, borderRadius: 14),
+            if (i < 2) const SizedBox(height: 12),
+          ],
+        ],
+      ),
     );
   }
 
@@ -298,7 +364,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
   /// Animated toggle button that marks the habit as done/undone for today.
   ///
   /// On tap, calls the toggle API and updates local state from the
-  /// server response (completion status and streak count).
+  /// server response (completion status and streak count). Shows a
+  /// celebration animation when marking as complete.
   Widget _buildCompletionToggle(ThemeColors tc) {
     final isDone = _habit.isCompleted;
 
@@ -307,12 +374,17 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
         try {
           final result = await _habitService.toggleHabit(_habit.id);
           if (result['success'] == true) {
+            final nowCompleted = result['isCompleted'] == true;
             setState(() {
               _habit = _habit.copyWith(
-                isCompleted: result['isCompleted'],
+                isCompleted: nowCompleted,
                 currentStreak: result['currentStreak'] ?? _habit.currentStreak,
               );
             });
+            // Show celebration animation on completion
+            if (nowCompleted && mounted) {
+              CompletionCelebration.show(context, color: _habit.color);
+            }
             widget.onToggle?.call();
             await _loadData();
           }
@@ -321,7 +393,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
         }
       },
       child: AnimatedContainer(
-        duration: const Duration(milliseconds: 300),
+        duration: AppDurations.medium,
+        curve: AppCurves.smooth,
         padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 24),
         decoration: BoxDecoration(
           color: isDone

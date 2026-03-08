@@ -21,6 +21,7 @@ import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
 import '../../../theme/app_theme.dart';
 import '../../../models/settings_models.dart';
+import '../../../services/pdf_export_service.dart';
 import '../settings_controller.dart';
 
 /// Data-export settings page allowing users to download their habit data.
@@ -192,7 +193,9 @@ class _ExportDataPageState extends State<ExportDataPage> {
                       child: CircularProgressIndicator(
                           strokeWidth: 2, color: Colors.white))
                   : const Icon(Icons.download),
-              label: Text(_isExporting ? 'Exporting...' : 'Export Data'),
+              label: Text(_isExporting
+                  ? 'Exporting...'
+                  : 'Export ${_format.toUpperCase()}'),
               style: FilledButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 14),
                 shape: RoundedRectangleBorder(
@@ -231,25 +234,52 @@ class _ExportDataPageState extends State<ExportDataPage> {
 
   /// Submits the export request to the backend.
   ///
-  /// Validates that a date range is selected, sets the loading flag, and
-  /// shows a snackbar with the outcome. The loading flag is always cleared
-  /// in the `finally` block.
+  /// All formats (PDF, CSV, JSON) are generated on-the-fly by the backend
+  /// and downloaded directly as files.
   Future<void> _export(SettingsController ctrl) async {
     if (_range == null) return;
     setState(() => _isExporting = true);
     try {
+      final service = PdfExportService();
       final dateFrom = DateFormat('yyyy-MM-dd').format(_range!.start);
       final dateTo = DateFormat('yyyy-MM-dd').format(_range!.end);
-      final result = await ctrl.requestExport(
-        format: _format,
-        dateFrom: dateFrom,
-        dateTo: dateTo,
-      );
-      if (mounted) {
+
+      final PdfExportResult result;
+      if (_format == 'pdf') {
+        result = await service.exportHabitReport();
+      } else {
+        result = await service.exportData(
+          format: _format,
+          dateFrom: dateFrom,
+          dateTo: dateTo,
+        );
+      }
+
+      if (!mounted) return;
+
+      if (result.success) {
         ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-          content: Text(result['success'] == true
-              ? 'Export requested! It will appear below when ready.'
-              : result['error'] ?? 'Export failed'),
+          content: Text(
+            '${_format.toUpperCase()} exported successfully!',
+          ),
+          backgroundColor: Colors.green,
+        ));
+
+        // Open the file on mobile (no-op on web)
+        if (result.filePath != null) {
+          final opened = await service.openFile(result.filePath!);
+          if (!opened && mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+              content: Text('Saved to: ${result.filePath}'),
+            ));
+          }
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text(
+            result.errorMessage ?? 'Export failed. Please try again.',
+          ),
+          backgroundColor: Colors.red,
         ));
       }
     } finally {

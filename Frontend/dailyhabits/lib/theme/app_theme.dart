@@ -154,16 +154,29 @@ class AppColors {
 class ThemeColors {
   /// The current theme brightness used to resolve color variants.
   final Brightness brightness;
-  const ThemeColors._(this.brightness);
+
+  /// The active primary (accent) color injected by [ThemeProvider].
+  /// Falls back to [AppColors.primary] when no override is present.
+  final Color _primary;
+
+  /// The light variant of the active primary color.
+  final Color _primaryLight;
+
+  const ThemeColors._(
+    this.brightness, {
+    Color? primary,
+    Color? primaryLight,
+  })  : _primary = primary ?? AppColors.primary,
+        _primaryLight = primaryLight ?? AppColors.primaryLight;
 
   /// Whether the current theme is dark.
   bool get isDark => brightness == Brightness.dark;
 
   // ── Brand ──────────────────────────────────────────────────────────
 
-  /// Primary brand color, slightly lightened in dark mode for contrast.
-  Color get primary => isDark ? AppColors.primaryLight : AppColors.primary;
-  Color get primaryLight => AppColors.primaryLight;
+  /// Primary brand color - uses the user-selected accent color.
+  Color get primary => isDark ? _primaryLight : _primary;
+  Color get primaryLight => _primaryLight;
   Color get secondary => isDark ? AppColors.secondaryLight : AppColors.secondary;
   Color get secondaryLight => AppColors.secondaryLight;
 
@@ -225,8 +238,17 @@ class ThemeColors {
 /// if (context.isDarkMode) { /* … */ }
 /// ```
 extension ThemeColorsExtension on BuildContext {
-  /// Returns a [ThemeColors] instance matching the current [Brightness].
-  ThemeColors get colors => ThemeColors._(Theme.of(this).brightness);
+  /// Returns a [ThemeColors] instance matching the current [Brightness]
+  /// and the active primary color from [ColorScheme].
+  ThemeColors get colors {
+    final theme = Theme.of(this);
+    final cs = theme.colorScheme;
+    return ThemeColors._(
+      theme.brightness,
+      primary: cs.primary,
+      primaryLight: cs.primary, // already light-adjusted in dark theme
+    );
+  }
 
   /// `true` when the active theme brightness is [Brightness.dark].
   bool get isDarkMode => Theme.of(this).brightness == Brightness.dark;
@@ -426,34 +448,41 @@ class AppTextStyles {
 
 /// Application-level [ThemeData] factory for both light and dark modes.
 ///
-/// Each getter returns a fully configured [ThemeData] using the tokens
+/// Each method returns a fully configured [ThemeData] using the tokens
 /// defined in [AppColors], [AppTextStyles], and [AppRadius].  These are
 /// consumed by [MaterialApp.theme] and [MaterialApp.darkTheme].
+///
+/// The [accent] / [accentLight] parameters allow the user's chosen color
+/// preference to be injected at build-time so that every Material widget
+/// (AppBar, buttons, FABs, chips, switches, progress indicators) picks up
+/// the selected accent automatically.
 class AppTheme {
   AppTheme._();
 
-  // ── LIGHT THEME ────────────────────────────────────────────────────────
+  // -- LIGHT THEME ----------------------------------------------------------
 
   /// Returns the complete [ThemeData] for **light** mode.
   ///
-  /// Configures Material 3 with the Inter font family and sets every
-  /// component theme (AppBar, cards, buttons, inputs, chips, switches,
-  /// progress indicators) to align with the DailyHabits design spec.
-  static ThemeData get lightTheme {
+  /// [accent] overrides the primary brand color.  Defaults to
+  /// [AppColors.primary] (deep indigo) when omitted.
+  static ThemeData lightTheme({
+    Color accent = AppColors.primary,
+    Color accentLight = AppColors.primaryLight,
+  }) {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.light,
       scaffoldBackgroundColor: AppColors.lightBg,
-      primaryColor: AppColors.primary,
+      primaryColor: accent,
       fontFamily: 'Inter',
 
-      colorScheme: const ColorScheme.light(
-        primary: AppColors.primary,
+      colorScheme: ColorScheme.light(
+        primary: accent,
         secondary: AppColors.secondary,
         surface: AppColors.lightSurface,
         error: AppColors.error,
-        onPrimary: Color(0xFFFFFFFF),
-        onSecondary: Color(0xFFFFFFFF),
+        onPrimary: const Color(0xFFFFFFFF),
+        onSecondary: const Color(0xFFFFFFFF),
         onSurface: AppColors.lightTextPrimary,
         outline: AppColors.lightBorder,
         surfaceContainerHighest: AppColors.lightSurfaceVariant,
@@ -470,9 +499,9 @@ class AppTheme {
         iconTheme: const IconThemeData(color: AppColors.lightTextPrimary),
       ),
 
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.lightSurface,
-        selectedItemColor: AppColors.primary,
+        selectedItemColor: accent,
         unselectedItemColor: AppColors.lightTextMuted,
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
@@ -492,7 +521,7 @@ class AppTheme {
 
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primary,
+          backgroundColor: accent,
           foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -503,7 +532,7 @@ class AppTheme {
 
       outlinedButtonTheme: OutlinedButtonThemeData(
         style: OutlinedButton.styleFrom(
-          foregroundColor: AppColors.primary,
+          foregroundColor: accent,
           side: const BorderSide(color: AppColors.lightBorder),
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
           shape: RoundedRectangleBorder(borderRadius: AppRadius.lgAll),
@@ -524,7 +553,7 @@ class AppTheme {
         ),
         focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.mdAll,
-          borderSide: const BorderSide(color: AppColors.primary, width: 1.5),
+          borderSide: BorderSide(color: accent, width: 1.5),
         ),
         hintStyle:
             AppTextStyles.bodyMd.copyWith(color: AppColors.lightTextMuted),
@@ -536,61 +565,63 @@ class AppTheme {
 
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.lightSurfaceVariant,
-        selectedColor: AppColors.primary.withValues(alpha: 0.12),
+        selectedColor: accent.withValues(alpha: 0.12),
         labelStyle:
             AppTextStyles.label.copyWith(color: AppColors.lightTextPrimary),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.smAll),
         side: const BorderSide(color: AppColors.lightBorder),
       ),
 
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.primary,
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: accent,
         foregroundColor: Colors.white,
         elevation: 2,
       ),
 
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
-          if (states.contains(WidgetState.selected)) return AppColors.secondary;
+          if (states.contains(WidgetState.selected)) return accent;
           return AppColors.lightTextMuted;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.secondary.withValues(alpha: 0.3);
+            return accent.withValues(alpha: 0.3);
           }
           return AppColors.lightBorder;
         }),
       ),
 
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.secondary,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: accent,
         linearTrackColor: AppColors.lightSurfaceVariant,
       ),
     );
   }
 
-  // ── DARK THEME ─────────────────────────────────────────────────────────
+  // -- DARK THEME -----------------------------------------------------------
 
   /// Returns the complete [ThemeData] for **dark** mode.
   ///
-  /// Mirrors the structure of [lightTheme] but substitutes darker surface
-  /// colors, lighter text tones, and adjusted widget opacities for
-  /// comfortable viewing in low-light environments.
-  static ThemeData get darkTheme {
+  /// [accent] overrides the primary brand color.  Defaults to
+  /// [AppColors.primaryLight] when omitted.
+  static ThemeData darkTheme({
+    Color accent = AppColors.primaryLight,
+    Color accentDark = AppColors.primary,
+  }) {
     return ThemeData(
       useMaterial3: true,
       brightness: Brightness.dark,
       scaffoldBackgroundColor: AppColors.darkBg,
-      primaryColor: AppColors.primary,
+      primaryColor: accent,
       fontFamily: 'Inter',
 
-      colorScheme: const ColorScheme.dark(
-        primary: AppColors.primaryLight,
+      colorScheme: ColorScheme.dark(
+        primary: accent,
         secondary: AppColors.secondaryLight,
         surface: AppColors.darkSurface,
         error: AppColors.error,
-        onPrimary: Color(0xFFFFFFFF),
-        onSecondary: Color(0xFFFFFFFF),
+        onPrimary: const Color(0xFFFFFFFF),
+        onSecondary: const Color(0xFFFFFFFF),
         onSurface: AppColors.darkTextPrimary,
         outline: AppColors.darkBorder,
         surfaceContainerHighest: AppColors.darkSurfaceVariant,
@@ -607,9 +638,9 @@ class AppTheme {
         iconTheme: const IconThemeData(color: AppColors.darkTextPrimary),
       ),
 
-      bottomNavigationBarTheme: const BottomNavigationBarThemeData(
+      bottomNavigationBarTheme: BottomNavigationBarThemeData(
         backgroundColor: AppColors.darkSurface,
-        selectedItemColor: AppColors.primaryLight,
+        selectedItemColor: accent,
         unselectedItemColor: AppColors.darkTextMuted,
         showUnselectedLabels: true,
         type: BottomNavigationBarType.fixed,
@@ -629,7 +660,7 @@ class AppTheme {
 
       elevatedButtonTheme: ElevatedButtonThemeData(
         style: ElevatedButton.styleFrom(
-          backgroundColor: AppColors.primaryLight,
+          backgroundColor: accent,
           foregroundColor: Colors.white,
           elevation: 0,
           padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 14),
@@ -661,9 +692,9 @@ class AppTheme {
             color: AppColors.darkBorder.withValues(alpha: 0.5),
           ),
         ),
-        focusedBorder: const OutlineInputBorder(
+        focusedBorder: OutlineInputBorder(
           borderRadius: AppRadius.mdAll,
-          borderSide: BorderSide(color: AppColors.primaryLight, width: 1.5),
+          borderSide: BorderSide(color: accent, width: 1.5),
         ),
         hintStyle:
             AppTextStyles.bodyMd.copyWith(color: AppColors.darkTextMuted),
@@ -675,15 +706,15 @@ class AppTheme {
 
       chipTheme: ChipThemeData(
         backgroundColor: AppColors.darkSurfaceVariant,
-        selectedColor: AppColors.primaryLight.withValues(alpha: 0.2),
+        selectedColor: accent.withValues(alpha: 0.2),
         labelStyle:
             AppTextStyles.label.copyWith(color: AppColors.darkTextPrimary),
         shape: RoundedRectangleBorder(borderRadius: AppRadius.smAll),
         side: const BorderSide(color: AppColors.darkBorder),
       ),
 
-      floatingActionButtonTheme: const FloatingActionButtonThemeData(
-        backgroundColor: AppColors.primaryLight,
+      floatingActionButtonTheme: FloatingActionButtonThemeData(
+        backgroundColor: accent,
         foregroundColor: Colors.white,
         elevation: 2,
       ),
@@ -691,20 +722,20 @@ class AppTheme {
       switchTheme: SwitchThemeData(
         thumbColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.secondaryLight;
+            return accent;
           }
           return AppColors.darkTextMuted;
         }),
         trackColor: WidgetStateProperty.resolveWith((states) {
           if (states.contains(WidgetState.selected)) {
-            return AppColors.secondaryLight.withValues(alpha: 0.3);
+            return accent.withValues(alpha: 0.3);
           }
           return AppColors.darkBorder;
         }),
       ),
 
-      progressIndicatorTheme: const ProgressIndicatorThemeData(
-        color: AppColors.secondaryLight,
+      progressIndicatorTheme: ProgressIndicatorThemeData(
+        color: accent,
         linearTrackColor: AppColors.darkSurfaceVariant,
       ),
     );

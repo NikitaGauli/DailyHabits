@@ -45,6 +45,7 @@ from .serializers import (
 )
 from .services import SocialService
 from habits.models import Habit
+from notifications.services import NotificationCreator
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -147,6 +148,11 @@ class FeedViewSet(viewsets.ViewSet):
             PostLike.objects.create(post=post, user=request.user)
             post.like_count += 1
             post.save(update_fields=['like_count'])
+
+            # Notify post author (skip if liking own post)
+            if post.author_id != request.user.id:
+                NotificationCreator.post_liked(to_user=post.author, from_user=request.user, post=post)
+
             return Response({'success': True, 'liked': True, 'likeCount': post.like_count})
 
     @action(detail=True, methods=['get', 'post'])
@@ -180,6 +186,14 @@ class FeedViewSet(viewsets.ViewSet):
         )
         post.comment_count += 1
         post.save(update_fields=['comment_count'])
+
+        # Notify post author (skip if commenting on own post)
+        if post.author_id != request.user.id:
+            NotificationCreator.post_commented(
+                to_user=post.author, from_user=request.user,
+                post=post, comment_preview=content,
+            )
+
         serializer = PostCommentSerializer(comment)
         return Response(
             {'success': True, 'comment': serializer.data},
@@ -303,9 +317,27 @@ class FriendViewSet(viewsets.ViewSet):
             existing.from_user = request.user
             existing.to_user_id = user_id  # type: ignore[attr-defined]
             existing.save()
+
+            # Create notification for re-activated request
+            from authentication.models import User
+            try:
+                to_user = User.objects.get(id=user_id)
+                NotificationCreator.friend_request(to_user=to_user, from_user=request.user)
+            except User.DoesNotExist:
+                pass
+
             return Response({'success': True, 'message': 'Friend request sent'})
 
         Friendship.objects.create(from_user=request.user, to_user_id=user_id, status='pending')
+
+        # Create notification for the recipient
+        from authentication.models import User
+        try:
+            to_user = User.objects.get(id=user_id)
+            NotificationCreator.friend_request(to_user=to_user, from_user=request.user)
+        except User.DoesNotExist:
+            pass
+
         return Response({'success': True, 'message': 'Friend request sent'}, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'], url_path='accept-request')
@@ -318,6 +350,10 @@ class FriendViewSet(viewsets.ViewSet):
             return Response({'success': False, 'message': 'Request not found'}, status=status.HTTP_404_NOT_FOUND)
         friendship.status = 'accepted'
         friendship.save()
+
+        # Notify the original sender that their request was accepted
+        NotificationCreator.friend_accepted(to_user=friendship.from_user, from_user=request.user)
+
         return Response({'success': True, 'message': 'Friend request accepted'})
 
     @action(detail=False, methods=['post'], url_path='reject-request')
@@ -392,6 +428,16 @@ class GroupHabitViewSet(viewsets.ViewSet):
         result = SocialService.join_group(request.user, invite_code)
         if result['success']:
             serializer = GroupDetailSerializer(result['group'], context={'request': request})
+
+            # Notify group creator that someone joined
+            group = result['group']
+            if group.creator_id != request.user.id:
+                NotificationCreator.group_join(
+                    to_user=group.creator,
+                    member_user=request.user,
+                    group=group,
+                )
+
             return Response({'success': True, 'group': serializer.data})
         return Response({'success': False, 'message': result['message']}, status=status.HTTP_400_BAD_REQUEST)
 

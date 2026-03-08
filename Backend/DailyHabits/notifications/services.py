@@ -347,6 +347,38 @@ class NotificationCreator:
             action_data={'habitId': habit.id},
         )
 
+    # ── Feed post interaction notifications ──────────────────────────
+
+    @staticmethod
+    def post_liked(to_user, from_user, post):
+        """Notify feed post author that someone liked their post."""
+        preview = (post.content[:60] + '…') if len(post.content) > 60 else post.content
+        return NotificationCreator.create(
+            user=to_user,
+            notification_type='social_like',
+            title=f'{from_user.name} liked your post',
+            message=f'"{preview}"',
+            from_user=from_user,
+            icon_code=0xE87E,   # favorite
+            color_value=0xFFEF4444,
+            action_type='community',
+        )
+
+    @staticmethod
+    def post_commented(to_user, from_user, post, comment_preview):
+        """Notify feed post author that someone commented on their post."""
+        preview = (comment_preview[:80] + '…') if len(comment_preview) > 80 else comment_preview
+        return NotificationCreator.create(
+            user=to_user,
+            notification_type='social_comment',
+            title=f'{from_user.name} commented on your post',
+            message=preview,
+            from_user=from_user,
+            icon_code=0xE0B9,   # chat_bubble
+            color_value=0xFF3B82F6,
+            action_type='community',
+        )
+
 
 # =============================================================================
 #  SMART TIP SERVICE — personalised, non-urgent habit guidance

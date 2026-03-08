@@ -13,14 +13,24 @@
 //
 // Lightweight caching (30-second window) prevents redundant API calls
 // during rapid tab switches.
+//
+// **Real-Time Integration:**
+// The controller manages a [WebSocketNotificationService] that delivers
+// instant notification events from the Django Channels backend.  When a
+// ``new_notification`` event arrives, the notification is prepended to
+// the inbox list and the badge count is updated — all without polling.
+// The 60-second badge polling timer in [HomePage] serves as a fallback
+// for missed WebSocket events (e.g. during brief disconnections).
 // =============================================================================
 
 import 'package:flutter/material.dart';
 import 'package:dailyhabits/models/notification_model.dart';
 import 'package:dailyhabits/services/notification_service.dart';
+import 'package:dailyhabits/services/websocket_service.dart';
 
 class NotificationController extends ChangeNotifier {
   final NotificationService _service = NotificationService();
+  final WebSocketNotificationService _ws = WebSocketNotificationService();
 
   // ── Inbox State ────────────────────────────────────────────────
   List<AppNotification> notifications = [];
@@ -38,6 +48,10 @@ class NotificationController extends ChangeNotifier {
   // ── Badge ──────────────────────────────────────────────────────
   int unreadCount = 0;
 
+  // ── WebSocket Connection ───────────────────────────────────────
+  WebSocketConnectionState wsConnectionState =
+      WebSocketConnectionState.disconnected;
+
   // ── Cache ──────────────────────────────────────────────────────
   DateTime? _lastInboxLoad;
   DateTime? _lastTipsLoad;
@@ -48,6 +62,78 @@ class NotificationController extends ChangeNotifier {
       notifications.where((n) => !n.isRead).length;
 
   bool get hasUnread => unreadCount > 0;
+
+  /// Whether the WebSocket is currently connected.
+  bool get isWebSocketConnected =>
+      wsConnectionState == WebSocketConnectionState.connected;
+
+  // ═══════════════════════════════════════════════════════════════
+  //  WEBSOCKET — Real-Time Connection Management
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Initialises and connects the WebSocket for real-time notifications.
+  ///
+  /// Call this after the user has logged in (typically in [HomePage.initState]).
+  /// The WebSocket will automatically reconnect with exponential backoff
+  /// if the connection drops.
+  Future<void> connectWebSocket() async {
+    // Wire up callbacks before connecting
+    _ws.onNotificationReceived = _handleNewNotification;
+    _ws.onBadgeUpdate = _handleBadgeUpdate;
+    _ws.onConnectionStateChanged = _handleConnectionStateChanged;
+
+    await _ws.connect();
+  }
+
+  /// Disconnects the WebSocket cleanly.
+  ///
+  /// Call this on user logout or when the controller is disposed.
+  void disconnectWebSocket() {
+    _ws.disconnect();
+  }
+
+  /// Handles an incoming real-time notification from the WebSocket.
+  ///
+  /// Prepends the notification to the local inbox list and updates the
+  /// badge count — providing instant UI feedback without an API call.
+  /// Also invokes [onNewRealtimeNotification] so the UI layer can
+  /// display an in-app banner.
+  void _handleNewNotification(AppNotification notification) {
+    // Avoid duplicates (signal may fire while a poll response is in-flight)
+    final exists = notifications.any((n) => n.id == notification.id);
+    if (!exists) {
+      notifications.insert(0, notification);
+      // Invalidate cache so the next loadInbox fetches fresh server state
+      _lastInboxLoad = null;
+      // Notify UI layer for in-app banner display
+      onNewRealtimeNotification?.call(notification);
+    }
+    notifyListeners();
+  }
+
+  /// Optional callback for the UI layer to display in-app notification
+  /// banners when a real-time notification arrives via WebSocket.
+  ///
+  /// Set this from your widget's [initState] (e.g. [HomePage]):
+  /// ```dart
+  /// ctrl.onNewRealtimeNotification = (n) => NotificationBanner.show(...);
+  /// ```
+  void Function(AppNotification)? onNewRealtimeNotification;
+
+  /// Handles a badge count update from the WebSocket.
+  ///
+  /// The server sends the authoritative unread count after every
+  /// notification creation or read-status change.
+  void _handleBadgeUpdate(int count) {
+    unreadCount = count;
+    notifyListeners();
+  }
+
+  /// Tracks WebSocket connection state for UI indicators.
+  void _handleConnectionStateChanged(WebSocketConnectionState state) {
+    wsConnectionState = state;
+    notifyListeners();
+  }
 
   // ═══════════════════════════════════════════════════════════════
   //  INBOX
@@ -108,6 +194,9 @@ class NotificationController extends ChangeNotifier {
         unreadCount += 1;
         notifyListeners();
       }
+    } else {
+      // Notify all connected devices via WebSocket
+      _ws.markNotificationRead(notification.id);
     }
   }
 
@@ -165,6 +254,59 @@ class NotificationController extends ChangeNotifier {
     notifyListeners();
 
     await _service.dismissNotification(id);
+  }
+
+  // ═══════════════════════════════════════════════════════════════
+  //  FRIEND REQUEST ACTIONS
+  // ═══════════════════════════════════════════════════════════════
+
+  /// Accepts a friend request from the notification with [notificationId].
+  ///
+  /// Optimistically removes the notification from the inbox (the backend
+  /// marks it as read). Reverts on failure.
+  Future<bool> acceptFriendRequest(int notificationId) async {
+    final idx = notifications.indexWhere((n) => n.id == notificationId);
+    if (idx == -1) return false;
+
+    // Optimistic: mark as read and change type visual
+    final original = notifications[idx];
+    notifications[idx] = original.copyWith(
+      isRead: true,
+      title: 'Friend Request Accepted',
+      message: 'You are now friends with ${original.fromUserName ?? "this user"}!',
+    );
+    unreadCount = (unreadCount - 1).clamp(0, 99999);
+    notifyListeners();
+
+    final success = await _service.acceptFriendRequest(notificationId);
+    if (!success) {
+      notifications[idx] = original;
+      unreadCount += 1;
+      notifyListeners();
+    }
+    return success;
+  }
+
+  /// Rejects a friend request from the notification with [notificationId].
+  ///
+  /// Removes the notification from the inbox optimistically.
+  Future<bool> rejectFriendRequest(int notificationId) async {
+    final idx = notifications.indexWhere((n) => n.id == notificationId);
+    if (idx == -1) return false;
+
+    // Optimistic: remove the notification entirely
+    final removed = notifications[idx];
+    notifications.removeAt(idx);
+    if (!removed.isRead) unreadCount = (unreadCount - 1).clamp(0, 99999);
+    notifyListeners();
+
+    final success = await _service.rejectFriendRequest(notificationId);
+    if (!success) {
+      notifications.insert(idx, removed);
+      if (!removed.isRead) unreadCount += 1;
+      notifyListeners();
+    }
+    return success;
   }
 
   // ═══════════════════════════════════════════════════════════════
@@ -276,6 +418,7 @@ class NotificationController extends ChangeNotifier {
 
   /// Reset state on logout
   void reset() {
+    disconnectWebSocket();
     notifications = [];
     smartTips = [];
     streakRisks = [];
@@ -286,6 +429,7 @@ class NotificationController extends ChangeNotifier {
     isTipsLoading = true;
     isInboxError = false;
     isTipsError = false;
+    wsConnectionState = WebSocketConnectionState.disconnected;
     _lastInboxLoad = null;
     _lastTipsLoad = null;
   }
