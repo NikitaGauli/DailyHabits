@@ -19,19 +19,14 @@ import 'package:dailyhabits/widgets/common/shimmer_loading.dart';
 
 /// Top-level entry point for the Analytics feature.
 ///
-/// Sets up a [ChangeNotifierProvider] to inject an [AnalyticsController]
-/// into the widget subtree. This separation keeps the screen's public API
-/// clean while allowing the private [_AnalyticsView] to consume the
-/// controller via Provider.
+/// Uses the app-level [AnalyticsController] from the [MultiProvider] in
+/// main.dart so that habit toggles can trigger analytics refresh.
 class AnalyticsScreen extends StatelessWidget {
   const AnalyticsScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return ChangeNotifierProvider(
-      create: (_) => AnalyticsController(),
-      child: const _AnalyticsView(),
-    );
+    return const _AnalyticsView();
   }
 }
 

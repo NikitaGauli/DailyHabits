@@ -80,15 +80,22 @@ class AnalyticsController extends ChangeNotifier {
   Future<void> loadDashboard() async {
     try {
       final dashboard = await _analyticsService.getDashboard();
-      dashboardData = dashboard;
+      final hasNestedSummary = dashboard['summary'] is Map<String, dynamic>;
+      dashboardData = hasNestedSummary
+          ? dashboard
+          : {
+              'summary': dashboard,
+              'weeklyData': dashboard['weeklyData'] ?? [],
+            };
 
-      if (dashboard.containsKey('weeklyData')) {
-        weeklyData = (dashboard['weeklyData'] as List)
+      if (dashboardData!.containsKey('weeklyData')) {
+        weeklyData = (dashboardData!['weeklyData'] as List)
             .map((json) => WeeklyDataPoint.fromJson(json))
             .toList();
       }
 
       categoryBreakdown = await _analyticsService.getCategoryBreakdown();
+      notifyListeners();
     } catch (e) {
       debugPrint('Error loading analytics: $e');
     }
@@ -101,6 +108,7 @@ class AnalyticsController extends ChangeNotifier {
         currentMonth.year,
         currentMonth.month,
       );
+      notifyListeners();
     } catch (e) {
       debugPrint('Error loading heatmap: $e');
     }
@@ -115,6 +123,7 @@ class AnalyticsController extends ChangeNotifier {
         // Merge into dashboard if not yet loaded
         dashboardData ??= {};
         dashboardData!['summary'] ??= statsSummary;
+        notifyListeners();
       }
     } catch (e) {
       debugPrint('Error loading habit stats: $e');
@@ -126,5 +135,11 @@ class AnalyticsController extends ChangeNotifier {
   void changeMonth(int offset) {
     currentMonth = DateTime(currentMonth.year, currentMonth.month + offset);
     loadHeatmap().then((_) => notifyListeners());
+  }
+
+  /// Refreshes all analytics data. Call after habit completions or toggles
+  /// to ensure the analytics screen reflects the latest data.
+  Future<void> refresh() async {
+    await _loadAll();
   }
 }

@@ -18,6 +18,7 @@ import 'package:provider/provider.dart';
 import 'package:dailyhabits/screens/home/home_controller.dart';
 import 'package:dailyhabits/screens/notifications/notification_controller.dart';
 import 'package:dailyhabits/screens/gamification/gamification_controller.dart';
+import 'package:dailyhabits/screens/analytics/analytics_controller.dart';
 
 // ==========================================================================
 //  Bootstrap
@@ -28,7 +29,7 @@ import 'package:dailyhabits/screens/gamification/gamification_controller.dart';
 /// 1. Ensures the Flutter engine is initialised.
 /// 2. Sets a transparent status bar for edge-to-edge rendering.
 /// 3. Wraps the widget tree in a [MultiProvider] to expose app-wide state.
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
   // Make the status bar transparent so content can draw edge-to-edge.
@@ -46,6 +47,7 @@ void main() {
         ChangeNotifierProvider(create: (_) => HomeController()),
         ChangeNotifierProvider(create: (_) => NotificationController()),
         ChangeNotifierProvider(create: (_) => GamificationController()),
+        ChangeNotifierProvider(create: (_) => AnalyticsController()),
       ],
       child: const MyApp(),
     ),

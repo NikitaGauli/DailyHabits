@@ -342,6 +342,10 @@ class SettingsService {
     }
   }
 
+
+
+  
+
   // ─── FAQs ──────────────────────────────────────────────────────
 
   Future<List<FAQItem>> getFAQs() async {

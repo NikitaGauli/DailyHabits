@@ -395,12 +395,11 @@ class AnalyticsService:
         total_consistency = 0
 
         for habit in habits:
-            try:
-                streak = habit.streak  # type: ignore[attr-defined]  # OneToOne reverse relation
-                overall_current_streak = max(overall_current_streak, streak.current_streak)
-                overall_best_streak = max(overall_best_streak, streak.best_streak)
-            except Streak.DoesNotExist:
-                pass  # Habit has no streak record yet
+            # Recompute from logs to avoid stale cache edge-cases.
+            current_streak = AnalyticsService.calculate_current_streak(habit)
+            best_streak = AnalyticsService.calculate_best_streak(habit)
+            overall_current_streak = max(overall_current_streak, current_streak)
+            overall_best_streak = max(overall_best_streak, best_streak)
             
             total_consistency += AnalyticsService.get_consistency_percentage(habit, 30)
 

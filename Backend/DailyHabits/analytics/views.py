@@ -66,8 +66,10 @@ class AnalyticsViewSet(viewsets.ViewSet):
         return Response({
             'success': True,
             'data': {
-                **summary,
+                'summary': summary,
                 'weeklyData': weekly_data,
+                # Backward compatibility for any clients reading flat keys.
+                **summary,
             }
         })
     

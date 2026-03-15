@@ -424,11 +424,14 @@ class _GamificationViewState extends State<_GamificationView>
   //  TAB 2 — CHALLENGES
   // ═══════════════════════════════════════════════════════════════════════════
 
+  bool _challengesLoaded = false;
+
   Widget _buildChallengesTab(GamificationController ctrl) {
     final tc = context.colors;
 
     // Load challenges on first visit
-    if (ctrl.myChallenges.isEmpty && ctrl.communityChallenges.isEmpty) {
+    if (!_challengesLoaded) {
+      _challengesLoaded = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ctrl.loadChallenges();
       });
@@ -440,11 +443,19 @@ class _GamificationViewState extends State<_GamificationView>
       child: ListView(
         padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
         children: [
+          // Create challenge button
+          _buildCreateChallengeButton(ctrl),
+          const SizedBox(height: 20),
+
           // My challenges
           _sectionHeader('My Challenges', Icons.emoji_events_rounded),
           const SizedBox(height: 12),
           if (ctrl.myChallenges.isEmpty)
-            _emptyState('No active challenges.\nCreate one to get started!')
+            _emptyStateWithIcon(
+              Icons.flag_outlined,
+              'No Active Challenges',
+              'Create or join a challenge to start competing!',
+            )
           else
             ...ctrl.myChallenges.map(
               (c) => Padding(
@@ -459,7 +470,11 @@ class _GamificationViewState extends State<_GamificationView>
           _sectionHeader('Community Challenges', Icons.groups_rounded),
           const SizedBox(height: 12),
           if (ctrl.communityChallenges.isEmpty)
-            _emptyState('No community challenges available right now.')
+            _emptyStateWithIcon(
+              Icons.people_outline_rounded,
+              'No Community Challenges',
+              'Check back later for new challenges!',
+            )
           else
             ...ctrl.communityChallenges.map(
               (c) => Padding(
@@ -467,10 +482,449 @@ class _GamificationViewState extends State<_GamificationView>
                 child: ChallengeCard(
                   challenge: c,
                   showJoinButton: true,
-                  onJoin: () => ctrl.joinChallenge(c.id),
+                  onJoin: () async {
+                    final success = await ctrl.joinChallenge(c.id);
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            success
+                                ? 'Joined "${c.title}"!'
+                                : 'Could not join "${c.title}". It may be full.',
+                          ),
+                          backgroundColor: success
+                              ? const Color(0xFF22C55E)
+                              : const Color(0xFFEF4444),
+                          behavior: SnackBarBehavior.floating,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                      );
+                    }
+                  },
                 ),
               ),
             ),
+        ],
+      ),
+    );
+  }
+
+  /// Button to create a new personal challenge.
+  Widget _buildCreateChallengeButton(GamificationController ctrl) {
+    final tc = context.colors;
+
+    return GestureDetector(
+      onTap: () => _showCreateChallengeSheet(ctrl),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            colors: [
+              tc.primary.withValues(alpha: 0.08),
+              tc.secondary.withValues(alpha: 0.05),
+            ],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: tc.primary.withValues(alpha: 0.15),
+            width: 1.5,
+          ),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 42,
+              height: 42,
+              decoration: BoxDecoration(
+                color: tc.primary.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.add_rounded, color: tc.primary, size: 24),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Create Challenge',
+                    style: TextStyle(
+                      color: tc.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  Text(
+                    'Set a personal goal and track your progress',
+                    style: TextStyle(
+                      color: tc.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right_rounded, color: tc.textMuted, size: 22),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// Shows a bottom sheet for creating a new challenge.
+  void _showCreateChallengeSheet(GamificationController ctrl) {
+    final tc = context.colors;
+    final titleController = TextEditingController();
+    final descController = TextEditingController();
+    String selectedDifficulty = 'medium';
+    String selectedScope = 'personal';
+    String selectedCriteriaType = 'completions';
+    int target = 10;
+    int days = 7;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: tc.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                24, 20, 24,
+                MediaQuery.of(ctx).viewInsets.bottom + 24,
+              ),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // Handle
+                    Center(
+                      child: Container(
+                        width: 40,
+                        height: 4,
+                        decoration: BoxDecoration(
+                          color: tc.textMuted.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    Text(
+                      'Create Challenge',
+                      style: TextStyle(
+                        color: tc.textPrimary,
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                      ),
+                    ),
+                    const SizedBox(height: 20),
+
+                    // Title field
+                    TextField(
+                      controller: titleController,
+                      style: TextStyle(color: tc.textPrimary),
+                      decoration: InputDecoration(
+                        labelText: 'Challenge Title',
+                        labelStyle: TextStyle(color: tc.textMuted),
+                        filled: true,
+                        fillColor: tc.card,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: tc.border.withValues(alpha: 0.1)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: tc.border.withValues(alpha: 0.1)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // Description field
+                    TextField(
+                      controller: descController,
+                      style: TextStyle(color: tc.textPrimary),
+                      maxLines: 2,
+                      decoration: InputDecoration(
+                        labelText: 'Description (optional)',
+                        labelStyle: TextStyle(color: tc.textMuted),
+                        filled: true,
+                        fillColor: tc.card,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: tc.border.withValues(alpha: 0.1)),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(color: tc.border.withValues(alpha: 0.1)),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Scope selector
+                    Text('Challenge Type',
+                        style: TextStyle(
+                          color: tc.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        )),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        _chipOption('Personal', 'personal',
+                            selectedScope, (v) {
+                          setSheetState(() => selectedScope = v);
+                        }),
+                        _chipOption('Community', 'community',
+                            selectedScope, (v) {
+                          setSheetState(() => selectedScope = v);
+                        }),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Goal type selector
+                    Text('Goal Type',
+                        style: TextStyle(
+                          color: tc.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        )),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        _chipOption('Completions', 'completions',
+                            selectedCriteriaType, (v) {
+                          setSheetState(() => selectedCriteriaType = v);
+                        }),
+                        _chipOption('Streak', 'streak',
+                            selectedCriteriaType, (v) {
+                          setSheetState(() => selectedCriteriaType = v);
+                        }),
+                        _chipOption('Perfect Days', 'all_done_days',
+                            selectedCriteriaType, (v) {
+                          setSheetState(() => selectedCriteriaType = v);
+                        }),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Target & Duration
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Target',
+                                  style: TextStyle(
+                                    color: tc.textSecondary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  )),
+                              const SizedBox(height: 8),
+                              _numberSelector(target, 1, 200, (v) {
+                                setSheetState(() => target = v);
+                              }),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Duration (days)',
+                                  style: TextStyle(
+                                    color: tc.textSecondary,
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w600,
+                                  )),
+                              const SizedBox(height: 8),
+                              _numberSelector(days, 1, 90, (v) {
+                                setSheetState(() => days = v);
+                              }),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+
+                    // Difficulty selector
+                    Text('Difficulty',
+                        style: TextStyle(
+                          color: tc.textSecondary,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w600,
+                        )),
+                    const SizedBox(height: 8),
+                    Wrap(
+                      spacing: 8,
+                      children: [
+                        _chipOption('Easy', 'easy', selectedDifficulty, (v) {
+                          setSheetState(() => selectedDifficulty = v);
+                        }),
+                        _chipOption('Medium', 'medium', selectedDifficulty, (v) {
+                          setSheetState(() => selectedDifficulty = v);
+                        }),
+                        _chipOption('Hard', 'hard', selectedDifficulty, (v) {
+                          setSheetState(() => selectedDifficulty = v);
+                        }),
+                      ],
+                    ),
+                    const SizedBox(height: 24),
+
+                    // Create button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 48,
+                      child: ElevatedButton(
+                        onPressed: ctrl.isActioning
+                            ? null
+                            : () async {
+                                if (titleController.text.trim().isEmpty) return;
+                                final messenger = ScaffoldMessenger.of(context);
+                                final now = DateTime.now();
+                                final challenge = await ctrl.createChallenge(
+                                  title: titleController.text.trim(),
+                                  description: descController.text.trim(),
+                                  scope: selectedScope,
+                                  difficulty: selectedDifficulty,
+                                  startDate: now,
+                                  endDate: now.add(Duration(days: days)),
+                                  target: target,
+                                  criteriaType: selectedCriteriaType,
+                                  maxParticipants: selectedScope == 'community' ? 50 : 1,
+                                );
+                                if (challenge != null && ctx.mounted) {
+                                  Navigator.pop(ctx);
+                                  messenger.showSnackBar(
+                                    SnackBar(
+                                      content: const Text('Challenge created!'),
+                                      backgroundColor: const Color(0xFF22C55E),
+                                      behavior: SnackBarBehavior.floating,
+                                      shape: RoundedRectangleBorder(
+                                        borderRadius: BorderRadius.circular(12),
+                                      ),
+                                    ),
+                                  );
+                                }
+                              },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: tc.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(14),
+                          ),
+                          elevation: 0,
+                        ),
+                        child: ctrl.isActioning
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Create Challenge',
+                                style: TextStyle(
+                                  fontSize: 15,
+                                  fontWeight: FontWeight.w700,
+                                ),
+                              ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _chipOption(
+      String label, String value, String selected, ValueChanged<String> onTap) {
+    final tc = context.colors;
+    final isSelected = value == selected;
+
+    return GestureDetector(
+      onTap: () => onTap(value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? tc.primary.withValues(alpha: 0.12)
+              : tc.card,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? tc.primary.withValues(alpha: 0.3)
+                : tc.border.withValues(alpha: 0.1),
+          ),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? tc.primary : tc.textSecondary,
+            fontSize: 13,
+            fontWeight: isSelected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _numberSelector(
+      int value, int min, int max, ValueChanged<int> onChange) {
+    final tc = context.colors;
+
+    return Container(
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: tc.border.withValues(alpha: 0.1)),
+      ),
+      child: Row(
+        children: [
+          IconButton(
+            icon: Icon(Icons.remove_rounded, color: tc.textMuted, size: 18),
+            onPressed: value > min ? () => onChange(value - 1) : null,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
+          Expanded(
+            child: Text(
+              '$value',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: tc.textPrimary,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          IconButton(
+            icon: Icon(Icons.add_rounded, color: tc.textMuted, size: 18),
+            onPressed: value < max ? () => onChange(value + 1) : null,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 36, minHeight: 36),
+          ),
         ],
       ),
     );
@@ -480,15 +934,22 @@ class _GamificationViewState extends State<_GamificationView>
   //  TAB 3 — LEADERBOARD
   // ═══════════════════════════════════════════════════════════════════════════
 
+  bool _leaderboardLoaded = false;
+
   Widget _buildLeaderboardTab(GamificationController ctrl) {
     final tc = context.colors;
 
     // Load leaderboard on first visit
-    if (ctrl.leaderboard == null) {
+    if (!_leaderboardLoaded) {
+      _leaderboardLoaded = true;
       WidgetsBinding.instance.addPostFrameCallback((_) {
         ctrl.loadLeaderboard();
       });
     }
+
+    final entries = ctrl.leaderboard?.entries ?? [];
+    final top3 = entries.where((e) => e.rank <= 3).toList();
+    final rest = entries.where((e) => e.rank > 3).toList();
 
     return RefreshIndicator(
       onRefresh: () => ctrl.loadLeaderboard(type: ctrl.leaderboardType),
@@ -503,21 +964,161 @@ class _GamificationViewState extends State<_GamificationView>
           // User rank card
           if (ctrl.leaderboard?.userRank != null)
             _buildUserRankCard(ctrl.leaderboard!.userRank!),
-          const SizedBox(height: 16),
+          if (ctrl.leaderboard?.userRank != null) const SizedBox(height: 20),
 
-          // Leaderboard entries
-          if (ctrl.leaderboard == null || ctrl.leaderboard!.entries.isEmpty)
-            _emptyState('No leaderboard data yet.\nComplete habits to rank up!')
+          // Top 3 podium
+          if (top3.isNotEmpty) ...[
+            _buildPodium(top3),
+            const SizedBox(height: 20),
+          ],
+
+          // Remaining leaderboard entries
+          if (entries.isEmpty)
+            _emptyStateWithIcon(
+              Icons.leaderboard_outlined,
+              'No Rankings Yet',
+              'Complete habits to climb the leaderboard!',
+            )
           else
-            ...ctrl.leaderboard!.entries.asMap().entries.map(
-                  (entry) => Padding(
-                    padding: const EdgeInsets.only(bottom: 8),
-                    child: LeaderboardTile(
-                      entry: entry.value,
-                      index: entry.key,
-                    ),
-                  ),
+            ...rest.map(
+              (e) => Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: LeaderboardTile(
+                  entry: e,
+                  index: entries.indexOf(e),
                 ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// Builds a visual podium for the top 3 leaderboard entries.
+  Widget _buildPodium(List<LeaderboardEntry> top3) {
+    final tc = context.colors;
+
+    // Arrange: 2nd place, 1st place, 3rd place
+    LeaderboardEntry? first, second, third;
+    for (final e in top3) {
+      if (e.rank == 1) first = e;
+      if (e.rank == 2) second = e;
+      if (e.rank == 3) third = e;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          colors: [
+            const Color(0xFFF59E0B).withValues(alpha: 0.06),
+            tc.card,
+          ],
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+        ),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tc.border.withValues(alpha: 0.08)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: [
+          if (second != null)
+            _podiumColumn(second, '🥈', 60, const Color(0xFFC0C0C0))
+          else
+            const SizedBox(width: 90),
+          const SizedBox(width: 8),
+          if (first != null)
+            _podiumColumn(first, '🥇', 80, const Color(0xFFFFD700))
+          else
+            const SizedBox(width: 90),
+          const SizedBox(width: 8),
+          if (third != null)
+            _podiumColumn(third, '🥉', 48, const Color(0xFFCD7F32))
+          else
+            const SizedBox(width: 90),
+        ],
+      ),
+    );
+  }
+
+  Widget _podiumColumn(
+      LeaderboardEntry entry, String medal, double barHeight, Color color) {
+    final tc = context.colors;
+
+    return SizedBox(
+      width: 90,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          // Avatar
+          CircleAvatar(
+            radius: entry.rank == 1 ? 28 : 22,
+            backgroundColor: color.withValues(alpha: 0.2),
+            backgroundImage: entry.profileImage != null
+                ? NetworkImage(entry.profileImage!)
+                : null,
+            child: entry.profileImage == null
+                ? Text(
+                    entry.userName.isNotEmpty
+                        ? entry.userName[0].toUpperCase()
+                        : '?',
+                    style: TextStyle(
+                      color: color,
+                      fontWeight: FontWeight.w800,
+                      fontSize: entry.rank == 1 ? 20 : 16,
+                    ),
+                  )
+                : null,
+          ),
+          const SizedBox(height: 6),
+          // Name
+          Text(
+            entry.userName,
+            style: TextStyle(
+              color: tc.textPrimary,
+              fontSize: 12,
+              fontWeight: FontWeight.w700,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            textAlign: TextAlign.center,
+          ),
+          // Score
+          Text(
+            '${entry.score} pts',
+            style: TextStyle(
+              color: tc.textSecondary,
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          // Medal + podium bar
+          Text(medal, style: TextStyle(fontSize: entry.rank == 1 ? 28 : 22)),
+          Container(
+            width: 60,
+            height: barHeight,
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                colors: [color, color.withValues(alpha: 0.7)],
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+              ),
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(8)),
+            ),
+            child: Center(
+              child: Text(
+                '#${entry.rank}',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ),
         ],
       ),
     );
@@ -681,6 +1282,48 @@ class _GamificationViewState extends State<_GamificationView>
           fontSize: 14,
           height: 1.5,
         ),
+      ),
+    );
+  }
+
+  /// Enhanced empty state with icon, title, and subtitle.
+  Widget _emptyStateWithIcon(IconData icon, String title, String subtitle) {
+    final tc = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: BoxDecoration(
+              color: tc.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Icon(icon, color: tc.primary.withValues(alpha: 0.5), size: 32),
+          ),
+          const SizedBox(height: 16),
+          Text(
+            title,
+            style: TextStyle(
+              color: tc.textSecondary,
+              fontSize: 16,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            subtitle,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              color: tc.textMuted,
+              fontSize: 13,
+              height: 1.4,
+            ),
+          ),
+        ],
       ),
     );
   }

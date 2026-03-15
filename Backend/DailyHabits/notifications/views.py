@@ -541,3 +541,4 @@ class NotificationIntelligenceViewSet(viewsets.ViewSet):
         from .services import NotificationIntelligence
         summary = NotificationIntelligence.get_notification_summary(request.user)
         return Response({'success': True, **summary})
+

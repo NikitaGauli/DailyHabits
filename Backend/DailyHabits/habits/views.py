@@ -53,6 +53,7 @@ from .serializers import (
 )
 from achievements.services import AchievementService
 from gamification.services import GamificationEngine
+from notifications.services import NotificationCreator
 
 
 # =============================================================================
@@ -293,12 +294,13 @@ class HabitViewSet(viewsets.ModelViewSet):
             log.save()
             
             # Recalculate streak after revoking completion
-            self._update_streak_on_uncomplete(habit)
+            updated_streak = self._update_streak_on_uncomplete(habit)
             
             return Response({
                 'success': True,
                 'status': 'uncompleted',
                 'isCompleted': False,
+                'currentStreak': updated_streak,
             })
         else:
             # --- Complete path ---------------------------------------------------
@@ -333,7 +335,33 @@ class HabitViewSet(viewsets.ModelViewSet):
             
             # Check milestones after XP award
             milestone_results = GamificationEngine.check_milestones(request.user)
-            
+
+            # ── Create a completion notification for real-time delivery ──
+            streak_count = habit.streak.current_streak if hasattr(habit, 'streak') else 0
+            NotificationCreator.create(
+                user=request.user,
+                notification_type='system',
+                title=f'✅ {habit.title} completed!',
+                message=f'Great job! You completed "{habit.title}" today.'
+                        + (f' 🔥 {streak_count}-day streak!' if streak_count > 1 else ''),
+                habit=habit,
+                icon_code=0xE86C,
+                color_value=0xFF22C55E,
+                action_type='habit_detail',
+                action_data={'habitId': habit.id},
+            )
+
+            # ── Streak milestone notifications (7, 14, 21, 30, 50, 100…) ──
+            milestone_thresholds = {7, 14, 21, 30, 50, 75, 100, 150, 200, 365}
+            if streak_count in milestone_thresholds:
+                NotificationCreator.streak_milestone(request.user, habit, streak_count)
+
+            # ── Achievement notifications ──
+            for ua in newly_earned:
+                NotificationCreator.achievement_earned(
+                    request.user, ua.achievement, habit=habit,
+                )
+
             return Response({
                 'success': True,
                 'status': 'completed',
@@ -587,12 +615,35 @@ class HabitViewSet(viewsets.ModelViewSet):
         
         try:
             streak = habit.streak
-            # Full re-count from log history
+            # Full re-count from log history keeps cache aligned with source of truth.
             streak.current_streak = AnalyticsService.calculate_current_streak(habit)
-            streak.total_completions = max(0, streak.total_completions - 1)
+            streak.best_streak = AnalyticsService.calculate_best_streak(habit)
+            streak.total_completions = HabitLog.objects.filter(
+                habit=habit,
+                status='completed',
+            ).count()
+            streak.total_skips = HabitLog.objects.filter(
+                habit=habit,
+                status='skipped',
+            ).count()
+            streak.total_misses = HabitLog.objects.filter(
+                habit=habit,
+                status='missed',
+            ).count()
+
+            latest_completion = HabitLog.objects.filter(
+                habit=habit,
+                status='completed',
+            ).order_by('-date').first()
+            streak.last_completed_date = latest_completion.date if latest_completion else None
+            if streak.current_streak > 0 and streak.last_completed_date:
+                streak.streak_start_date = streak.last_completed_date - timedelta(days=streak.current_streak - 1)
+            else:
+                streak.streak_start_date = None
             streak.save()
+            return streak.current_streak
         except Streak.DoesNotExist:
-            pass
+            return 0
 
     # =========================================================================
     # Habit Quality-of-Life Endpoints

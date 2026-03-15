@@ -449,4 +449,5 @@ class NotificationService {
       return {};
     }
   }
+
 }

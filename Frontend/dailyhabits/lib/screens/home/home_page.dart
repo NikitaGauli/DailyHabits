@@ -31,6 +31,7 @@ import 'package:dailyhabits/models/habit.dart';
 import 'package:dailyhabits/widgets/home/create_edit_habit_sheet.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
 import 'package:dailyhabits/screens/analytics/analytics_screen.dart';
+import 'package:dailyhabits/screens/analytics/analytics_controller.dart';
 import 'package:dailyhabits/screens/settings/settings_screen.dart';
 import 'package:dailyhabits/screens/settings/settings_controller.dart';
 import 'package:dailyhabits/screens/settings/pages/appearance_page.dart';
@@ -825,14 +826,21 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       onDismissed: (_) => controller.removeHabit(habit.id),
       child: GestureDetector(
         onTap: () {
+          final analyticsCtrl = context.read<AnalyticsController>();
           Navigator.push(
             context,
             AppPageRoute.slideRight(HabitDetailScreen(
               habit: habit,
-              onToggle: () => controller.loadData(),
+              onToggle: () {
+                controller.loadData();
+                analyticsCtrl.refresh();
+              },
               onDelete: () => controller.loadData(),
             )),
-          ).then((_) => controller.loadData());
+          ).then((_) {
+            controller.loadData();
+            analyticsCtrl.refresh();
+          });
         },
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 250),
@@ -955,11 +963,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         XPCelebrationOverlay.show(context, gamResult);
                         // Refresh gamification dashboard in background
                         context.read<GamificationController>().loadData();
+                        // Refresh analytics so data reflects the completion
+                        context.read<AnalyticsController>().refresh();
                       }
                     } else {
                       // Show completion celebration for non-gamification completions
                       if (isNowDone) {
                         CompletionCelebration.show(context, color: habit.color);
+                      }
+                      // Refresh analytics for uncomplete or non-gamification toggle
+                      if (mounted) {
+                        context.read<AnalyticsController>().refresh();
                       }
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(

@@ -570,3 +570,16 @@ JAZZMIN_UI_TWEAKS = {
         'success': 'btn-success',
     },
 }
+
+# =============================================================================
+# CELERY — BACKGROUND TASK QUEUE
+# =============================================================================
+# Broker URL — Redis is required for production. Falls back to memory://
+# for lightweight development without Redis.
+CELERY_BROKER_URL = os.environ.get('CELERY_BROKER_URL', 'redis://127.0.0.1:6379/0')
+CELERY_RESULT_BACKEND = os.environ.get('CELERY_RESULT_BACKEND', 'redis://127.0.0.1:6379/0')
+CELERY_ACCEPT_CONTENT = ['json']
+CELERY_TASK_SERIALIZER = 'json'
+CELERY_RESULT_SERIALIZER = 'json'
+CELERY_TIMEZONE = TIME_ZONE
+CELERY_ENABLE_UTC = True

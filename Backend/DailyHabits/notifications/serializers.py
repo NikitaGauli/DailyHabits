@@ -148,3 +148,4 @@ class HabitReminderSerializer(serializers.ModelSerializer):
             'message', 'last_sent', 'created_at'
         ]
         read_only_fields = ['id', 'last_sent', 'created_at']
+

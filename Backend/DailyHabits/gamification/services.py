@@ -492,10 +492,16 @@ class GamificationEngine:
             Challenge: The created challenge instance.
         """
         import uuid
+        scope = data.get('scope', 'personal')
+        max_participants = data.get('max_participants', 1)
+        # Community and friend challenges should allow multiple participants
+        if scope in ('community', 'friend') and max_participants <= 1:
+            max_participants = 50 if scope == 'community' else 10
+
         challenge = Challenge.objects.create(
             title=data['title'],
             description=data.get('description', ''),
-            scope=data.get('scope', 'personal'),
+            scope=scope,
             difficulty=data.get('difficulty', 'medium'),
             criteria=data.get('criteria', {}),
             start_date=data.get('start_date', timezone.now()),
@@ -503,8 +509,8 @@ class GamificationEngine:
             xp_reward=data.get('xp_reward', 100),
             coin_reward=data.get('coin_reward', 25),
             created_by=user,
-            max_participants=data.get('max_participants', 1),
-            invite_code=uuid.uuid4().hex[:8] if data.get('scope') != 'personal' else None,
+            max_participants=max_participants,
+            invite_code=uuid.uuid4().hex[:8] if scope != 'personal' else None,
             icon_code=data.get('icon_code', 0xE87C),
             color_value=data.get('color_value', 0xFF4F46E5),
             status='active',
@@ -699,13 +705,24 @@ class GamificationEngine:
         ]
 
     @staticmethod
-    def get_community_challenges():
-        """Get available community challenges that are active."""
+    def get_community_challenges(user=None):
+        """Get available community challenges that are active.
+
+        If a user is provided, excludes challenges the user has already joined.
+        """
         challenges = Challenge.objects.filter(
             scope='community',
             status='active',
             end_date__gt=timezone.now(),
-        ).order_by('-is_featured', '-created_at')[:20]
+        )
+
+        if user is not None:
+            joined_ids = ChallengeParticipant.objects.filter(
+                user=user,
+            ).values_list('challenge_id', flat=True)
+            challenges = challenges.exclude(id__in=joined_ids)
+
+        challenges = challenges.order_by('-is_featured', '-created_at')[:20]
 
         return [
             {
@@ -730,6 +747,30 @@ class GamificationEngine:
     # =====================================================================
     # Leaderboard
     # =====================================================================
+
+    @staticmethod
+    def ensure_leaderboard_fresh(board_type='weekly'):
+        """
+        Check if the leaderboard for the given type is fresh (updated within
+        the last hour). If stale or empty, trigger a rebuild.
+        """
+        today = timezone.now().date()
+
+        if board_type == 'weekly':
+            period_start = today - timedelta(days=today.weekday())
+        elif board_type == 'monthly':
+            period_start = today.replace(day=1)
+        else:
+            period_start = today.replace(year=2020, month=1, day=1)
+
+        latest = LeaderboardEntry.objects.filter(
+            board_type=board_type,
+            period_start=period_start,
+        ).order_by('-updated_at').first()
+
+        one_hour_ago = timezone.now() - timedelta(hours=1)
+        if latest is None or latest.updated_at < one_hour_ago:
+            GamificationEngine.rebuild_leaderboard(board_type)
 
     @staticmethod
     def rebuild_leaderboard(board_type='weekly'):

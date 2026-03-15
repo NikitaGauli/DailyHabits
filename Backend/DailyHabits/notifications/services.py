@@ -209,6 +209,104 @@ class NotificationCreator:
             action_type='settings',
         )
 
+    # ── Streak-at-risk notifications ─────────────────────────────────
+
+    @staticmethod
+    def streak_at_risk(user, habit, streak_count):
+        """Warn the user that their streak is about to break."""
+        return NotificationCreator.create(
+            user=user,
+            notification_type='streak_risk',
+            title=f'🔥 {streak_count}-day streak at risk!',
+            message=f'Complete "{habit.title}" today to keep your {streak_count}-day streak alive!',
+            habit=habit,
+            icon_code=0xE80E,
+            color_value=0xFFEF4444,
+            action_type='habit_detail',
+            action_data={'habitId': habit.id},
+        )
+
+    # ── Challenge notifications ──────────────────────────────────────
+
+    @staticmethod
+    def challenge_joined(user, challenge):
+        """Notify user they successfully joined a challenge."""
+        return NotificationCreator.create(
+            user=user,
+            notification_type='challenge_joined',
+            title='Challenge Joined! 🎯',
+            message=f'You joined "{challenge.title}". Give it your best!',
+            icon_code=0xE838,
+            color_value=0xFF4F46E5,
+            action_type='challenge_detail',
+            action_data={'challengeId': challenge.id},
+        )
+
+    @staticmethod
+    def challenge_ending_soon(user, challenge, days_left):
+        """Notify user that a challenge they're in is ending soon."""
+        return NotificationCreator.create(
+            user=user,
+            notification_type='challenge_ending',
+            title=f'⏳ {days_left} day{"s" if days_left != 1 else ""} left!',
+            message=f'"{challenge.title}" ends in {days_left} day{"s" if days_left != 1 else ""}. Keep pushing!',
+            icon_code=0xE838,
+            color_value=0xFFF59E0B,
+            action_type='challenge_detail',
+            action_data={'challengeId': challenge.id},
+        )
+
+    @staticmethod
+    def challenge_completed(user, challenge):
+        """Notify user they completed a challenge."""
+        return NotificationCreator.create(
+            user=user,
+            notification_type='challenge_completed',
+            title='Challenge Complete! 🏆',
+            message=f'Congratulations! You completed "{challenge.title}"!',
+            icon_code=0xE838,
+            color_value=0xFF22C55E,
+            action_type='challenge_detail',
+            action_data={'challengeId': challenge.id},
+        )
+
+    # ── Leaderboard notifications ────────────────────────────────────
+
+    @staticmethod
+    def leaderboard_rank_change(user, new_rank, old_rank, leaderboard_type='weekly'):
+        """Notify user of a rank change on the leaderboard."""
+        if new_rank < old_rank:
+            title = f'📈 You moved up to #{new_rank}!'
+            message = f'Great job! You climbed from #{old_rank} to #{new_rank} on the {leaderboard_type} leaderboard!'
+            color = 0xFF22C55E
+        else:
+            title = f'📉 Rank update: #{new_rank}'
+            message = f'You dropped from #{old_rank} to #{new_rank} on the {leaderboard_type} leaderboard. Time to catch up!'
+            color = 0xFFF59E0B
+        return NotificationCreator.create(
+            user=user,
+            notification_type='leaderboard',
+            title=title,
+            message=message,
+            icon_code=0xE885,
+            color_value=color,
+            action_type='leaderboard',
+            action_data={'type': leaderboard_type},
+        )
+
+    @staticmethod
+    def system_notification(user, title, message):
+        """Send a generic system notification to a user."""
+        return NotificationCreator.create(
+            user=user,
+            notification_type='system',
+            title=title,
+            message=message,
+            icon_code=0xE88E,
+            color_value=0xFF3B82F6,
+            action_type='none',
+        )
+
     # ── Social habit-sharing notifications ────────────────────────────
 
     @staticmethod

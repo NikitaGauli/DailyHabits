@@ -224,9 +224,9 @@ class GamificationViewSet(viewsets.ViewSet):
         """
         GET /api/gamification/community-challenges/
 
-        Browse available community challenges.
+        Browse available community challenges the user hasn't joined yet.
         """
-        challenges = GamificationEngine.get_community_challenges()
+        challenges = GamificationEngine.get_community_challenges(request.user)
         return Response({
             'success': True,
             'challenges': challenges,
@@ -242,9 +242,13 @@ class GamificationViewSet(viewsets.ViewSet):
         GET /api/gamification/leaderboard/?type=weekly&limit=50
 
         Retrieve the leaderboard for a given period type.
+        Auto-rebuilds if data is stale (>1 hour old or empty).
         """
         board_type = request.query_params.get('type', 'weekly')
         limit = min(int(request.query_params.get('limit', 50)), 100)
+
+        # Auto-rebuild if leaderboard is empty or stale
+        GamificationEngine.ensure_leaderboard_fresh(board_type)
 
         data = GamificationEngine.get_leaderboard(
             request.user,

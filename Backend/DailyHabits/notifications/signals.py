@@ -65,74 +65,67 @@ def broadcast_notification(sender, instance, created, **kwargs):
     if not created:
         return
 
+    # Build the notification payload for WebSocket
+    notification_data = {
+        'id': instance.id,
+        'type': instance.notification_type,
+        'title': instance.title,
+        'message': instance.message,
+        'status': instance.status,
+        'scheduledTime': instance.scheduled_time.isoformat() if instance.scheduled_time else None,
+        'sentAt': instance.sent_at.isoformat() if instance.sent_at else None,
+        'iconCode': instance.icon_code,
+        'colorValue': instance.color_value,
+        'actionType': instance.action_type,
+        'actionData': instance.action_data or {},
+        'habitId': instance.habit_id,
+        'fromUserId': instance.from_user_id if instance.from_user_id else None,
+        'fromUserName': instance.from_user.name if instance.from_user_id else None,
+        'fromUserImage': None,
+        'groupId': instance.group_id if instance.group_id else None,
+        'groupName': instance.group.name if instance.group_id else None,
+        'habitTitle': instance.habit.title if instance.habit_id else None,
+    }
+
+    # --- WebSocket broadcast ---
     try:
         from channels.layers import get_channel_layer
         from asgiref.sync import async_to_sync
 
         channel_layer = get_channel_layer()
-        if channel_layer is None:
-            logger.debug('No channel layer configured — skipping broadcast')
-            return
+        if channel_layer is not None:
+            group_name = f'notifications_user_{instance.user_id}'
 
-        group_name = f'notifications_user_{instance.user_id}'
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    'type': 'new_notification',
+                    'notification': notification_data,
+                },
+            )
 
-        # Build the notification payload for the WebSocket client.
-        # This mirrors the essential fields from NotificationSerializer
-        # to enable instant rendering without additional API calls.
-        notification_data = {
-            'id': instance.id,
-            'type': instance.notification_type,
-            'title': instance.title,
-            'message': instance.message,
-            'status': instance.status,
-            'scheduledTime': instance.scheduled_time.isoformat() if instance.scheduled_time else None,
-            'sentAt': instance.sent_at.isoformat() if instance.sent_at else None,
-            'iconCode': instance.icon_code,
-            'colorValue': instance.color_value,
-            'actionType': instance.action_type,
-            'actionData': instance.action_data or {},
-            'habitId': instance.habit_id,
-            'fromUserId': instance.from_user_id if instance.from_user_id else None,
-            'fromUserName': instance.from_user.name if instance.from_user_id else None,
-            'fromUserImage': None,  # Resolved lazily by the client if needed
-            'groupId': instance.group_id if instance.group_id else None,
-            'groupName': instance.group.name if instance.group_id else None,
-            'habitTitle': instance.habit.title if instance.habit_id else None,
-        }
+            # Send updated badge count
+            from notifications.models import Notification
+            unread_count = Notification.objects.filter(
+                user_id=instance.user_id,
+                status='sent',
+            ).count()
 
-        # Send a new_notification event to the user's channel group
-        async_to_sync(channel_layer.group_send)(
-            group_name,
-            {
-                'type': 'new_notification',
-                'notification': notification_data,
-            },
-        )
+            async_to_sync(channel_layer.group_send)(
+                group_name,
+                {
+                    'type': 'badge_update',
+                    'unread_count': unread_count,
+                },
+            )
 
-        # Also send an updated badge count
-        from notifications.models import Notification
-        unread_count = Notification.objects.filter(
-            user_id=instance.user_id,
-            status='sent',
-        ).count()
-
-        async_to_sync(channel_layer.group_send)(
-            group_name,
-            {
-                'type': 'badge_update',
-                'unread_count': unread_count,
-            },
-        )
-
-        logger.info(
-            'Broadcast notification id=%s to group=%s (unread=%s)',
-            instance.id,
-            group_name,
-            unread_count,
-        )
-
+            logger.info(
+                'Broadcast notification id=%s to group=%s (unread=%s)',
+                instance.id,
+                group_name,
+                unread_count,
+            )
     except Exception as e:
-        # Never let a broadcast failure break notification creation.
-        # The notification is already persisted — the client will pick
-        # it up on the next poll or reconnect.
-        logger.error('Failed to broadcast notification: %s', e, exc_info=True)
+        logger.error('Failed to broadcast notification via WebSocket: %s', e, exc_info=True)
+
+

@@ -55,10 +55,18 @@ class Notification(models.Model):
         ('missed', 'Missed Habit Alert'),        # User missed a habit yesterday
         ('achievement', 'Achievement Earned'),   # New badge / achievement unlocked
         ('streak', 'Streak Milestone'),          # Streak reached a milestone (7, 30, …)
+        ('streak_risk', 'Streak At Risk'),       # Streak about to break
         ('level_up', 'Level Up'),                # User levelled up in gamification
         ('system', 'System Notification'),       # Generic system message
         ('admin', 'Admin Announcement'),         # Broadcast from administrators
         ('security', 'Security Alert'),          # Password change, new device, etc.
+        # Challenge events
+        ('challenge', 'Challenge Update'),               # Personal/friend challenge events
+        ('challenge_joined', 'Challenge Joined'),        # User joined a challenge
+        ('challenge_ending', 'Challenge Ending Soon'),   # Challenge about to end
+        ('challenge_completed', 'Challenge Completed'),  # User completed a challenge
+        # Leaderboard events
+        ('leaderboard', 'Leaderboard Update'),           # Rank change on leaderboard
         # Social / community events
         ('friend_request', 'Friend Request'),            # Incoming friend request
         ('friend_accepted', 'Friend Request Accepted'),  # Request was accepted
@@ -79,6 +87,8 @@ class Notification(models.Model):
         ('friend_requests', 'Open Friend Requests'),  # Open friend-request list
         ('achievements', 'Open Achievements'),   # Open achievements gallery
         ('settings', 'Open Settings'),            # Open app settings
+        ('challenge_detail', 'Open Challenge'),  # Open a specific challenge
+        ('leaderboard', 'Open Leaderboard'),     # Open the leaderboard screen
     ]
 
     # ── Notification lifecycle states ──────────────────────────────────────
@@ -402,3 +412,54 @@ class HabitReminder(models.Model):
 
     def __str__(self):
         return f"Reminder for {self.habit.title} at {self.reminder_time}"
+
+
+# =============================================================================
+#  DEVICE TOKEN MODEL — FCM push notification token storage
+# =============================================================================
+
+class DeviceToken(models.Model):
+    """
+    Stores Firebase Cloud Messaging (FCM) device tokens for push notifications.
+
+    Each user may have multiple tokens (one per device). Tokens are
+    registered when the Flutter app initialises and refreshed when FCM
+    rotates them. Stale tokens are deactivated when the FCM API returns
+    an ``UNREGISTERED`` error.
+
+    Attributes:
+        user: The owner of this device token.
+        token: The FCM registration token string.
+        device_type: Platform identifier (android / ios / web).
+        device_name: Optional human-readable device label.
+        is_active: Whether this token is valid for sending.
+        last_used: Timestamp of the most recent successful push via this token.
+    """
+    DEVICE_TYPES = [
+        ('android', 'Android'),
+        ('ios', 'iOS'),
+        ('web', 'Web'),
+    ]
+
+    user = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='device_tokens',
+    )
+    id = models.AutoField(primary_key=True)
+    token = models.TextField(unique=True)
+    device_type = models.CharField(max_length=20, choices=DEVICE_TYPES, default='android')
+    device_name = models.CharField(max_length=255, blank=True, default='')
+    is_active = models.BooleanField(default=True)
+    last_used = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'device_tokens'
+        indexes = [
+            models.Index(fields=['user', 'is_active']),
+        ]
+
+    def __str__(self):
+        return f"{self.user.email} - {self.device_type} ({'active' if self.is_active else 'inactive'})"

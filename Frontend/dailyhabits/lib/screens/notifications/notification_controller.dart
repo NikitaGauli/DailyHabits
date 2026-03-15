@@ -27,6 +27,7 @@ import 'package:flutter/material.dart';
 import 'package:dailyhabits/models/notification_model.dart';
 import 'package:dailyhabits/services/notification_service.dart';
 import 'package:dailyhabits/services/websocket_service.dart';
+import 'package:dailyhabits/services/local_notification_service.dart';
 
 class NotificationController extends ChangeNotifier {
   final NotificationService _service = NotificationService();
@@ -83,6 +84,11 @@ class NotificationController extends ChangeNotifier {
     _ws.onConnectionStateChanged = _handleConnectionStateChanged;
 
     await _ws.connect();
+
+    // Initialize local notifications and wire up callbacks
+    final localNotif = LocalNotificationService.instance;
+    await localNotif.initialize();
+    localNotif.onNotificationTapped = _handlePushNotificationTap;
   }
 
   /// Disconnects the WebSocket cleanly.
@@ -92,12 +98,20 @@ class NotificationController extends ChangeNotifier {
     _ws.disconnect();
   }
 
+  /// Handles a push notification tap — invokes the same callback as
+  /// WebSocket-delivered taps so the UI can navigate to the relevant screen.
+  void _handlePushNotificationTap(AppNotification notification) {
+    // Mark as read locally and notify UI layer
+    _handleNewNotification(notification);
+    onNewRealtimeNotification?.call(notification);
+  }
+
   /// Handles an incoming real-time notification from the WebSocket.
   ///
   /// Prepends the notification to the local inbox list and updates the
   /// badge count — providing instant UI feedback without an API call.
-  /// Also invokes [onNewRealtimeNotification] so the UI layer can
-  /// display an in-app banner.
+  /// Also displays a local notification banner and invokes
+  /// [onNewRealtimeNotification] so the UI layer can display an in-app banner.
   void _handleNewNotification(AppNotification notification) {
     // Avoid duplicates (signal may fire while a poll response is in-flight)
     final exists = notifications.any((n) => n.id == notification.id);
@@ -107,6 +121,8 @@ class NotificationController extends ChangeNotifier {
       _lastInboxLoad = null;
       // Notify UI layer for in-app banner display
       onNewRealtimeNotification?.call(notification);
+      // Show a native system notification banner
+      LocalNotificationService.instance.showNotification(notification);
     }
     notifyListeners();
   }
@@ -419,6 +435,7 @@ class NotificationController extends ChangeNotifier {
   /// Reset state on logout
   void reset() {
     disconnectWebSocket();
+    LocalNotificationService.instance.cancelAll();
     notifications = [];
     smartTips = [];
     streakRisks = [];

@@ -73,14 +73,14 @@ class GamificationService {
     try {
       final headers = await _getHeaders();
       final response = await http.get(
-        Uri.parse('$_baseUrl/xp_history/?page=$page&page_size=$pageSize'),
+        Uri.parse('$_baseUrl/xp-history/?limit=$pageSize'),        
         headers: headers,
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
-          return (data['history'] as List?)
+          return (data['events'] as List?)
                   ?.map((e) => XPEvent.fromJson(e))
                   .toList() ??
               [];
@@ -101,7 +101,7 @@ class GamificationService {
     try {
       final headers = await _getHeaders();
       final response = await http.post(
-        Uri.parse('$_baseUrl/claim_login/'),
+        Uri.parse('$_baseUrl/claim-login/'),
         headers: headers,
       );
 
@@ -173,7 +173,7 @@ class GamificationService {
     try {
       final headers = await _getHeaders();
       final response = await http.post(
-        Uri.parse('$_baseUrl/buy_freeze/'),
+        Uri.parse('$_baseUrl/buy-freeze/'),
         headers: headers,
       );
 
@@ -223,7 +223,7 @@ class GamificationService {
     try {
       final headers = await _getHeaders();
       final response = await http.get(
-        Uri.parse('$_baseUrl/community_challenges/'),
+        Uri.parse('$_baseUrl/community-challenges/'),
         headers: headers,
       );
 
@@ -259,20 +259,19 @@ class GamificationService {
     try {
       final headers = await _getHeaders();
       final response = await http.post(
-        Uri.parse('$_baseUrl/create_challenge/'),
+        Uri.parse('$_baseUrl/challenges/create/'),
         headers: headers,
         body: jsonEncode({
           'title': title,
           'description': description,
           'scope': scope,
           'difficulty': difficulty,
-          'startDate': startDate.toIso8601String().split('T').first,
-          'endDate': endDate.toIso8601String().split('T').first,
-          'target': target,
-          'criteriaType': criteriaType,
-          'xpReward': xpReward,
-          'coinReward': coinReward,
-          'maxParticipants': maxParticipants,
+          'start_date': startDate.toIso8601String(),
+          'end_date': endDate.toIso8601String(),
+          'criteria': {'type': criteriaType, 'target': target},
+          'xp_reward': xpReward,
+          'coin_reward': coinReward,
+          'max_participants': maxParticipants,
         }),
       );
 
@@ -293,9 +292,8 @@ class GamificationService {
     try {
       final headers = await _getHeaders();
       final response = await http.post(
-        Uri.parse('$_baseUrl/join_challenge/'),
+        Uri.parse('$_baseUrl/challenges/$challengeId/join/'),
         headers: headers,
-        body: jsonEncode({'challengeId': challengeId}),
       );
 
       if (response.statusCode == 200) {
@@ -318,7 +316,7 @@ class GamificationService {
     try {
       final headers = await _getHeaders();
       final response = await http.get(
-        Uri.parse('$_baseUrl/leaderboard/?board_type=$boardType'),
+        Uri.parse('$_baseUrl/leaderboard/?type=$boardType'),
         headers: headers,
       );
 
@@ -364,7 +362,7 @@ class GamificationService {
     try {
       final headers = await _getHeaders();
       final response = await http.post(
-        Uri.parse('$_baseUrl/check_milestones/'),
+        Uri.parse('$_baseUrl/check-milestones/'),
         headers: headers,
       );
 
