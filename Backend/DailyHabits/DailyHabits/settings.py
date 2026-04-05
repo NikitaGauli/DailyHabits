@@ -44,7 +44,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # SECURITY WARNING: never run with DEBUG=True in production!
-DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
+DEBUG = False
 
 # 10.0.2.2 is the Android emulator's alias for the host machine's localhost.
 ALLOWED_HOSTS = os.environ.get(
@@ -201,7 +201,7 @@ USE_TZ = True                   # Store datetimes in UTC; convert to TIME_ZONE f
 # =============================================================================
 # STATIC FILES
 # =============================================================================
-STATIC_URL = 'static/'                    # URL prefix for static assets
+STATIC_URL = '/static/'                   # URL prefix for static assets
 STATIC_ROOT = BASE_DIR / 'staticfiles'     # Destination for collectstatic output
 # WhiteNoise serves static files with far-future Cache-Control headers and
 # content-hash filenames for cache-busting in production.
@@ -210,7 +210,7 @@ STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
 # =============================================================================
 # MEDIA FILES
 # =============================================================================
-MEDIA_URL = 'media/'               # URL prefix for user-uploaded content
+MEDIA_URL = '/media/'              # URL prefix for user-uploaded content
 MEDIA_ROOT = BASE_DIR / 'media'    # Filesystem path for user-uploaded files
 
 # =============================================================================
