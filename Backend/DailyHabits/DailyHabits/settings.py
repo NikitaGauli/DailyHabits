@@ -28,6 +28,7 @@ import os
 from pathlib import Path
 from datetime import timedelta
 from dotenv import load_dotenv
+import dj_database_url
 
 # Load environment variables from the .env file located at the project root.
 # This must happen before any os.environ.get() calls below.
@@ -44,13 +45,21 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 
 # SECURITY WARNING: never run with DEBUG=True in production!
-DEBUG = False
+DEBUG = os.environ.get('DEBUG', 'False').lower() == 'true'
 
 # 10.0.2.2 is the Android emulator's alias for the host machine's localhost.
-ALLOWED_HOSTS = os.environ.get(
-    'ALLOWED_HOSTS',
-    'localhost,127.0.0.1,10.0.2.2,NikitaGauli11.pythonanywhere.com'
-).split(',')
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get(
+        'ALLOWED_HOSTS',
+        '.onrender.com,localhost,127.0.0.1,10.0.2.2,NikitaGauli11.pythonanywhere.com'
+    ).split(',')
+    if host.strip()
+]
+
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '').strip()
+if RENDER_EXTERNAL_HOSTNAME:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
 
 # =============================================================================
 # GOOGLE OAUTH SETTINGS
@@ -169,13 +178,12 @@ CHANNEL_LAYERS = {
 # =============================================================================
 # DATABASE CONFIGURATION
 # =============================================================================
-# SQLite is used for local development. For production, swap to PostgreSQL or
-# MySQL by changing ENGINE and providing the appropriate connection parameters.
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.config(
+        default=f"sqlite:///{BASE_DIR / 'db.sqlite3'}",
+        conn_max_age=600,
+        ssl_require=not DEBUG,
+    )
 }
 
 # =============================================================================
@@ -205,13 +213,22 @@ STATIC_URL = '/static/'                   # URL prefix for static assets
 STATIC_ROOT = BASE_DIR / 'staticfiles'     # Destination for collectstatic output
 # WhiteNoise serves static files with far-future Cache-Control headers and
 # content-hash filenames for cache-busting in production.
-STATICFILES_STORAGE = "whitenoise.storage.CompressedStaticFilesStorage"
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # =============================================================================
 # MEDIA FILES
 # =============================================================================
 MEDIA_URL = '/media/'              # URL prefix for user-uploaded content
 MEDIA_ROOT = BASE_DIR / 'media'    # Filesystem path for user-uploaded files
+
+# Render sits behind a proxy/load balancer. These settings let Django correctly
+# treat forwarded HTTPS requests as secure.
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+USE_X_FORWARDED_HOST = True
+
+CSRF_TRUSTED_ORIGINS = [
+    'https://*.onrender.com',
+]
 
 # =============================================================================
 # DEFAULT PRIMARY KEY
