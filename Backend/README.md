@@ -99,6 +99,23 @@ python manage.py runserver
 
 The server will start at `http://localhost:8000`
 
+## Render Deployment (Important)
+
+If you deploy from this repository structure, the Django package is `DailyHabits`,
+not `habit_tracker_backend`.
+
+Use these Render settings:
+
+- Root Directory: `Backend`
+- Build Command: `pip install -r requirements.txt && cd DailyHabits && python manage.py collectstatic --noinput && python manage.py migrate --noinput`
+- Start Command: `cd DailyHabits && gunicorn DailyHabits.wsgi:application --bind 0.0.0.0:$PORT`
+
+Why the common error happens:
+
+- `ModuleNotFoundError: No module named 'habit_tracker_backend'` appears when
+    the Start Command points to a package that does not exist in this repo.
+- The real WSGI module is `DailyHabits.wsgi:application`.
+
 **API endpoints:** http://localhost:8000/api/
 **Admin interface:** http://localhost:8000/admin/
 
