@@ -166,9 +166,6 @@ class Migration(migrations.Migration):
                 'ordering': ['-created_at'],
             },
         ),
-        migrations.DeleteModel(
-            name='DeviceToken',
-        ),
         migrations.AddIndex(
             model_name='loginsession',
             index=models.Index(fields=['user', 'is_active'], name='login_sessi_user_id_f258eb_idx'),

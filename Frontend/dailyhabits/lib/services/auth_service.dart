@@ -15,6 +15,41 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:dailyhabits/services/api_config.dart';
 
 // =============================================================================
+// Testable Storage Abstraction
+// =============================================================================
+
+/// Minimal key/value storage used by [AuthService] for persisting auth data.
+///
+/// In production, this is backed by [FlutterSecureStorage]. In unit tests,
+/// it can be replaced with an in-memory implementation.
+abstract class AuthKeyValueStore {
+  Future<void> write({required String key, required String? value});
+  Future<String?> read({required String key});
+  Future<void> delete({required String key});
+}
+
+class FlutterSecureAuthStore implements AuthKeyValueStore {
+  FlutterSecureAuthStore(this._storage);
+
+  final FlutterSecureStorage _storage;
+
+  @override
+  Future<void> write({required String key, required String? value}) {
+    return _storage.write(key: key, value: value);
+  }
+
+  @override
+  Future<String?> read({required String key}) {
+    return _storage.read(key: key);
+  }
+
+  @override
+  Future<void> delete({required String key}) {
+    return _storage.delete(key: key);
+  }
+}
+
+// =============================================================================
 // Authentication Service
 // =============================================================================
 
@@ -57,15 +92,30 @@ class AuthService {
   factory AuthService() => _instance;
 
   /// Private named constructor used by the singleton pattern.
-  AuthService._internal();
+  AuthService._internal({http.Client? client, AuthKeyValueStore? store})
+      : _client = client ?? http.Client(),
+        _store =
+            store ??
+            FlutterSecureAuthStore(
+              const FlutterSecureStorage(
+                aOptions: AndroidOptions(encryptedSharedPreferences: true),
+              ),
+            ),
+        _prefsProvider = SharedPreferences.getInstance;
 
-  /// Secure encrypted storage instance for persisting sensitive auth data.
-  ///
-  /// Uses AES encryption on Android (via EncryptedSharedPreferences) and
-  /// Keychain on iOS for hardware-backed secret storage.
-  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage(
-    aOptions: AndroidOptions(encryptedSharedPreferences: true),
-  );
+  /// Test-only constructor that allows injecting dependencies.
+  @visibleForTesting
+  AuthService.forTesting({
+    http.Client? client,
+    AuthKeyValueStore? store,
+    Future<SharedPreferences> Function()? prefsProvider,
+  })  : _client = client ?? http.Client(),
+        _store = store ?? _InMemoryAuthStore(),
+        _prefsProvider = prefsProvider ?? SharedPreferences.getInstance;
+
+  final http.Client _client;
+  final AuthKeyValueStore _store;
+  final Future<SharedPreferences> Function() _prefsProvider;
 
   // ---------------------------------------------------------------------------
   // Public API — Authentication
@@ -83,7 +133,7 @@ class AuthService {
     final url = '$baseUrl/login/';
     debugPrint('AUTH ➜ POST $url');
     try {
-      final response = await http
+      final response = await _client
           .post(
             Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
@@ -131,7 +181,7 @@ class AuthService {
     final url = '$baseUrl/register/';
     debugPrint('AUTH ➜ POST $url');
     try {
-      final response = await http
+      final response = await _client
           .post(
             Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
@@ -193,7 +243,7 @@ class AuthService {
     final url = '$baseUrl/google/';
     debugPrint('AUTH ➜ POST $url (Google OAuth)');
     try {
-      final response = await http
+      final response = await _client
           .post(
             Uri.parse(url),
             headers: {'Content-Type': 'application/json'},
@@ -238,9 +288,9 @@ class AuthService {
   /// [FlutterSecureStorage]. Does **not** call the backend — the token simply
   /// becomes unused on the client side.
   Future<void> logout() async {
-    await _secureStorage.delete(key: _tokenKey);
-    await _secureStorage.delete(key: _userKey);
-    await _secureStorage.delete(key: _refreshKey);
+    await _store.delete(key: _tokenKey);
+    await _store.delete(key: _userKey);
+    await _store.delete(key: _refreshKey);
   }
 
   // ---------------------------------------------------------------------------
@@ -253,7 +303,7 @@ class AuthService {
   /// whether the email exists, preventing user enumeration.
   Future<Map<String, dynamic>> forgotPassword(String email) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/forgot-password/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email.trim().toLowerCase()}),
@@ -286,7 +336,7 @@ class AuthService {
   /// `{valid: false, message: '…'}` when it has expired or been consumed.
   Future<Map<String, dynamic>> validateResetToken(String token) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/validate-reset-token/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'token': token}),
@@ -312,7 +362,7 @@ class AuthService {
     required String confirmPassword,
   }) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/reset-password/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -342,7 +392,7 @@ class AuthService {
   /// whether the email exists, preventing user enumeration.
   Future<Map<String, dynamic>> requestPasswordResetOTP(String email) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/request-password-reset/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({'email': email.trim().toLowerCase()}),
@@ -381,7 +431,7 @@ class AuthService {
     required String confirmPassword,
   }) async {
     try {
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/verify-otp-reset/'),
         headers: {'Content-Type': 'application/json'},
         body: jsonEncode({
@@ -415,7 +465,7 @@ class AuthService {
   /// [FlutterSecureStorage] on first call after app update.
   Future<String?> getToken() async {
     await _migrateFromSharedPrefs();
-    return await _secureStorage.read(key: _tokenKey);
+    return await _store.read(key: _tokenKey);
   }
 
   /// Returns `true` if a JWT token exists in secure storage.
@@ -429,7 +479,7 @@ class AuthService {
   /// Retrieves the cached user profile as a JSON map, or `null` if absent.
   Future<Map<String, dynamic>?> getUser() async {
     await _migrateFromSharedPrefs();
-    final userStr = await _secureStorage.read(key: _userKey);
+    final userStr = await _store.read(key: _userKey);
     if (userStr != null) {
       return jsonDecode(userStr);
     }
@@ -448,20 +498,20 @@ class AuthService {
   /// first app launch after the update. The migration flag prevents
   /// re-running on subsequent launches.
   Future<void> _migrateFromSharedPrefs() async {
-    final alreadyMigrated = await _secureStorage.read(key: _migrationKey);
+    final alreadyMigrated = await _store.read(key: _migrationKey);
     if (alreadyMigrated == 'true') return;
 
     try {
-      final prefs = await SharedPreferences.getInstance();
+      final prefs = await _prefsProvider();
       final oldToken = prefs.getString('auth_token');
       final oldUser = prefs.getString('user_data');
 
       if (oldToken != null) {
-        await _secureStorage.write(key: _tokenKey, value: oldToken);
+        await _store.write(key: _tokenKey, value: oldToken);
         await prefs.remove('auth_token');
       }
       if (oldUser != null) {
-        await _secureStorage.write(key: _userKey, value: oldUser);
+        await _store.write(key: _userKey, value: oldUser);
         await prefs.remove('user_data');
       }
     } catch (e) {
@@ -469,7 +519,7 @@ class AuthService {
     }
 
     // Mark migration as done regardless — prevents retries on failure
-    await _secureStorage.write(key: _migrationKey, value: 'true');
+    await _store.write(key: _migrationKey, value: 'true');
   }
 
   /// Persists the JWT tokens and user profile from an API [data] response.
@@ -481,21 +531,18 @@ class AuthService {
   Future<void> _saveAuthData(Map<String, dynamic> data) async {
     // Backend may return the token under 'access' (JWT pair) or 'token' (legacy)
     if (data.containsKey('access')) {
-      await _secureStorage.write(key: _tokenKey, value: data['access']);
+      await _store.write(key: _tokenKey, value: data['access']?.toString());
     } else if (data.containsKey('token')) {
-      await _secureStorage.write(key: _tokenKey, value: data['token']);
+      await _store.write(key: _tokenKey, value: data['token']?.toString());
     }
 
     // Store refresh token if present
     if (data.containsKey('refresh')) {
-      await _secureStorage.write(key: _refreshKey, value: data['refresh']);
+      await _store.write(key: _refreshKey, value: data['refresh']?.toString());
     }
 
     if (data.containsKey('user')) {
-      await _secureStorage.write(
-        key: _userKey,
-        value: jsonEncode(data['user']),
-      );
+      await _store.write(key: _userKey, value: jsonEncode(data['user']));
     }
   }
 
@@ -592,5 +639,24 @@ class AuthService {
       return 'SSL error – the backend should use http://, not https://.';
     }
     return 'Connection error. Please check your network.';
+  }
+}
+
+class _InMemoryAuthStore implements AuthKeyValueStore {
+  final Map<String, String?> _values = <String, String?>{};
+
+  @override
+  Future<void> write({required String key, required String? value}) async {
+    _values[key] = value;
+  }
+
+  @override
+  Future<String?> read({required String key}) async {
+    return _values[key];
+  }
+
+  @override
+  Future<void> delete({required String key}) async {
+    _values.remove(key);
   }
 }

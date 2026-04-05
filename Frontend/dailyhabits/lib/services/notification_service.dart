@@ -30,8 +30,14 @@ class NotificationService {
   // Dependencies & Configuration
   // ---------------------------------------------------------------------------
 
+  NotificationService({AuthService? authService, http.Client? client})
+      : _authService = authService ?? AuthService(),
+        _client = client ?? http.Client();
+
   /// Shared [AuthService] instance for retrieving the JWT token.
-  final AuthService _authService = AuthService();
+  final AuthService _authService;
+
+  final http.Client _client;
 
   /// Base URL for standard notification endpoints.
   String get _baseUrl => '${ApiConfig.baseUrl}/notifications';
@@ -62,7 +68,7 @@ class NotificationService {
   Future<List<AppNotification>> getNotifications() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_baseUrl/'),
         headers: headers,
       );
@@ -87,7 +93,7 @@ class NotificationService {
   Future<int> getUnreadCount() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_baseUrl/unread/'),
         headers: headers,
       );
@@ -108,7 +114,7 @@ class NotificationService {
   Future<bool> markAsRead(int id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$_baseUrl/$id/mark-read/'),
         headers: headers,
       );
@@ -124,7 +130,7 @@ class NotificationService {
   Future<bool> markAllAsRead() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$_baseUrl/mark-all-read/'),
         headers: headers,
       );
@@ -140,7 +146,7 @@ class NotificationService {
   Future<bool> deleteNotification(int id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.delete(
+      final response = await _client.delete(
         Uri.parse('$_baseUrl/$id/'),
         headers: headers,
       );
@@ -157,7 +163,7 @@ class NotificationService {
   Future<bool> dismissNotification(int id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$_baseUrl/$id/dismiss/'),
         headers: headers,
       );
@@ -178,7 +184,7 @@ class NotificationService {
   Future<bool> acceptFriendRequest(int notificationId) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$_baseUrl/$notificationId/accept-friend/'),
         headers: headers,
       );
@@ -195,7 +201,7 @@ class NotificationService {
   Future<bool> rejectFriendRequest(int notificationId) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$_baseUrl/$notificationId/reject-friend/'),
         headers: headers,
       );
@@ -216,7 +222,7 @@ class NotificationService {
   Future<Map<String, dynamic>> getSmartTipsData() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_smartTipsUrl/'),
         headers: headers,
       );
@@ -239,7 +245,7 @@ class NotificationService {
   Future<List<SmartTip>> getSmartTips() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_smartTipsUrl/'),
         headers: headers,
       );
@@ -262,7 +268,7 @@ class NotificationService {
   Future<bool> markTipRead(int id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$_smartTipsUrl/$id/mark-read/'),
         headers: headers,
       );
@@ -276,7 +282,7 @@ class NotificationService {
   Future<bool> toggleTipLike(int id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$_smartTipsUrl/$id/like/'),
         headers: headers,
       );
@@ -290,7 +296,7 @@ class NotificationService {
   Future<bool> toggleTipSave(int id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$_smartTipsUrl/$id/save-tip/'),
         headers: headers,
       );
@@ -304,7 +310,7 @@ class NotificationService {
   Future<bool> dismissTip(int id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$_smartTipsUrl/$id/dismiss/'),
         headers: headers,
       );
@@ -325,7 +331,7 @@ class NotificationService {
   Future<NotificationSettings?> getSettings() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_settingsUrl/'),
         headers: headers,
       );
@@ -348,7 +354,7 @@ class NotificationService {
   Future<bool> updateSettings(NotificationSettings settings) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$_settingsUrl/update/'),
         headers: headers,
         body: jsonEncode(settings.toJson()),
@@ -375,7 +381,7 @@ class NotificationService {
   Future<List<dynamic>> getSmartSuggestions() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_intelligenceUrl/smart-suggestions/'),
         headers: headers,
       );
@@ -396,13 +402,13 @@ class NotificationService {
   Future<List<dynamic>> getStreakRiskAlerts() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_intelligenceUrl/streak-risks/'),
         headers: headers,
       );
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
-        return data['at_risk_habits'] ?? [];
+        return data['alerts'] ?? [];
       }
       return [];
     } catch (_) {
@@ -417,7 +423,7 @@ class NotificationService {
   Future<Map<String, dynamic>> getWeeklyNudges() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_intelligenceUrl/weekly-nudges/'),
         headers: headers,
       );
@@ -437,7 +443,7 @@ class NotificationService {
   Future<Map<String, dynamic>> getNotificationSummary() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_intelligenceUrl/summary/'),
         headers: headers,
       );

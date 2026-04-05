@@ -280,6 +280,9 @@ ALLOWED_HOSTS=yourdomain.com,www.yourdomain.com
 DATABASE_URL=postgresql://user:password@localhost/habitdb
 ```
 
+PythonAnywhere-specific deployment steps are documented in
+`PYTHONANYWHERE_DEPLOYMENT.md`.
+
 ## Troubleshooting
 
 ### `No module named 'rest_framework'`

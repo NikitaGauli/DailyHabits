@@ -51,6 +51,10 @@ class AdminProfileSerializer(serializers.ModelSerializer):
     role_name = serializers.CharField(source='role.display_name', read_only=True)
     user_email = serializers.CharField(source='user.email', read_only=True)
     user_name = serializers.CharField(source='user.name', read_only=True)
+    # Workaround: Django 6.0 changed ip_address_validators() return shape,
+    # which breaks DRF's built-in IPAddressField on GenericIPAddressField.
+    # Represent it as a plain string for API output.
+    last_admin_ip = serializers.CharField(allow_null=True, read_only=True)
 
     class Meta:
         model = AdminProfile

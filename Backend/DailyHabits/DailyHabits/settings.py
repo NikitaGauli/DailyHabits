@@ -47,7 +47,10 @@ SECRET_KEY = os.environ.get('SECRET_KEY', 'dev-secret-key-change-in-production')
 DEBUG = os.environ.get('DEBUG', 'True').lower() == 'true'
 
 # 10.0.2.2 is the Android emulator's alias for the host machine's localhost.
-ALLOWED_HOSTS = os.environ.get('ALLOWED_HOSTS', 'localhost,127.0.0.1,10.0.2.2').split(',')
+ALLOWED_HOSTS = os.environ.get(
+    'ALLOWED_HOSTS',
+    'localhost,127.0.0.1,10.0.2.2,NikitaGauli11.pythonanywhere.com'
+).split(',')
 
 # =============================================================================
 # GOOGLE OAUTH SETTINGS

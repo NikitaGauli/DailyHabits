@@ -30,8 +30,14 @@ class AnalyticsService {
   // Dependencies & Configuration
   // ---------------------------------------------------------------------------
 
+  AnalyticsService({AuthService? authService, http.Client? client})
+      : _authService = authService ?? AuthService(),
+        _client = client ?? http.Client();
+
   /// Shared [AuthService] instance for retrieving the JWT token.
-  final AuthService _authService = AuthService();
+  final AuthService _authService;
+
+  final http.Client _client;
 
   /// Base URL for analytics endpoints, derived from [ApiConfig].
   String get _baseUrl => '${ApiConfig.baseUrl}/analytics';
@@ -56,7 +62,7 @@ class AnalyticsService {
   Future<Map<String, dynamic>> getDashboard() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_baseUrl/dashboard/'),
         headers: headers,
       );
@@ -85,7 +91,7 @@ class AnalyticsService {
   Future<List<WeeklyDataPoint>> getWeeklyData({int weeksBack = 0}) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_baseUrl/weekly/?weeksBack=$weeksBack'),
         headers: headers,
       );
@@ -119,7 +125,7 @@ class AnalyticsService {
   ) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_baseUrl/monthly/?year=$year&month=$month'),
         headers: headers,
       );
@@ -148,7 +154,7 @@ class AnalyticsService {
   Future<List<Map<String, dynamic>>> getCategoryBreakdown() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$_baseUrl/category-breakdown/'),
         headers: headers,
       );

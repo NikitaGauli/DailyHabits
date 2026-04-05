@@ -35,8 +35,14 @@ class HabitService {
   /// Base URL for habit endpoints, derived from [ApiConfig].
   static String get baseUrl => '${ApiConfig.baseUrl}/habits';
 
+  HabitService({AuthService? authService, http.Client? client})
+      : _authService = authService ?? AuthService(),
+        _client = client ?? http.Client();
+
   /// Shared instance of [AuthService] used to retrieve the JWT token.
-  final AuthService _authService = AuthService();
+  final AuthService _authService;
+
+  final http.Client _client;
 
   /// Builds the standard HTTP headers including the JWT `Authorization` bearer
   /// token and JSON content type.
@@ -59,7 +65,8 @@ class HabitService {
   Future<List<Habit>> getHabits() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(Uri.parse('$baseUrl/'), headers: headers);
+      final response =
+          await _client.get(Uri.parse('$baseUrl/'), headers: headers);
 
       if (response.statusCode == 200) {
         final List<dynamic> data = jsonDecode(response.body);
@@ -82,7 +89,7 @@ class HabitService {
   Future<Map<String, dynamic>> getTodayHabits() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$baseUrl/today/'),
         headers: headers,
       );
@@ -121,7 +128,7 @@ class HabitService {
       final headers = await _getHeaders();
       final body = jsonEncode(habit.toJson());
 
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/'),
         headers: headers,
         body: body,
@@ -153,7 +160,7 @@ class HabitService {
   Future<Map<String, dynamic>> toggleHabit(String id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/$id/toggle-complete/'),
         headers: headers,
       );
@@ -174,7 +181,7 @@ class HabitService {
   Future<bool> skipHabit(String id, {String reason = ''}) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.post(
+      final response = await _client.post(
         Uri.parse('$baseUrl/$id/skip/'),
         headers: headers,
         body: jsonEncode({'reason': reason}),
@@ -200,7 +207,7 @@ class HabitService {
   Future<List<Map<String, dynamic>>> getCategories() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$baseUrl/categories/'),
         headers: headers,
       );
@@ -227,7 +234,7 @@ class HabitService {
   Future<Map<String, dynamic>> getStats(String id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$baseUrl/$id/stats/'),
         headers: headers,
       );
@@ -249,7 +256,7 @@ class HabitService {
   Future<Map<String, dynamic>> getStatsSummary() async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$baseUrl/stats_summary/'),
         headers: headers,
       );
@@ -270,7 +277,7 @@ class HabitService {
   Future<Map<String, dynamic>> getHistory(String id, {int days = 30}) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.get(
+      final response = await _client.get(
         Uri.parse('$baseUrl/$id/history/?days=$days'),
         headers: headers,
       );
@@ -291,7 +298,7 @@ class HabitService {
   Future<Habit> updateHabit(Habit habit) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.patch(
+      final response = await _client.patch(
         Uri.parse('$baseUrl/${habit.id}/'),
         headers: headers,
         body: jsonEncode(habit.toJson()),
@@ -317,7 +324,7 @@ class HabitService {
   Future<void> deleteHabit(String id) async {
     try {
       final headers = await _getHeaders();
-      final response = await http.delete(
+      final response = await _client.delete(
         Uri.parse('$baseUrl/$id/'),
         headers: headers,
       );
