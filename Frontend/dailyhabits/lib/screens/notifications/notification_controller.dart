@@ -58,6 +58,19 @@ class NotificationController extends ChangeNotifier {
   DateTime? _lastTipsLoad;
   static const _cacheWindow = Duration(seconds: 30);
 
+  List<dynamic> _toList(dynamic value) {
+    if (value is List) {
+      return value;
+    }
+    if (value is Map) {
+      if (value['items'] is List) return value['items'] as List<dynamic>;
+      if (value['results'] is List) return value['results'] as List<dynamic>;
+      if (value['data'] is List) return value['data'] as List<dynamic>;
+      if (value.isNotEmpty) return [value];
+    }
+    return const [];
+  }
+
   // ── Computed ───────────────────────────────────────────────────
   int get unreadInboxCount =>
       notifications.where((n) => !n.isRead).length;
@@ -348,12 +361,12 @@ class NotificationController extends ChangeNotifier {
     try {
       final data = await _service.getSmartTipsData();
       if (data.isNotEmpty) {
-        smartTips = (data['tips'] as List? ?? [])
+        smartTips = _toList(data['tips'])
             .map((json) => SmartTip.fromJson(json))
             .toList();
-        streakRisks = data['streakRisks'] as List? ?? [];
-        suggestions = data['suggestions'] as List? ?? [];
-        nudges = data['nudges'] as List? ?? [];
+        streakRisks = _toList(data['streakRisks']);
+        suggestions = _toList(data['suggestions']);
+        nudges = _toList(data['nudges']);
       }
       isTipsError = false;
       _lastTipsLoad = DateTime.now();

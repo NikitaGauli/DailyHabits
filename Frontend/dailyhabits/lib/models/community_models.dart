@@ -342,6 +342,7 @@ class EnrichedGroupDetail {
   final int totalStreaks;
   final List<Map<String, dynamic>> leaderboard;
   final List<GroupChallenge> challenges;
+  final List<Map<String, dynamic>> sharedAchievements;
   final List<GroupMemberInfo> members;
 
   EnrichedGroupDetail({
@@ -360,6 +361,7 @@ class EnrichedGroupDetail {
     this.totalStreaks = 0,
     this.leaderboard = const [],
     this.challenges = const [],
+    this.sharedAchievements = const [],
     this.members = const [],
   });
 
@@ -386,6 +388,8 @@ class EnrichedGroupDetail {
       challenges: (json['challenges'] as List? ?? [])
           .map((c) => GroupChallenge.fromJson(c))
           .toList(),
+        sharedAchievements:
+          List<Map<String, dynamic>>.from(json['sharedAchievements'] ?? []),
       members: (json['members'] as List? ?? [])
           .map((m) => GroupMemberInfo.fromJson(m))
           .toList(),

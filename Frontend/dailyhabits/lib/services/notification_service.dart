@@ -57,6 +57,36 @@ class NotificationService {
     };
   }
 
+  Map<String, dynamic> _decodeMap(String body) {
+    final decoded = jsonDecode(body);
+    if (decoded is Map<String, dynamic>) {
+      return decoded;
+    }
+    return {};
+  }
+
+  List<dynamic> _normalizeList(dynamic value) {
+    if (value is List) {
+      return value;
+    }
+
+    if (value is Map<String, dynamic>) {
+      final candidates = [value['results'], value['items'], value['data'], value['nudges']];
+      for (final candidate in candidates) {
+        if (candidate is List) {
+          return candidate;
+        }
+      }
+
+      // Single-object fallback for endpoints that return one suggestion payload.
+      if (value.isNotEmpty) {
+        return [value];
+      }
+    }
+
+    return const [];
+  }
+
   // ---------------------------------------------------------------------------
   // Inbox Notifications
   // ---------------------------------------------------------------------------
@@ -222,18 +252,48 @@ class NotificationService {
   Future<Map<String, dynamic>> getSmartTipsData() async {
     try {
       final headers = await _getHeaders();
-      final response = await _client.get(
-        Uri.parse('$_smartTipsUrl/'),
-        headers: headers,
-      );
+      final responses = await Future.wait([
+        _client.get(
+          Uri.parse('$_smartTipsUrl/'),
+          headers: headers,
+        ),
+        _client.get(
+          Uri.parse('$_intelligenceUrl/streak-risks/'),
+          headers: headers,
+        ),
+        _client.get(
+          Uri.parse('$_intelligenceUrl/smart-suggestions/'),
+          headers: headers,
+        ),
+        _client.get(
+          Uri.parse('$_intelligenceUrl/weekly-nudges/'),
+          headers: headers,
+        ),
+      ]);
 
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        if (data['success'] == true) {
-          return data;
-        }
-      }
-      return {};
+      final tipsRes = responses[0];
+      final risksRes = responses[1];
+      final suggestionsRes = responses[2];
+      final nudgesRes = responses[3];
+
+      final tipsData =
+          tipsRes.statusCode == 200 ? _decodeMap(tipsRes.body) : <String, dynamic>{};
+      final risksData =
+          risksRes.statusCode == 200 ? _decodeMap(risksRes.body) : <String, dynamic>{};
+      final suggestionsData = suggestionsRes.statusCode == 200
+          ? _decodeMap(suggestionsRes.body)
+          : <String, dynamic>{};
+      final nudgesData =
+          nudgesRes.statusCode == 200 ? _decodeMap(nudgesRes.body) : <String, dynamic>{};
+
+      return {
+        'success': true,
+        'tips': _normalizeList(tipsData['tips']),
+        'streakRisks': _normalizeList(risksData['alerts']),
+        'suggestions': _normalizeList(suggestionsData['suggestions']),
+        'nudges': _normalizeList(nudgesData['nudges']),
+        'rawWeeklyNudges': nudgesData,
+      };
     } catch (e) {
       return {};
     }
@@ -386,8 +446,8 @@ class NotificationService {
         headers: headers,
       );
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['suggestions'] ?? [];
+        final data = _decodeMap(response.body);
+        return _normalizeList(data['suggestions']);
       }
       return [];
     } catch (_) {
@@ -407,8 +467,8 @@ class NotificationService {
         headers: headers,
       );
       if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        return data['alerts'] ?? [];
+        final data = _decodeMap(response.body);
+        return _normalizeList(data['alerts']);
       }
       return [];
     } catch (_) {
@@ -428,7 +488,7 @@ class NotificationService {
         headers: headers,
       );
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return _decodeMap(response.body);
       }
       return {};
     } catch (_) {
@@ -448,7 +508,7 @@ class NotificationService {
         headers: headers,
       );
       if (response.statusCode == 200) {
-        return jsonDecode(response.body);
+        return _decodeMap(response.body);
       }
       return {};
     } catch (_) {

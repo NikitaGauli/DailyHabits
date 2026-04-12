@@ -7,6 +7,7 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import 'package:dailyhabits/screens/analytics/analytics_controller.dart';
 import 'package:dailyhabits/screens/analytics/widgets/consistency_ring.dart';
@@ -94,27 +95,74 @@ class _AnalyticsView extends StatelessWidget {
     final completions = _toInt(summary['todayCompleted']);
     final weeklyCompletions = _toInt(summary['weeklyCompletions']);
     final avgConsistency = _toDouble(summary['avgConsistency']);
+    final wowThisWeek = _toMap(controller.weeklyComparison['thisWeek']);
+    final wowLastWeek = _toMap(controller.weeklyComparison['lastWeek']);
+    final wowDelta = _toDouble(controller.weeklyComparison['changePercent']);
+    final wowTrend = (controller.weeklyComparison['trend'] ?? '').toString();
+    final thisWeekDaily = _toDouble(wowThisWeek['dailyAverage']);
+    final lastWeekDaily = _toDouble(wowLastWeek['dailyAverage']);
+    final trendData = controller.completionTrend;
+    final trendDays = controller.selectedTrendDays;
 
     return Scaffold(
       backgroundColor: tc.bg,
       body: SafeArea(
         child: RefreshIndicator(
-          onRefresh: () async {
-            await controller.loadDashboard();
-            await controller.loadHeatmap();
-          },
+          onRefresh: controller.refresh,
           color: tc.primary,
-          child: SingleChildScrollView(
-            physics: const AlwaysScrollableScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                // ── Header
+          child: Stack(
+            children: [
+              Positioned(
+                top: -90,
+                right: -70,
+                child: Container(
+                  width: 240,
+                  height: 240,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: tc.primary.withValues(alpha: 0.07),
+                  ),
+                ),
+              ),
+              Positioned(
+                top: 260,
+                left: -80,
+                child: Container(
+                  width: 200,
+                  height: 200,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: tc.secondary.withValues(alpha: 0.06),
+                  ),
+                ),
+              ),
+              SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(),
+                padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
                 _buildHeader(context),
-                const SizedBox(height: 24),
+                const SizedBox(height: 18),
 
-                // ── Overview Card: Ring + Stats
+                _buildHeroSpotlight(
+                  context,
+                  consistency: consistency,
+                  completions: completions,
+                  totalHabits: totalHabits,
+                  weeklyCompletions: weeklyCompletions,
+                ),
+                const SizedBox(height: 18),
+
+                _buildKpiGrid(
+                  context,
+                  avgConsistency: avgConsistency,
+                  currentStreak: currentStreak,
+                  bestStreak: bestStreak,
+                  thisWeekDaily: thisWeekDaily,
+                ),
+                const SizedBox(height: 22),
+
                 _buildOverviewCard(
                   context,
                   consistency: consistency,
@@ -125,14 +173,23 @@ class _AnalyticsView extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // ── Streak Card
                 StreakCard(
                   currentStreak: currentStreak,
                   bestStreak: bestStreak,
                 ),
                 const SizedBox(height: 24),
 
-                // ── Category Breakdown
+                _sectionTitle(context, 'Week-over-Week Momentum'),
+                const SizedBox(height: 12),
+                _buildWeekComparisonCard(
+                  context,
+                  thisWeekDaily: thisWeekDaily,
+                  lastWeekDaily: lastWeekDaily,
+                  delta: wowDelta,
+                  trend: wowTrend,
+                ),
+                const SizedBox(height: 24),
+
                 if (controller.categoryBreakdown.isNotEmpty) ...[
                   _sectionTitle(context, 'By Category'),
                   const SizedBox(height: 12),
@@ -140,7 +197,13 @@ class _AnalyticsView extends StatelessWidget {
                   const SizedBox(height: 24),
                 ],
 
-                // ── Weekly Trend
+                if (controller.categorySuccess.isNotEmpty) ...[
+                  _sectionTitle(context, 'Category Success League'),
+                  const SizedBox(height: 12),
+                  _buildCategorySuccessCard(context, controller.categorySuccess),
+                  const SizedBox(height: 24),
+                ],
+
                 _sectionTitle(context, 'Weekly Trend'),
                 const SizedBox(height: 12),
                 if (controller.weeklyData.isNotEmpty)
@@ -156,7 +219,25 @@ class _AnalyticsView extends StatelessWidget {
                   _buildEmptyCard(context, 'Complete a habit to see trends here'),
                 const SizedBox(height: 24),
 
-                // ── Monthly Heatmap
+                _sectionTitle(context, 'Performance Pulse'),
+                const SizedBox(height: 10),
+                _buildTrendWindowSelector(context, controller, trendDays),
+                const SizedBox(height: 10),
+                if (controller.isTrendLoading)
+                  const ShimmerBox(width: double.infinity, height: 220, borderRadius: 20)
+                else if (trendData.isNotEmpty)
+                  _buildPerformanceTrendCard(context, trendData)
+                else
+                  _buildEmptyCard(context, 'No trend data available for this range yet'),
+                const SizedBox(height: 24),
+
+                if (controller.longTermTrends.isNotEmpty) ...[
+                  _sectionTitle(context, '6-Month Performance'),
+                  const SizedBox(height: 12),
+                  _buildLongTermTrendCard(context, controller.longTermTrends),
+                  const SizedBox(height: 24),
+                ],
+
                 Row(
                   children: [
                     Expanded(
@@ -187,9 +268,18 @@ class _AnalyticsView extends StatelessWidget {
                     monthDate: controller.currentMonth,
                   ),
                 ),
+                if (controller.errorMessage != null) ...[
+                  const SizedBox(height: 18),
+                  Text(
+                    controller.errorMessage!,
+                    style: TextStyle(color: tc.warning, fontSize: 12),
+                  ),
+                ],
                 const SizedBox(height: 32),
-              ],
-            ),
+                  ],
+                ),
+              ),
+            ],
           ),
         ),
       ),
@@ -208,14 +298,181 @@ class _AnalyticsView extends StatelessWidget {
       children: [
         Text(
           'Analytics',
-          style: AppTextStyles.h1.copyWith(color: tc.textPrimary, fontSize: 26),
+          style: AppTextStyles.h1.copyWith(color: tc.textPrimary, fontSize: 28),
         ),
         const SizedBox(height: 4),
         Text(
-          'Your progress at a glance',
+          'Beautiful insights for your habit engine',
           style: AppTextStyles.bodyMd.copyWith(color: tc.textSecondary),
         ),
       ],
+    );
+  }
+
+  Widget _buildHeroSpotlight(
+    BuildContext context, {
+    required double consistency,
+    required int completions,
+    required int totalHabits,
+    required int weeklyCompletions,
+  }) {
+    final tc = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            tc.primary,
+            tc.secondary.withValues(alpha: 0.92),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(
+            color: tc.primary.withValues(alpha: 0.28),
+            blurRadius: 22,
+            offset: const Offset(0, 12),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Daily Score',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.9),
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                '${consistency.toInt()}%',
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 44,
+                  fontWeight: FontWeight.w900,
+                  height: 1,
+                ),
+              ),
+              const SizedBox(width: 10),
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text(
+                  _statusLabel(consistency),
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.9),
+                    fontSize: 13,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 18),
+          Wrap(
+            spacing: 10,
+            runSpacing: 10,
+            children: [
+              _heroChip('$completions/$totalHabits done today'),
+              _heroChip('$weeklyCompletions completions this week'),
+              _heroChip('Keep consistency above 70%'),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _heroChip(String label) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: Colors.white.withValues(alpha: 0.17),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: const TextStyle(
+          color: Colors.white,
+          fontSize: 11,
+          fontWeight: FontWeight.w600,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildKpiGrid(
+    BuildContext context, {
+    required double avgConsistency,
+    required int currentStreak,
+    required int bestStreak,
+    required double thisWeekDaily,
+  }) {
+    final cards = [
+      _KpiData('30-day Avg', '${avgConsistency.toStringAsFixed(1)}%', Icons.analytics_rounded, AppColors.info),
+      _KpiData('Current Streak', '$currentStreak days', Icons.local_fire_department_rounded, AppColors.warning),
+      _KpiData('Best Streak', '$bestStreak days', Icons.emoji_events_rounded, AppColors.success),
+      _KpiData('Daily Avg', thisWeekDaily.toStringAsFixed(1), Icons.timeline_rounded, AppColors.secondary),
+    ];
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      itemCount: cards.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        mainAxisSpacing: 10,
+        crossAxisSpacing: 10,
+        childAspectRatio: 1.52,
+      ),
+      itemBuilder: (context, index) => _buildKpiCard(context, cards[index]),
+    );
+  }
+
+  Widget _buildKpiCard(BuildContext context, _KpiData data) {
+    final tc = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tc.border.withValues(alpha: 0.2)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 28,
+            height: 28,
+            decoration: BoxDecoration(
+              color: data.color.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(data.icon, size: 16, color: data.color),
+          ),
+          const Spacer(),
+          Text(
+            data.value,
+            style: TextStyle(
+              color: tc.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: 16,
+            ),
+          ),
+          const SizedBox(height: 2),
+          Text(
+            data.label,
+            style: TextStyle(color: tc.textMuted, fontSize: 11),
+          ),
+        ],
+      ),
     );
   }
 
@@ -357,6 +614,100 @@ class _AnalyticsView extends StatelessWidget {
     return 'Getting Started';
   }
 
+  Widget _buildWeekComparisonCard(
+    BuildContext context, {
+    required double thisWeekDaily,
+    required double lastWeekDaily,
+    required double delta,
+    required String trend,
+  }) {
+    final tc = context.colors;
+    final bool isUp = delta >= 0;
+    final badgeColor = isUp ? AppColors.success : AppColors.error;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tc.border.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(
+                isUp ? Icons.trending_up_rounded : Icons.trending_down_rounded,
+                color: badgeColor,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                '${isUp ? '+' : ''}${delta.toStringAsFixed(1)}% vs last week',
+                style: TextStyle(
+                  color: badgeColor,
+                  fontWeight: FontWeight.w800,
+                  fontSize: 14,
+                ),
+              ),
+              const Spacer(),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: badgeColor.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                child: Text(
+                  trend.isEmpty ? 'stable' : trend,
+                  style: TextStyle(
+                    color: badgeColor,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(child: _comparisonMetric(context, 'This week', thisWeekDaily)),
+              const SizedBox(width: 10),
+              Expanded(child: _comparisonMetric(context, 'Last week', lastWeekDaily)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _comparisonMetric(BuildContext context, String label, double value) {
+    final tc = context.colors;
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: tc.surfaceVariant,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(label, style: TextStyle(color: tc.textMuted, fontSize: 11)),
+          const SizedBox(height: 4),
+          Text(
+            value.toStringAsFixed(1),
+            style: TextStyle(
+              color: tc.textPrimary,
+              fontWeight: FontWeight.w800,
+              fontSize: 18,
+            ),
+          ),
+          Text('daily completions', style: TextStyle(color: tc.textSecondary, fontSize: 11)),
+        ],
+      ),
+    );
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  CATEGORY BREAKDOWN
   // ═══════════════════════════════════════════════════════════════════════════
@@ -468,6 +819,340 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
+  Widget _buildCategorySuccessCard(BuildContext context, List<Map<String, dynamic>> categories) {
+    final tc = context.colors;
+    final top = categories.take(4).toList();
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tc.border.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        children: List.generate(top.length, (index) {
+          final item = top[index];
+          final ratio = _toDouble(item['successRatio']);
+          final category = (item['category'] ?? 'General').toString();
+          final habits = _toInt(item['habitCount']);
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: index == top.length - 1 ? 0 : 12),
+            child: Row(
+              children: [
+                Container(
+                  width: 22,
+                  height: 22,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: AppColors.primary.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    '${index + 1}',
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.primary,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(category, style: TextStyle(color: tc.textPrimary, fontWeight: FontWeight.w700)),
+                      Text('$habits habits', style: TextStyle(color: tc.textMuted, fontSize: 11)),
+                    ],
+                  ),
+                ),
+                Text(
+                  '${ratio.toStringAsFixed(1)}%',
+                  style: TextStyle(
+                    color: tc.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 14,
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+
+  Widget _buildTrendWindowSelector(
+    BuildContext context,
+    AnalyticsController controller,
+    int selectedDays,
+  ) {
+    final options = [7, 30, 90];
+    return Row(
+      children: options
+          .map(
+            (days) => Padding(
+              padding: const EdgeInsets.only(right: 8),
+              child: _buildRangeChip(context, controller, selectedDays, days),
+            ),
+          )
+          .toList(),
+    );
+  }
+
+  Widget _buildRangeChip(
+    BuildContext context,
+    AnalyticsController controller,
+    int selectedDays,
+    int days,
+  ) {
+    final tc = context.colors;
+    final selected = selectedDays == days;
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(999),
+      onTap: () => controller.setTrendWindow(days),
+      child: AnimatedContainer(
+        duration: AppDurations.fast,
+        curve: AppCurves.smooth,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+        decoration: BoxDecoration(
+          color: selected ? tc.primary : tc.card,
+          borderRadius: BorderRadius.circular(999),
+          border: Border.all(
+            color: selected ? tc.primary : tc.border.withValues(alpha: 0.22),
+          ),
+        ),
+        child: Text(
+          '$days days',
+          style: TextStyle(
+            color: selected ? Colors.white : tc.textSecondary,
+            fontWeight: FontWeight.w700,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPerformanceTrendCard(BuildContext context, List<Map<String, dynamic>> trendData) {
+    final tc = context.colors;
+    final spots = <FlSpot>[];
+    for (int i = 0; i < trendData.length; i++) {
+      spots.add(FlSpot(i.toDouble(), _toDouble(trendData[i]['rate'])));
+    }
+
+    final maxRate = trendData
+        .map((e) => _toDouble(e['rate']))
+        .fold<double>(0, (prev, value) => value > prev ? value : prev);
+    final yCap = ((maxRate / 10).ceil() * 10).clamp(30, 100).toDouble();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 16, 14, 12),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tc.border.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Completion intensity',
+            style: TextStyle(color: tc.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 185,
+            child: LineChart(
+              LineChartData(
+                minX: 0,
+                maxX: (trendData.length - 1).toDouble(),
+                minY: 0,
+                maxY: yCap,
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 20,
+                  getDrawingHorizontalLine: (_) => FlLine(color: tc.surfaceVariant),
+                ),
+                borderData: FlBorderData(show: false),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 20,
+                      reservedSize: 34,
+                      getTitlesWidget: (value, _) => Text(
+                        '${value.toInt()}%',
+                        style: TextStyle(color: tc.textMuted, fontSize: 10),
+                      ),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: _xIntervalForTrend(trendData.length),
+                      getTitlesWidget: (value, _) {
+                        final idx = value.toInt();
+                        if (idx < 0 || idx >= trendData.length) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            _trendDateLabel(trendData[idx]['date']),
+                            style: TextStyle(color: tc.textMuted, fontSize: 10),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                lineTouchData: LineTouchData(
+                  handleBuiltInTouches: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    tooltipRoundedRadius: 10,
+                    getTooltipItems: (spots) => spots
+                        .map(
+                          (spot) => LineTooltipItem(
+                            '${spot.y.toStringAsFixed(1)}%',
+                            const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: spots,
+                    isCurved: true,
+                    curveSmoothness: 0.28,
+                    barWidth: 4,
+                    color: tc.primary,
+                    dotData: FlDotData(
+                      show: trendData.length <= 14,
+                      getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                        radius: 3.2,
+                        color: tc.primary,
+                        strokeColor: tc.card,
+                        strokeWidth: 1,
+                      ),
+                    ),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                        colors: [
+                          tc.primary.withValues(alpha: 0.22),
+                          tc.secondary.withValues(alpha: 0.05),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLongTermTrendCard(BuildContext context, List<Map<String, dynamic>> trends) {
+    final tc = context.colors;
+    final maxRate = trends
+        .map((e) => _toDouble(e['completionRate']))
+        .fold<double>(0, (prev, value) => value > prev ? value : prev);
+    final yCap = ((maxRate / 10).ceil() * 10).clamp(40, 100).toDouble();
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(12, 16, 12, 10),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: tc.border.withValues(alpha: 0.15)),
+      ),
+      child: Column(
+        children: [
+          SizedBox(
+            height: 210,
+            child: BarChart(
+              BarChartData(
+                alignment: BarChartAlignment.spaceAround,
+                gridData: FlGridData(
+                  show: true,
+                  horizontalInterval: 20,
+                  getDrawingHorizontalLine: (_) => FlLine(color: tc.surfaceVariant),
+                  drawVerticalLine: false,
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 20,
+                      reservedSize: 34,
+                      getTitlesWidget: (value, _) => Text(
+                        '${value.toInt()}%',
+                        style: TextStyle(fontSize: 10, color: tc.textMuted),
+                      ),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, _) {
+                        final i = value.toInt();
+                        if (i < 0 || i >= trends.length) return const SizedBox.shrink();
+                        final label = (trends[i]['month'] ?? '').toString();
+                        final short = label.isNotEmpty ? label.split(' ').first : '';
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(short, style: TextStyle(fontSize: 10, color: tc.textSecondary)),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                borderData: FlBorderData(show: false),
+                minY: 0,
+                maxY: yCap,
+                barGroups: List.generate(trends.length, (index) {
+                  final rate = _toDouble(trends[index]['completionRate']);
+                  return BarChartGroupData(
+                    x: index,
+                    barRods: [
+                      BarChartRodData(
+                        toY: rate,
+                        width: 18,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                        gradient: LinearGradient(
+                          colors: [tc.primary, tc.secondary],
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Completion rate over the last 6 months',
+            style: TextStyle(color: tc.textMuted, fontSize: 11),
+          ),
+        ],
+      ),
+    );
+  }
+
   // ═══════════════════════════════════════════════════════════════════════════
   //  HELPERS
   // ═══════════════════════════════════════════════════════════════════════════
@@ -512,4 +1197,35 @@ class _AnalyticsView extends StatelessWidget {
 
   /// Safely casts a dynamic value to [double], defaulting to `0.0`.
   static double _toDouble(dynamic v) => v is double ? v : (v is num ? v.toDouble() : 0.0);
+
+  /// Safely casts a dynamic value to [Map<String, dynamic>].
+  static Map<String, dynamic> _toMap(dynamic v) {
+    if (v is Map<String, dynamic>) return v;
+    if (v is Map) return Map<String, dynamic>.from(v);
+    return {};
+  }
+
+  static double _xIntervalForTrend(int length) {
+    if (length <= 8) return 1;
+    if (length <= 20) return 3;
+    if (length <= 45) return 7;
+    return 15;
+  }
+
+  static String _trendDateLabel(dynamic raw) {
+    final text = raw?.toString() ?? '';
+    if (text.length >= 10) {
+      return text.substring(5).replaceAll('-', '/');
+    }
+    return text;
+  }
+}
+
+class _KpiData {
+  final String label;
+  final String value;
+  final IconData icon;
+  final Color color;
+
+  const _KpiData(this.label, this.value, this.icon, this.color);
 }

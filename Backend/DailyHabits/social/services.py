@@ -30,6 +30,7 @@ from django.db.models import Count, Avg, Q, Sum
 from .models import (
     ShareCard, SharingPrivacy, ReferralLink, Referral,
     GroupHabit, GroupMember, Friendship,
+    FeedPost,
     SharedHabit, HabitReaction, HabitComment,
     GroupChallenge, Encouragement,
 )
@@ -1074,7 +1075,7 @@ class SocialService:
                 group=group, user=user, is_active=True,
             )
         except GroupMember.DoesNotExist:
-            membership = None
+            raise PermissionError('You are not a member of this group.')
 
         members = GroupMember.objects.filter(
             group=group, is_active=True,
@@ -1085,6 +1086,14 @@ class SocialService:
 
         # Active challenges
         challenges = SocialService.get_group_challenges(group_id)
+
+        # Shared achievements in this group (newest first)
+        shared_achievements = list(
+            FeedPost.objects.filter(
+                group=group,
+                post_type='achievement',
+            ).select_related('author').order_by('-created_at')[:20]
+        )
 
         # Aggregate stats
         total_completions = 0
@@ -1115,6 +1124,15 @@ class SocialService:
             'totalStreaks': total_streaks,
             'leaderboard': leaderboard,
             'challenges': challenges,
+            'sharedAchievements': [{
+                'id': p.id,
+                'authorName': p.author.name,
+                'content': p.content,
+                'emoji': p.emoji,
+                'createdAt': p.created_at.isoformat(),
+                'likeCount': p.like_count,
+                'commentCount': p.comment_count,
+            } for p in shared_achievements],
             'members': [{
                 'id': m.user.id,
                 'name': m.user.name,

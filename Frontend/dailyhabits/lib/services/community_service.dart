@@ -238,12 +238,17 @@ class CommunityService {
   Future<Map<String, dynamic>> createGroup({
     required String name,
     String description = '',
+    List<String> members = const [],
   }) async {
     final h = await _headers();
     final r = await http.post(
       Uri.parse('$_base/social/groups/'),
       headers: h,
-      body: jsonEncode({'name': name, 'description': description}),
+      body: jsonEncode({
+        'name': name,
+        'description': description,
+        'members': members,
+      }),
     );
     if (r.statusCode == 201) return _decode(r);
     throw Exception('Create group failed: ${r.statusCode}');
@@ -281,6 +286,39 @@ class CommunityService {
     );
     if (r.statusCode == 200) return _decode(r);
     throw Exception('Members failed: ${r.statusCode}');
+  }
+
+  /// Adds a member to a group by [email] or [userId] (admin only).
+  Future<Map<String, dynamic>> addMemberToGroup(
+    int groupId, {
+    String? email,
+    int? userId,
+  }) async {
+    final h = await _headers();
+    final payload = <String, dynamic>{
+      if (email != null && email.trim().isNotEmpty) 'email': email.trim(),
+      if (userId != null) 'userId': userId,
+    };
+    final r = await http.post(
+      Uri.parse('$_base/social/groups/$groupId/members/add/'),
+      headers: h,
+      body: jsonEncode(payload),
+    );
+    final data = _decode(r);
+    if (r.statusCode == 200 || r.statusCode == 201) return data;
+    throw Exception(data['message'] ?? 'Add member failed');
+  }
+
+  /// Deletes a group (soft delete, admin only).
+  Future<Map<String, dynamic>> deleteGroup(int groupId) async {
+    final h = await _headers();
+    final r = await http.delete(
+      Uri.parse('$_base/social/groups/$groupId/delete/'),
+      headers: h,
+    );
+    final data = _decode(r);
+    if (r.statusCode == 200) return data;
+    throw Exception(data['message'] ?? 'Delete group failed');
   }
 
   /// Fetches the leaderboard rankings for the group identified by [groupId].

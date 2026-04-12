@@ -77,6 +77,8 @@ def api_root(request):
             'notifications': '/api/notifications/',
             'social': '/api/social/',
             'intelligence': '/api/notification-intelligence/',
+            'predict_habits': '/api/predict-habits/',
+            'upload_kmeans_model': '/api/predict-habits/model/upload/',
         },
         'documentation': '/api/docs/',
     })
@@ -100,6 +102,9 @@ urlpatterns = [
 
     # --- Admin Panel API ---
     path('api/admin/', include('admin_panel.urls')),
+
+    # --- Machine Learning Recommendation Engine ---
+    path('api/', include('recommendation_engine.urls')),
     
     # --- Centralised REST Router ---
     # Habits, Analytics, Achievements, Insights, Notifications, Social, Settings

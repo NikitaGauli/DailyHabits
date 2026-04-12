@@ -37,6 +37,18 @@ class InsightController extends ChangeNotifier {
   /// List of recommended actions for the user.
   List<Recommendation> recommendations = [];
 
+  /// Best time-of-day payload for pie chart and performance callout.
+  Map<String, dynamic> bestTime = {};
+
+  /// Top consistent habits for bar-chart comparison.
+  List<Map<String, dynamic>> topHabits = [];
+
+  /// Declining habits comparison payloads for trend visualizations.
+  List<Map<String, dynamic>> decliningHabits = [];
+
+  /// Time series points for line-chart trend section.
+  List<Map<String, dynamic>> trendSeries = [];
+
   InsightController() {
     loadData();
   }
@@ -57,6 +69,17 @@ class InsightController extends ChangeNotifier {
       if (data.containsKey('recommendations')) {
         recommendations = data['recommendations'];
       }
+      if (data.containsKey('bestTime')) {
+        bestTime = Map<String, dynamic>.from(data['bestTime'] as Map);
+      }
+      if (data.containsKey('topHabits')) {
+        topHabits = List<Map<String, dynamic>>.from(data['topHabits'] as List);
+      }
+      if (data.containsKey('decliningHabits')) {
+        decliningHabits = List<Map<String, dynamic>>.from(data['decliningHabits'] as List);
+      }
+
+      trendSeries = await _service.getInsightTrend(days: 14);
     } catch (e) {
       debugPrint('Error loading insights: $e');
     } finally {

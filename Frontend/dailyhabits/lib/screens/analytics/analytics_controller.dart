@@ -51,6 +51,27 @@ class AnalyticsController extends ChangeNotifier {
   /// General habit statistics from the habit service.
   List<Map<String, dynamic>> habitStats = [];
 
+  /// Week-over-week comparison metrics.
+  Map<String, dynamic> weeklyComparison = {};
+
+  /// Month-by-month trend values for long horizon charts.
+  List<Map<String, dynamic>> longTermTrends = [];
+
+  /// Category success ratios used for leaderboard-style display.
+  List<Map<String, dynamic>> categorySuccess = [];
+
+  /// Selected day-window for the dynamic performance trend.
+  int selectedTrendDays = 30;
+
+  /// Time-series payload for the selected trend window.
+  List<Map<String, dynamic>> completionTrend = [];
+
+  /// Loading state for trend-window switches.
+  bool isTrendLoading = false;
+
+  /// Optional readable error shown by the analytics view.
+  String? errorMessage;
+
   /// The month currently displayed in the heatmap calendar.
   DateTime currentMonth = DateTime.now();
 
@@ -65,12 +86,19 @@ class AnalyticsController extends ChangeNotifier {
   /// requests in parallel. Notifies listeners before and after loading.
   Future<void> _loadAll() async {
     isLoading = true;
+    errorMessage = null;
     notifyListeners();
-    await Future.wait([
-      loadDashboard(),
-      loadHeatmap(),
-      loadHabitStats(),
-    ]);
+    try {
+      await Future.wait([
+        loadDashboard(),
+        loadHeatmap(),
+        loadHabitStats(),
+        loadEnhancedInsights(),
+        loadCompletionTrend(days: selectedTrendDays, showLoading: false),
+      ]);
+    } catch (_) {
+      errorMessage = 'Unable to load analytics right now.';
+    }
     isLoading = false;
     notifyListeners();
   }
@@ -98,6 +126,7 @@ class AnalyticsController extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading analytics: $e');
+      errorMessage ??= 'Failed to load dashboard data.';
     }
   }
 
@@ -111,6 +140,7 @@ class AnalyticsController extends ChangeNotifier {
       notifyListeners();
     } catch (e) {
       debugPrint('Error loading heatmap: $e');
+      errorMessage ??= 'Failed to load monthly heatmap.';
     }
   }
 
@@ -127,7 +157,53 @@ class AnalyticsController extends ChangeNotifier {
       }
     } catch (e) {
       debugPrint('Error loading habit stats: $e');
+      errorMessage ??= 'Failed to load habit stats.';
     }
+  }
+
+  /// Fetches additional insights for richer charting and comparisons.
+  Future<void> loadEnhancedInsights() async {
+    try {
+      final results = await Future.wait([
+        _analyticsService.getWeeklyComparison(),
+        _analyticsService.getLongTermTrends(months: 6),
+        _analyticsService.getCategorySuccess(),
+      ]);
+
+      weeklyComparison = results[0] as Map<String, dynamic>;
+      longTermTrends = results[1] as List<Map<String, dynamic>>;
+      categorySuccess = results[2] as List<Map<String, dynamic>>;
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading enhanced insights: $e');
+      errorMessage ??= 'Some insights are temporarily unavailable.';
+    }
+  }
+
+  /// Loads a completion trend for the selected [days] window.
+  Future<void> loadCompletionTrend({required int days, bool showLoading = true}) async {
+    if (showLoading) {
+      isTrendLoading = true;
+      notifyListeners();
+    }
+
+    selectedTrendDays = days;
+    try {
+      completionTrend = await _analyticsService.getCompletionTrend(days: days);
+      notifyListeners();
+    } catch (e) {
+      debugPrint('Error loading completion trend: $e');
+      errorMessage ??= 'Failed to load performance trend.';
+    } finally {
+      isTrendLoading = false;
+      notifyListeners();
+    }
+  }
+
+  /// Updates trend range and refreshes the trend series.
+  Future<void> setTrendWindow(int days) async {
+    if (selectedTrendDays == days && completionTrend.isNotEmpty) return;
+    await loadCompletionTrend(days: days);
   }
 
   /// Advances or rewinds [currentMonth] by [offset] months and reloads

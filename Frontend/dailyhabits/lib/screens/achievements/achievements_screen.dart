@@ -95,6 +95,7 @@ class _AchievementsView extends StatelessWidget {
                   delegate: SliverChildBuilderDelegate((context, index) {
                     return _buildAchievementItem(
                       context,
+                      controller,
                       controller.achievements[index],
                     );
                   }, childCount: controller.achievements.length),
@@ -225,7 +226,11 @@ class _AchievementsView extends StatelessWidget {
   ///
   /// Unlocked badges show a coloured circular icon with a glow shadow;
   /// locked badges appear dimmed with a transparent background.
-  Widget _buildAchievementItem(BuildContext context, Achievement achievement) {
+  Widget _buildAchievementItem(
+    BuildContext context,
+    AchievementsController controller,
+    Achievement achievement,
+  ) {
     final tc = context.colors;
     final isUnlocked = achievement.isEarned;
     final iconColor = isUnlocked
@@ -279,8 +284,113 @@ class _AchievementsView extends StatelessWidget {
               ),
             ),
           ),
+          const SizedBox(height: 4),
+          Text(
+            '+${achievement.points} XP',
+            style: TextStyle(color: tc.textMuted, fontSize: 10),
+          ),
+          if (isUnlocked) ...[
+            const SizedBox(height: 6),
+            InkWell(
+              onTap: () => _showShareAchievementSheet(context, controller, achievement),
+              borderRadius: BorderRadius.circular(10),
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: tc.primary.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.share_rounded, size: 12, color: tc.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Share',
+                      style: TextStyle(
+                        color: tc.primary,
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
         ],
       ),
+    );
+  }
+
+  void _showShareAchievementSheet(
+    BuildContext context,
+    AchievementsController controller,
+    Achievement achievement,
+  ) async {
+    final tc = context.colors;
+    await controller.loadGroupsForSharing();
+    if (!context.mounted) return;
+
+    final groups = controller.myGroups;
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: tc.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        if (groups.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text('No groups available',
+                    style: TextStyle(color: tc.textPrimary, fontWeight: FontWeight.w700)),
+                const SizedBox(height: 8),
+                Text('Join or create a group to share achievements.',
+                    style: TextStyle(color: tc.textMuted)),
+                const SizedBox(height: 14),
+              ],
+            ),
+          );
+        }
+
+        return ListView(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 20),
+          children: [
+            Text('Share "${achievement.name}"',
+                style: TextStyle(color: tc.textPrimary, fontSize: 16, fontWeight: FontWeight.w700)),
+            const SizedBox(height: 10),
+            ...groups.map((g) {
+              final gid = g['id'] is int ? g['id'] as int : int.tryParse('${g['id']}');
+              return Card(
+                color: tc.surface,
+                child: ListTile(
+                  leading: Icon(Icons.group_rounded, color: tc.primary),
+                  title: Text('${g['name'] ?? 'Group'}', style: TextStyle(color: tc.textPrimary)),
+                  subtitle: Text('${g['memberCount'] ?? 0} members', style: TextStyle(color: tc.textMuted)),
+                  trailing: Icon(Icons.chevron_right_rounded, color: tc.textMuted),
+                  onTap: gid == null
+                      ? null
+                      : () async {
+                          Navigator.pop(ctx);
+                          final ok = await controller.shareAchievementToGroup(achievement, gid);
+                          if (!context.mounted) return;
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text(controller.actionMessage ?? (ok ? 'Shared' : 'Failed to share')),
+                            ),
+                          );
+                        },
+                ),
+              );
+            }),
+          ],
+        );
+      },
     );
   }
 }

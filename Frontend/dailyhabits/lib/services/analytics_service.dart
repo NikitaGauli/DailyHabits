@@ -170,4 +170,104 @@ class AnalyticsService {
       return [];
     }
   }
+
+  // ---------------------------------------------------------------------------
+  // Weekly Comparison
+  // ---------------------------------------------------------------------------
+
+  /// Compares this week against last week and returns trend metadata.
+  Future<Map<String, dynamic>> getWeeklyComparison() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await _client.get(
+        Uri.parse('$_baseUrl/weekly-comparison/'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return Map<String, dynamic>.from(data);
+        }
+      }
+      return {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Long-Term Trends
+  // ---------------------------------------------------------------------------
+
+  /// Retrieves month-by-month trend data for up to [months] months.
+  Future<List<Map<String, dynamic>>> getLongTermTrends({int months = 6}) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await _client.get(
+        Uri.parse('$_baseUrl/long-term-trends/?months=$months'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['trends'] ?? []);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Category Success Ratios
+  // ---------------------------------------------------------------------------
+
+  /// Returns category-level success ratios and completion totals.
+  Future<List<Map<String, dynamic>>> getCategorySuccess() async {
+    try {
+      final headers = await _getHeaders();
+      final response = await _client.get(
+        Uri.parse('$_baseUrl/category-success/'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['categories'] ?? []);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Completion Trend
+  // ---------------------------------------------------------------------------
+
+  /// Returns day-by-day completion trend for a selected [days] window.
+  Future<List<Map<String, dynamic>>> getCompletionTrend({int days = 30}) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await _client.get(
+        Uri.parse('$_baseUrl/trend/?days=$days'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['trend'] ?? []);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
+    }
+  }
 }

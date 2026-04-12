@@ -16,6 +16,7 @@ import 'package:dailyhabits/theme/app_animations.dart';
 import 'package:dailyhabits/widgets/common/shimmer_loading.dart';
 import 'package:dailyhabits/widgets/common/glass_container.dart';
 import 'package:dailyhabits/screens/grow_together/grow_together_screen.dart';
+import 'package:dailyhabits/screens/community/group_detail_screen.dart';
 import 'community_controller.dart';
 import 'widgets/feed_post_card.dart';
 import 'widgets/friend_tiles.dart';
@@ -724,8 +725,34 @@ class _GroupsTab extends StatelessWidget {
             )
           else
             ...ctrl.myGroups.map(
-              (g) =>
-                  GroupCard(group: g, onLeave: () => ctrl.leaveGroup(g['id'])),
+              (g) => GroupCard(
+                group: g,
+                onTap: () async {
+                  final dynamic gid = g['id'];
+                  final int? groupId = gid is int ? gid : int.tryParse('$gid');
+                  if (groupId == null || groupId <= 0) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(content: Text('Unable to open this group right now.')),
+                    );
+                    return;
+                  }
+
+                  await Navigator.of(context).push(
+                    MaterialPageRoute(
+                      builder: (_) => ChangeNotifierProvider.value(
+                        value: ctrl,
+                        child: GroupDetailScreen(
+                          groupId: groupId,
+                          groupName: g['name'] ?? 'Group',
+                        ),
+                      ),
+                    ),
+                  );
+                  ctrl.loadGroups();
+                },
+                onLeave: () => ctrl.leaveGroup(g['id']),
+                onDelete: () => _confirmDeleteGroup(context, g),
+              ),
             ),
         ],
       ),
@@ -800,42 +827,129 @@ class _GroupsTab extends StatelessWidget {
     final tc = context.colors;
     final nameCtrl = TextEditingController();
     final descCtrl = TextEditingController();
+    final memberCtrl = TextEditingController();
+    final members = <String>[];
+
+    bool isValidEmail(String value) {
+      final v = value.trim();
+      if (v.isEmpty || !v.contains('@')) return false;
+      final parts = v.split('@');
+      return parts.length == 2 && parts[0].isNotEmpty && parts[1].contains('.');
+    }
+
     showDialog(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: tc.bg,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-        title: Text('New Group', style: TextStyle(color: tc.textPrimary)),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            _dialogField(tc, nameCtrl, 'Group name'),
-            const SizedBox(height: 12),
-            _dialogField(tc, descCtrl, 'Description (optional)'),
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setDialogState) => AlertDialog(
+          backgroundColor: tc.bg,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+          title: Text('New Group', style: TextStyle(color: tc.textPrimary)),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _dialogField(tc, nameCtrl, 'Group name'),
+                const SizedBox(height: 12),
+                _dialogField(tc, descCtrl, 'Description (optional)'),
+                const SizedBox(height: 14),
+                Text(
+                  'Add Members (Optional)',
+                  style: AppTextStyles.caption.copyWith(
+                    color: tc.textSecondary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    Expanded(
+                      child: _dialogField(tc, memberCtrl, 'Enter member email'),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      height: 46,
+                      child: ElevatedButton(
+                        onPressed: () {
+                          final email = memberCtrl.text.trim().toLowerCase();
+                          if (!isValidEmail(email)) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Enter a valid email address')),
+                            );
+                            return;
+                          }
+                          if (members.contains(email)) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Member already added')),
+                            );
+                            return;
+                          }
+                          setDialogState(() {
+                            members.add(email);
+                            memberCtrl.clear();
+                          });
+                        },
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: tc.primary,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                        ),
+                        child: const Text('Add'),
+                      ),
+                    ),
+                  ],
+                ),
+                if (members.isNotEmpty) ...[
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: members
+                        .map(
+                          (email) => Chip(
+                            label: Text(email),
+                            onDeleted: () {
+                              setDialogState(() {
+                                members.remove(email);
+                              });
+                            },
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ],
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx),
+              child: Text('Cancel', style: TextStyle(color: tc.textMuted)),
+            ),
+            ElevatedButton(
+              onPressed: () {
+                if (nameCtrl.text.trim().isNotEmpty) {
+                  Navigator.pop(ctx);
+                  ctrl.createGroup(
+                    nameCtrl.text.trim(),
+                    descCtrl.text.trim(),
+                    initialMembers: members,
+                  );
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: tc.primary,
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+              child: Text(members.isEmpty ? 'Create' : 'Create + Invite'),
+            ),
           ],
         ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: Text('Cancel', style: TextStyle(color: tc.textMuted)),
-          ),
-          ElevatedButton(
-            onPressed: () {
-              if (nameCtrl.text.trim().isNotEmpty) {
-                Navigator.pop(ctx);
-                ctrl.createGroup(nameCtrl.text.trim(), descCtrl.text.trim());
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: tc.primary,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(12),
-              ),
-            ),
-            child: const Text('Create'),
-          ),
-        ],
       ),
     );
   }
@@ -891,6 +1005,48 @@ class _GroupsTab extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           borderSide: BorderSide.none,
         ),
+      ),
+    );
+  }
+
+  /// Confirm group deletion for admin users.
+  void _confirmDeleteGroup(BuildContext context, Map<String, dynamic> group) {
+    final tc = context.colors;
+    final groupId = group['id'] is int ? group['id'] as int : int.tryParse('${group['id']}');
+    final groupName = group['name'] ?? 'this group';
+
+    if (groupId == null) return;
+
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: tc.bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Group', style: TextStyle(color: tc.textPrimary)),
+        content: Text(
+          'Delete "$groupName" for all members? This cannot be undone.',
+          style: TextStyle(color: tc.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: tc.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              ctrl.deleteGroup(groupId);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: tc.error,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Delete'),
+          ),
+        ],
       ),
     );
   }

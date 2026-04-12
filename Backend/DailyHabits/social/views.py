@@ -28,6 +28,7 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
 
 from django.db.models import Q
+from django.contrib.auth import get_user_model
 
 from .models import (
     Friendship, FeedPost, PostLike, PostComment,
@@ -48,6 +49,9 @@ from habits.models import Habit
 from notifications.services import NotificationCreator
 
 
+User = get_user_model()
+
+
 # ═══════════════════════════════════════════════════════════════════════════
 #  FEED
 # ═══════════════════════════════════════════════════════════════════════════
@@ -62,6 +66,23 @@ class FeedViewSet(viewsets.ViewSet):
 
     permission_classes = [IsAuthenticated]
 
+    @staticmethod
+    def _can_access_post(user, post):
+        """Return True if the user is allowed to view/interact with this post."""
+        if post.author_id == user.id:
+            return True
+
+        # Group-linked posts are visible only to active group members.
+        if post.group_id:
+            return GroupMember.objects.filter(
+                group_id=post.group_id,
+                user=user,
+                is_active=True,
+            ).exists()
+
+        friend_ids = SocialService.get_friend_ids(user)
+        return post.is_public or post.author_id in friend_ids
+
     def list(self, request):
         """GET /api/social/feed/ — Return a paginated activity feed."""
         user = request.user
@@ -75,12 +96,12 @@ class FeedViewSet(viewsets.ViewSet):
             user=user, is_active=True
         ).values_list('group_id', flat=True))
 
-        # Build a combined query: own posts + friends + groups + public
+        # Build a combined query: own posts + friends + groups + public non-group posts
         posts = FeedPost.objects.filter(
             Q(author_id__in=friend_ids) |
             Q(author=user) |
             Q(group_id__in=group_ids) |
-            Q(is_public=True)
+            Q(is_public=True, group__isnull=True)
         ).select_related(
             'author', 'habit', 'group'
         ).prefetch_related(
@@ -105,13 +126,32 @@ class FeedViewSet(viewsets.ViewSet):
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
+        group_id = request.data.get('groupId')
+        if group_id is not None:
+            group = GroupHabit.objects.filter(id=group_id, is_active=True).first()
+            if not group:
+                return Response(
+                    {'success': False, 'message': 'Group not found'},
+                    status=status.HTTP_404_NOT_FOUND,
+                )
+            is_member = GroupMember.objects.filter(
+                group=group,
+                user=request.user,
+                is_active=True,
+            ).exists()
+            if not is_member:
+                return Response(
+                    {'success': False, 'message': 'Only group members can share to this group'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+
         post = FeedPost.objects.create(
             author=request.user,
             post_type=request.data.get('postType', 'motivation'),
             content=content,
             emoji=request.data.get('emoji', ''),
             habit_id=request.data.get('habitId'),
-            group_id=request.data.get('groupId'),
+            group_id=group_id,
             is_public=request.data.get('isPublic', True),
         )
         serializer = FeedPostSerializer(post, context={'request': request})
@@ -134,6 +174,12 @@ class FeedViewSet(viewsets.ViewSet):
             return Response(
                 {'success': False, 'message': 'Post not found'},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not self._can_access_post(request.user, post):
+            return Response(
+                {'success': False, 'message': 'You do not have access to this post'},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         existing = PostLike.objects.filter(post=post, user=request.user)
@@ -168,6 +214,12 @@ class FeedViewSet(viewsets.ViewSet):
             return Response(
                 {'success': False, 'message': 'Post not found'},
                 status=status.HTTP_404_NOT_FOUND,
+            )
+
+        if not self._can_access_post(request.user, post):
+            return Response(
+                {'success': False, 'message': 'You do not have access to this post'},
+                status=status.HTTP_403_FORBIDDEN,
             )
 
         if request.method == 'GET':
@@ -411,13 +463,90 @@ class GroupHabitViewSet(viewsets.ViewSet):
         name = request.data.get('name', '').strip()
         if not name:
             return Response({'success': False, 'message': 'Group name is required'}, status=status.HTTP_400_BAD_REQUEST)
+
+        requested_members = request.data.get('members', [])
+        if requested_members is None:
+            requested_members = []
+        if not isinstance(requested_members, list):
+            return Response(
+                {'success': False, 'message': 'members must be a list of emails or user IDs'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         group = SocialService.create_group_habit(
             request.user, name=name,
             description=request.data.get('description', ''),
             habit_template=request.data.get('habitTemplate'),
         )
+
+        requested_user_ids: list[int] = []
+        requested_emails: list[str] = []
+        for item in requested_members:
+            if isinstance(item, int):
+                requested_user_ids.append(item)
+                continue
+
+            text = str(item).strip()
+            if not text:
+                continue
+            if text.isdigit():
+                requested_user_ids.append(int(text))
+            elif '@' in text:
+                requested_emails.append(text.lower())
+
+        resolved_users: list[Any] = []
+        if requested_user_ids:
+            resolved_users.extend(list(User.objects.filter(id__in=requested_user_ids)))
+        if requested_emails:
+            for email in requested_emails:
+                u = User.objects.filter(email__iexact=email).first()
+                if u:
+                    resolved_users.append(u)
+
+        unique_users: list[Any] = []
+        seen_ids: set[int] = set()
+        for u in resolved_users:
+            uid = int(getattr(u, 'id', 0))
+            if uid <= 0 or uid == request.user.id or uid in seen_ids:
+                continue
+            seen_ids.add(uid)
+            unique_users.append(u)
+
+        current_count = GroupMember.objects.filter(group=group, is_active=True).count()
+        available_slots = max(group.max_members - current_count, 0)
+        added_members: list[dict[str, Any]] = []
+        for target_user in unique_users[:available_slots]:
+            membership = GroupMember.objects.filter(group=group, user=target_user).first()
+            if membership and membership.is_active:
+                continue
+
+            if membership:
+                membership.is_active = True
+                if membership.role not in ('admin', 'member'):
+                    membership.role = 'member'
+                membership.save(update_fields=['is_active', 'role'])
+            else:
+                membership = GroupMember.objects.create(
+                    group=group,
+                    user=target_user,
+                    role='member',
+                )
+
+            added_members.append({
+                'id': int(getattr(target_user, 'id', 0)),
+                'name': str(getattr(target_user, 'name', 'User')),
+                'role': membership.role,
+                'joinedAt': membership.joined_at.isoformat(),
+            })
+
         serializer = GroupDetailSerializer(group, context={'request': request})
-        return Response({'success': True, 'group': serializer.data}, status=status.HTTP_201_CREATED)
+        return Response({
+            'success': True,
+            'group': serializer.data,
+            'membersAdded': added_members,
+            'membersAddedCount': len(added_members),
+            'requestedMembersCount': len(requested_members),
+        }, status=status.HTTP_201_CREATED)
 
     @action(detail=False, methods=['post'])
     def join(self, request):
@@ -452,9 +581,118 @@ class GroupHabitViewSet(viewsets.ViewSet):
     @action(detail=True, methods=['get'])
     def members(self, request, pk=None):
         """GET /api/social/groups/{id}/members/ — List active group members."""
-        members = GroupMember.objects.filter(group_id=pk, is_active=True).select_related('user')
+        group = GroupHabit.objects.filter(id=pk, is_active=True).first()
+        if not group:
+            return Response({'success': False, 'message': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        is_member = GroupMember.objects.filter(
+            group=group,
+            user=request.user,
+            is_active=True,
+        ).exists()
+        if not is_member:
+            return Response({'success': False, 'message': 'You are not a member of this group'}, status=status.HTTP_403_FORBIDDEN)
+
+        members = GroupMember.objects.filter(group=group, is_active=True).select_related('user')
         data = [{'id': m.user.id, 'name': m.user.name, 'role': m.role, 'currentStreak': m.user.current_streak, 'joinedAt': m.joined_at.isoformat()} for m in members]
-        return Response({'success': True, 'members': data})
+        return Response({
+            'success': True,
+            'groupId': group.id,
+            'groupName': group.name,
+            'totalMembers': len(data),
+            'members': data,
+        })
+
+    @action(detail=True, methods=['post'], url_path='members/add')
+    def add_member(self, request, pk=None):
+        """POST /api/social/groups/{id}/members/add/ — Add a member by email or userId (admin only)."""
+        group = GroupHabit.objects.filter(id=pk, is_active=True).first()
+        if not group:
+            return Response({'success': False, 'message': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        is_admin = GroupMember.objects.filter(
+            group=group,
+            user=request.user,
+            is_active=True,
+            role='admin',
+        ).exists()
+        if not is_admin:
+            return Response({'success': False, 'message': 'Only group admins can add members'}, status=status.HTTP_403_FORBIDDEN)
+
+        user_id = request.data.get('userId')
+        email = str(request.data.get('email', '')).strip().lower()
+        if not user_id and not email:
+            return Response({'success': False, 'message': 'Provide email or userId'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if user_id:
+            target_user = User.objects.filter(id=user_id).first()
+        else:
+            target_user = User.objects.filter(email__iexact=email).first()
+
+        if not target_user:
+            return Response({'success': False, 'message': 'User not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        active_count = GroupMember.objects.filter(group=group, is_active=True).count()
+        if active_count >= group.max_members:
+            return Response({'success': False, 'message': 'Group is full'}, status=status.HTTP_400_BAD_REQUEST)
+
+        membership = GroupMember.objects.filter(group=group, user=target_user).first()
+        if membership and membership.is_active:
+            return Response({'success': False, 'message': 'User is already a member'}, status=status.HTTP_400_BAD_REQUEST)
+
+        if membership:
+            membership.is_active = True
+            if membership.role not in ('admin', 'member'):
+                membership.role = 'member'
+            membership.save(update_fields=['is_active', 'role'])
+        else:
+            membership = GroupMember.objects.create(group=group, user=target_user, role='member')
+
+        target_user_id = int(getattr(target_user, 'id', 0))
+        target_user_name = str(getattr(target_user, 'name', 'User'))
+        target_user_streak = int(getattr(target_user, 'current_streak', 0))
+        group_creator_id = int(getattr(group, 'creator_id', 0))
+
+        if group_creator_id != target_user_id:
+            NotificationCreator.group_join(
+                to_user=group.creator,
+                member_user=target_user,
+                group=group,
+            )
+
+        return Response({
+            'success': True,
+            'message': f'{target_user_name} added to group',
+            'member': {
+                'id': target_user_id,
+                'name': target_user_name,
+                'role': membership.role,
+                'currentStreak': target_user_streak,
+                'joinedAt': membership.joined_at.isoformat(),
+            },
+        }, status=status.HTTP_201_CREATED)
+
+    @action(detail=True, methods=['delete'], url_path='delete')
+    def delete_group(self, request, pk=None):
+        """DELETE /api/social/groups/{id}/delete/ — Soft-delete a group (admin only)."""
+        group = GroupHabit.objects.filter(id=pk, is_active=True).first()
+        if not group:
+            return Response({'success': False, 'message': 'Group not found'}, status=status.HTTP_404_NOT_FOUND)
+
+        is_admin = GroupMember.objects.filter(
+            group=group,
+            user=request.user,
+            is_active=True,
+            role='admin',
+        ).exists()
+        if not is_admin:
+            return Response({'success': False, 'message': 'Only group admins can delete groups'}, status=status.HTTP_403_FORBIDDEN)
+
+        group.is_active = False
+        group.save(update_fields=['is_active', 'updated_at'])
+        GroupMember.objects.filter(group=group, is_active=True).update(is_active=False)
+
+        return Response({'success': True, 'message': 'Group deleted successfully'})
 
     @action(detail=True, methods=['get'])
     def leaderboard(self, request, pk=None):
@@ -571,6 +809,11 @@ class GroupHabitViewSet(viewsets.ViewSet):
         try:
             data = SocialService.get_group_detail(int(pk), request.user)
             return Response({'success': True, 'data': data})
+        except PermissionError as e:
+            return Response(
+                {'success': False, 'message': str(e)},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         except ValueError as e:
             return Response(
                 {'success': False, 'message': str(e)},

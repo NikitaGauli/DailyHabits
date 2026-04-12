@@ -31,11 +31,15 @@ class GroupCard extends StatelessWidget {
   /// Callback fired when “Leave Group” is selected from the popup menu.
   final VoidCallback? onLeave;
 
+  /// Callback fired when “Delete Group” is selected (admin only).
+  final VoidCallback? onDelete;
+
   const GroupCard({
     super.key,
     required this.group,
     this.onTap,
     this.onLeave,
+    this.onDelete,
   });
 
   @override
@@ -46,6 +50,7 @@ class GroupCard extends StatelessWidget {
     final maxMembers = group['maxMembers'] ?? 50;
     final myRole = group['myRole'] ?? 'member';
     final inviteCode = group['inviteCode'] ?? '';
+    final isAdmin = myRole == 'admin';
 
     return GlassContainer(
       margin: const EdgeInsets.only(bottom: 12),
@@ -93,6 +98,7 @@ class GroupCard extends StatelessWidget {
                   PopupMenuButton<String>(
                     onSelected: (v) {
                       if (v == 'leave') onLeave?.call();
+                      if (v == 'delete') onDelete?.call();
                       if (v == 'copy') {
                         Clipboard.setData(ClipboardData(text: inviteCode));
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -128,6 +134,19 @@ class GroupCard extends StatelessWidget {
                           ],
                         ),
                       ),
+                      if (isAdmin)
+                        PopupMenuItem(
+                          value: 'delete',
+                          child: Row(
+                            children: [
+                              Icon(Icons.delete_forever,
+                                  size: 18, color: tc.error),
+                              const SizedBox(width: 8),
+                              Text('Delete Group',
+                                  style: TextStyle(color: tc.error)),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ],

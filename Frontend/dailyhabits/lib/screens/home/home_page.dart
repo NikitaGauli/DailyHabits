@@ -30,7 +30,6 @@ import 'dart:async';
 import 'package:dailyhabits/models/habit.dart';
 import 'package:dailyhabits/widgets/home/create_edit_habit_sheet.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
-import 'package:dailyhabits/screens/analytics/analytics_screen.dart';
 import 'package:dailyhabits/screens/analytics/analytics_controller.dart';
 import 'package:dailyhabits/screens/settings/settings_screen.dart';
 import 'package:dailyhabits/screens/settings/settings_controller.dart';
@@ -41,6 +40,7 @@ import 'package:dailyhabits/screens/community/community_screen.dart';
 import 'package:dailyhabits/screens/notifications/notification_screen.dart';
 import 'package:dailyhabits/screens/notifications/notification_controller.dart';
 import 'package:dailyhabits/screens/notifications/widgets/notification_banner.dart';
+import 'package:dailyhabits/screens/insights/insight_screen.dart';
 import 'package:dailyhabits/screens/habits/habit_detail_screen.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:dailyhabits/theme/app_animations.dart';
@@ -243,7 +243,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               const GamificationScreen(),
               const CommunityScreen(),
               const NotificationScreen(),
-              const AnalyticsScreen(),
+              const InsightScreen(),
               _buildProfile(controller),
             ],
           ),

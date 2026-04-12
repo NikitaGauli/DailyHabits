@@ -71,22 +71,28 @@ class InsightService {
       if (response.statusCode == 200) {
         final data = jsonDecode(response.body);
         if (data['success'] == true) {
-          final insights = (data['insights'] as List)
+          final insights = (data['insights'] as List? ?? const [])
               .map((json) => Insight.fromJson(json))
               .toList();
 
           final quote = MotivationalQuote.fromJson(data['quote']);
 
-          final recommendations = (data['recommendations'] as List)
+          final recommendations = (data['recommendations'] as List? ?? const [])
               .map((json) => Recommendation.fromJson(json))
               .toList();
+
+          final topHabits = List<Map<String, dynamic>>.from(data['topHabits'] ?? const []);
+          final decliningHabits = List<Map<String, dynamic>>.from(data['decliningHabits'] ?? const []);
+          final bestTime = Map<String, dynamic>.from(data['bestTime'] ?? const {});
 
           return {
             'insights': insights,
             'quote': quote,
             'recommendations': recommendations,
             'comeback': data['comeback'],
-            'bestTime': data['bestTime'],
+            'bestTime': bestTime,
+            'topHabits': topHabits,
+            'decliningHabits': decliningHabits,
           };
         }
       }
@@ -117,6 +123,27 @@ class InsightService {
       return null;
     } catch (e) {
       return null;
+    }
+  }
+
+  /// Returns completion trend points from analytics for line-chart rendering.
+  Future<List<Map<String, dynamic>>> getInsightTrend({int days = 14}) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.get(
+        Uri.parse('${ApiConfig.baseUrl}/analytics/trend/?days=$days'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        if (data['success'] == true) {
+          return List<Map<String, dynamic>>.from(data['trend'] ?? const []);
+        }
+      }
+      return [];
+    } catch (e) {
+      return [];
     }
   }
 }

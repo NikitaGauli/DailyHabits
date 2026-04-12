@@ -11,9 +11,11 @@
 // =============================================================================
 
 import 'package:flutter/material.dart';
+import 'package:fl_chart/fl_chart.dart';
 import 'package:provider/provider.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'insight_controller.dart';
+import 'habit_analysis_screen.dart';
 import '../../models/insight.dart';
 
 /// Entry point widget for the Insights feature.
@@ -69,11 +71,17 @@ class _InsightView extends StatelessWidget {
               children: [
                 _buildHeader(context),
                 const SizedBox(height: 32),
+                _buildAnalysisCTA(context),
+                const SizedBox(height: 20),
 
                 if (controller.dailyQuote != null)
                   _buildQuoteCard(context, controller.dailyQuote!),
 
-                const SizedBox(height: 32),
+                const SizedBox(height: 24),
+
+                _buildVisualInsightsSection(context, controller),
+
+                const SizedBox(height: 28),
 
                 if (controller.insights.isNotEmpty) ...[
                   Text(
@@ -114,6 +122,465 @@ class _InsightView extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildVisualInsightsSection(BuildContext context, InsightController controller) {
+    final tc = context.colors;
+    final hasVisualData =
+        controller.topHabits.isNotEmpty || controller.trendSeries.isNotEmpty || controller.bestTime.isNotEmpty;
+
+    if (!hasVisualData) {
+      return _buildEmptyState(
+        context,
+        'Visual insight data will appear as soon as you complete more habit logs.',
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'Visual Intelligence',
+          style: TextStyle(
+            color: tc.textPrimary,
+            fontSize: 20,
+            fontWeight: FontWeight.w800,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'Bar, line, and pie charts that explain your habit behavior at a glance.',
+          style: TextStyle(color: tc.textSecondary, fontSize: 13),
+        ),
+        const SizedBox(height: 14),
+        if (controller.bestTime.isNotEmpty) _buildBestTimeSpotlight(context, controller.bestTime),
+        const SizedBox(height: 14),
+        if (controller.topHabits.isNotEmpty) _buildTopHabitsBarChart(context, controller.topHabits),
+        const SizedBox(height: 14),
+        if (controller.trendSeries.isNotEmpty) _buildTrendLineChart(context, controller.trendSeries),
+        const SizedBox(height: 14),
+        if (controller.topHabits.isNotEmpty) _buildCategoryPieChart(context, controller.topHabits),
+      ],
+    );
+  }
+
+  Widget _buildBestTimeSpotlight(BuildContext context, Map<String, dynamic> bestTime) {
+    final tc = context.colors;
+    final label = (bestTime['timeLabel'] ?? 'Best Time').toString();
+    final percentage = _toDouble(bestTime['percentage']);
+    final insight = (bestTime['insight'] ?? '').toString();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(20),
+        gradient: LinearGradient(
+          colors: [
+            tc.primary,
+            tc.secondary,
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Peak Time',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.92),
+              fontWeight: FontWeight.w600,
+              fontSize: 12,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            label,
+            style: const TextStyle(
+              color: Colors.white,
+              fontSize: 24,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${percentage.toStringAsFixed(1)}% of completions happen here',
+            style: TextStyle(
+              color: Colors.white.withValues(alpha: 0.92),
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          if (insight.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(
+              insight,
+              style: TextStyle(color: Colors.white.withValues(alpha: 0.9), height: 1.35),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTopHabitsBarChart(BuildContext context, List<Map<String, dynamic>> habits) {
+    final tc = context.colors;
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: tc.border.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Bar Graph: Top Habit Consistency',
+            style: TextStyle(color: tc.textPrimary, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 210,
+            child: BarChart(
+              BarChartData(
+                minY: 0,
+                maxY: 100,
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 20,
+                  getDrawingHorizontalLine: (_) => FlLine(color: tc.surfaceVariant),
+                ),
+                borderData: FlBorderData(show: false),
+                alignment: BarChartAlignment.spaceAround,
+                barTouchData: BarTouchData(
+                  enabled: true,
+                  touchTooltipData: BarTouchTooltipData(
+                    getTooltipItem: (group, groupIndex, rod, rodIndex) {
+                      final title = _shortHabitName(habits[group.x]['title']?.toString() ?? 'Habit');
+                      return BarTooltipItem(
+                        '$title\n${rod.toY.toStringAsFixed(1)}%',
+                        const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                      );
+                    },
+                  ),
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 20,
+                      reservedSize: 34,
+                      getTitlesWidget: (value, _) => Text(
+                        '${value.toInt()}%',
+                        style: TextStyle(fontSize: 10, color: tc.textMuted),
+                      ),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      getTitlesWidget: (value, _) {
+                        final i = value.toInt();
+                        if (i < 0 || i >= habits.length) return const SizedBox.shrink();
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(
+                            _shortHabitName(habits[i]['title']?.toString() ?? ''),
+                            style: TextStyle(fontSize: 10, color: tc.textSecondary),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                barGroups: List.generate(habits.length, (index) {
+                  final consistency = _toDouble(habits[index]['consistency']);
+                  return BarChartGroupData(
+                    x: index,
+                    barRods: [
+                      BarChartRodData(
+                        toY: consistency,
+                        width: 18,
+                        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                        gradient: LinearGradient(
+                          colors: [tc.primary, tc.secondary],
+                          begin: Alignment.bottomCenter,
+                          end: Alignment.topCenter,
+                        ),
+                      ),
+                    ],
+                  );
+                }),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTrendLineChart(BuildContext context, List<Map<String, dynamic>> trend) {
+    final tc = context.colors;
+    final points = <FlSpot>[];
+    for (int i = 0; i < trend.length; i++) {
+      points.add(FlSpot(i.toDouble(), _toDouble(trend[i]['rate'])));
+    }
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: tc.border.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Line Graph: 14-Day Completion Trend',
+            style: TextStyle(color: tc.textPrimary, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            height: 210,
+            child: LineChart(
+              LineChartData(
+                minX: 0,
+                maxX: (trend.length - 1).toDouble(),
+                minY: 0,
+                maxY: 100,
+                borderData: FlBorderData(show: false),
+                gridData: FlGridData(
+                  show: true,
+                  drawVerticalLine: false,
+                  horizontalInterval: 20,
+                  getDrawingHorizontalLine: (_) => FlLine(color: tc.surfaceVariant),
+                ),
+                titlesData: FlTitlesData(
+                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  leftTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 20,
+                      reservedSize: 34,
+                      getTitlesWidget: (value, _) => Text(
+                        '${value.toInt()}%',
+                        style: TextStyle(fontSize: 10, color: tc.textMuted),
+                      ),
+                    ),
+                  ),
+                  bottomTitles: AxisTitles(
+                    sideTitles: SideTitles(
+                      showTitles: true,
+                      interval: 3,
+                      getTitlesWidget: (value, _) {
+                        final i = value.toInt();
+                        if (i < 0 || i >= trend.length) return const SizedBox.shrink();
+                        final date = trend[i]['date']?.toString() ?? '';
+                        final label = date.length >= 10 ? date.substring(5, 10).replaceAll('-', '/') : '';
+                        return Padding(
+                          padding: const EdgeInsets.only(top: 6),
+                          child: Text(label, style: TextStyle(fontSize: 9, color: tc.textSecondary)),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+                lineTouchData: LineTouchData(
+                  handleBuiltInTouches: true,
+                  touchTooltipData: LineTouchTooltipData(
+                    getTooltipItems: (spots) => spots
+                        .map(
+                          (spot) => LineTooltipItem(
+                            '${spot.y.toStringAsFixed(1)}%',
+                            const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                          ),
+                        )
+                        .toList(),
+                  ),
+                ),
+                lineBarsData: [
+                  LineChartBarData(
+                    spots: points,
+                    isCurved: true,
+                    barWidth: 4,
+                    color: tc.primary,
+                    dotData: FlDotData(show: trend.length <= 14),
+                    belowBarData: BarAreaData(
+                      show: true,
+                      gradient: LinearGradient(
+                        colors: [
+                          tc.primary.withValues(alpha: 0.25),
+                          tc.primary.withValues(alpha: 0.05),
+                        ],
+                        begin: Alignment.topCenter,
+                        end: Alignment.bottomCenter,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildCategoryPieChart(BuildContext context, List<Map<String, dynamic>> habits) {
+    final tc = context.colors;
+    final categoryTotals = <String, double>{};
+
+    for (final item in habits) {
+      final category = (item['category'] ?? 'General').toString();
+      final completed = _toDouble(item['completedDays']);
+      categoryTotals[category] = (categoryTotals[category] ?? 0) + completed;
+    }
+
+    if (categoryTotals.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final entries = categoryTotals.entries.toList();
+    final total = entries.fold<double>(0, (sum, e) => sum + e.value);
+    final palette = [
+      AppColors.primary,
+      AppColors.secondary,
+      AppColors.warning,
+      AppColors.success,
+      AppColors.info,
+    ];
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 12),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: tc.border.withValues(alpha: 0.25)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Pie Chart: Completion Share by Category',
+            style: TextStyle(color: tc.textPrimary, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            height: 220,
+            child: Row(
+              children: [
+                Expanded(
+                  child: PieChart(
+                    PieChartData(
+                      centerSpaceRadius: 40,
+                      sectionsSpace: 2,
+                      sections: List.generate(entries.length, (index) {
+                        final e = entries[index];
+                        final pct = total > 0 ? (e.value / total) * 100 : 0;
+                        return PieChartSectionData(
+                          value: e.value,
+                          color: palette[index % palette.length],
+                          title: '${pct.toStringAsFixed(0)}%',
+                          radius: 56,
+                          titleStyle: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12,
+                          ),
+                        );
+                      }),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: List.generate(entries.length, (index) {
+                      final e = entries[index];
+                      final pct = total > 0 ? (e.value / total) * 100 : 0;
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Row(
+                          children: [
+                            Container(
+                              width: 10,
+                              height: 10,
+                              decoration: BoxDecoration(
+                                color: palette[index % palette.length],
+                                borderRadius: BorderRadius.circular(3),
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Expanded(
+                              child: Text(
+                                '${e.key} ${pct.toStringAsFixed(0)}%',
+                                style: TextStyle(color: tc.textSecondary, fontSize: 12),
+                              ),
+                            ),
+                          ],
+                        ),
+                      );
+                    }),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAnalysisCTA(BuildContext context) {
+    final tc = context.colors;
+
+    return Container(
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: tc.border.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Habit Intelligence',
+            style: TextStyle(
+              color: tc.textPrimary,
+              fontSize: 17,
+              fontWeight: FontWeight.bold,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Run KMeans-based analysis to detect your consistency cluster and get personalized suggestions.',
+            style: TextStyle(color: tc.textSecondary, height: 1.4),
+          ),
+          const SizedBox(height: 12),
+          ElevatedButton.icon(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const HabitAnalysisScreen()),
+              );
+            },
+            icon: const Icon(Icons.analytics_outlined),
+            label: const Text('Analyze My Habits'),
+          ),
+        ],
       ),
     );
   }
@@ -361,5 +828,12 @@ class _InsightView extends StatelessWidget {
         ),
       ),
     );
+  }
+
+  static double _toDouble(dynamic v) => v is num ? v.toDouble() : 0;
+
+  static String _shortHabitName(String name) {
+    if (name.length <= 7) return name;
+    return '${name.substring(0, 7)}...';
   }
 }

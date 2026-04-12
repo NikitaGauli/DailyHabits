@@ -69,8 +69,46 @@ class HabitService {
           await _client.get(Uri.parse('$baseUrl/'), headers: headers);
 
       if (response.statusCode == 200) {
-        final List<dynamic> data = jsonDecode(response.body);
-        return data.map((json) => Habit.fromJson(json)).toList();
+        final decoded = jsonDecode(response.body);
+
+        // Support both legacy list responses and wrapped payloads.
+        if (decoded is List) {
+          return decoded
+              .whereType<Map<String, dynamic>>()
+              .map(Habit.fromJson)
+              .toList();
+        }
+
+        if (decoded is Map<String, dynamic>) {
+          final candidates = [
+            decoded['habits'],
+            decoded['results'],
+            decoded['data'],
+            decoded['items'],
+          ];
+
+          for (final candidate in candidates) {
+            if (candidate is List) {
+              return candidate
+                  .whereType<Map<String, dynamic>>()
+                  .map(Habit.fromJson)
+                  .toList();
+            }
+          }
+
+          if (decoded['data'] is Map<String, dynamic>) {
+            final nested = decoded['data'] as Map<String, dynamic>;
+            final nestedList = nested['habits'] ?? nested['results'] ?? nested['items'];
+            if (nestedList is List) {
+              return nestedList
+                  .whereType<Map<String, dynamic>>()
+                  .map(Habit.fromJson)
+                  .toList();
+            }
+          }
+        }
+
+        throw Exception('Unexpected habits response format');
       } else {
         throw Exception('Failed to load habits: ${response.statusCode}');
       }

@@ -68,8 +68,18 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           final detail = ctrl.selectedGroupDetail;
           if (detail == null) {
             return Center(
-              child: Text('Failed to load group',
-                  style: TextStyle(color: tc.textMuted)),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text('Failed to load group', style: TextStyle(color: tc.textMuted)),
+                  const SizedBox(height: 8),
+                  Text(
+                    ctrl.actionMessage ?? 'You may not be a member of this group.',
+                    style: TextStyle(color: tc.textMuted, fontSize: 12),
+                    textAlign: TextAlign.center,
+                  ),
+                ],
+              ),
             );
           }
 
@@ -87,6 +97,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 _buildChallengesSection(context, detail),
                 const SizedBox(height: 20),
                 _buildLeaderboardSection(context, detail),
+                const SizedBox(height: 20),
+                _buildSharedAchievementsSection(context, detail),
                 const SizedBox(height: 20),
                 _buildMembersSection(context, ctrl, detail),
               ],
@@ -223,40 +235,81 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
   Widget _buildAdminActions(BuildContext context, CommunityController ctrl,
       EnrichedGroupDetail detail) {
     final tc = context.colors;
-    return Row(
+    return Column(
       children: [
-        Expanded(
-          child: ElevatedButton.icon(
-            onPressed: () =>
-                _showCreateChallengeSheet(context, ctrl, detail.id),
-            icon: const Icon(Icons.emoji_events_rounded, size: 18),
-            label: const Text('New Challenge'),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF8B5CF6),
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () =>
+                    _showCreateChallengeSheet(context, ctrl, detail.id),
+                icon: const Icon(Icons.emoji_events_rounded, size: 18),
+                label: const Text('New Challenge'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF8B5CF6),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _showShareToGroupSheet(context, ctrl, detail.id),
+                icon: Icon(Icons.share_rounded, size: 18, color: tc.primary),
+                label: Text('Share Habit', style: TextStyle(color: tc.primary)),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  side: BorderSide(color: tc.primary),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: OutlinedButton.icon(
-            onPressed: () =>
-                _showShareToGroupSheet(context, ctrl, detail.id),
-            icon: Icon(Icons.share_rounded, size: 18, color: tc.primary),
-            label: Text('Share Habit',
-                style: TextStyle(color: tc.primary)),
-            style: OutlinedButton.styleFrom(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              side: BorderSide(color: tc.primary),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(14),
+        const SizedBox(height: 10),
+        Row(
+          children: [
+            Expanded(
+              child: ElevatedButton.icon(
+                onPressed: () => _showAddMemberSheet(context, ctrl, detail.id),
+                icon: const Icon(Icons.person_add_alt_1_rounded, size: 18),
+                label: const Text('Add Member'),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0EA5E9),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
               ),
             ),
-          ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: OutlinedButton.icon(
+                onPressed: () => _confirmDeleteGroup(context, ctrl, detail.id),
+                icon: const Icon(Icons.delete_forever_rounded,
+                    size: 18, color: Color(0xFFDC2626)),
+                label: const Text(
+                  'Delete Group',
+                  style: TextStyle(color: Color(0xFFDC2626)),
+                ),
+                style: OutlinedButton.styleFrom(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  side: const BorderSide(color: Color(0xFFDC2626)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ],
     );
@@ -554,6 +607,84 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     );
   }
 
+  Widget _buildSharedAchievementsSection(
+    BuildContext context,
+    EnrichedGroupDetail detail,
+  ) {
+    final tc = context.colors;
+    final achievements = detail.sharedAchievements;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.emoji_events_rounded,
+                size: 20, color: Color(0xFFF59E0B)),
+            const SizedBox(width: 8),
+            Text('Shared Achievements',
+                style: AppTextStyles.h3
+                    .copyWith(color: tc.textPrimary, fontSize: 16)),
+            const SizedBox(width: 6),
+            Text('${achievements.length}',
+                style: AppTextStyles.caption.copyWith(color: tc.textMuted)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (achievements.isEmpty)
+          GlassContainer(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'No shared achievements yet.',
+              style: TextStyle(color: tc.textMuted),
+            ),
+          )
+        else
+          ...achievements.map((a) {
+            final author = a['authorName'] ?? 'Member';
+            final content = a['content'] ?? 'Achievement unlocked';
+            final emoji = (a['emoji'] ?? '').toString();
+            return GlassContainer(
+              margin: const EdgeInsets.only(bottom: 8),
+              padding: const EdgeInsets.all(14),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFF59E0B).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.emoji_events_rounded,
+                        color: Color(0xFFF59E0B), size: 20),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('$author ${emoji.isNotEmpty ? emoji : ''}',
+                            style: AppTextStyles.bodyMd.copyWith(
+                              color: tc.textPrimary,
+                              fontWeight: FontWeight.w700,
+                            )),
+                        const SizedBox(height: 3),
+                        Text(content,
+                            style: AppTextStyles.caption
+                                .copyWith(color: tc.textSecondary)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+      ],
+    );
+  }
+
   Widget _memberTile(
       BuildContext context, CommunityController ctrl, GroupMemberInfo member) {
     final tc = context.colors;
@@ -608,6 +739,151 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 _showEncourageSheet(context, ctrl, member.id, member.name),
             icon: const Text('📣', style: TextStyle(fontSize: 20)),
             tooltip: 'Encourage',
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddMemberSheet(
+    BuildContext context,
+    CommunityController ctrl,
+    int groupId,
+  ) {
+    final tc = context.colors;
+    final emailCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: tc.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.only(
+            left: 20,
+            right: 20,
+            top: 20,
+            bottom: MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: tc.border,
+                  borderRadius: BorderRadius.circular(2),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                'Add Member',
+                style: AppTextStyles.h3.copyWith(color: tc.textPrimary),
+              ),
+              const SizedBox(height: 14),
+              TextField(
+                controller: emailCtrl,
+                style: TextStyle(color: tc.textPrimary),
+                keyboardType: TextInputType.emailAddress,
+                decoration: InputDecoration(
+                  hintText: 'Enter member email',
+                  hintStyle: TextStyle(color: tc.textMuted),
+                  filled: true,
+                  fillColor: tc.surfaceVariant,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+              SizedBox(
+                width: double.infinity,
+                height: 48,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final email = emailCtrl.text.trim();
+                    if (email.isEmpty) return;
+
+                    Navigator.pop(ctx);
+                    final ok = await ctrl.addMemberToGroup(groupId, email: email);
+                    if (!context.mounted) return;
+
+                    final message = ctrl.actionMessage ??
+                        (ok ? 'Member added successfully' : 'Failed to add member');
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(message)),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF0EA5E9),
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text(
+                    'Add to Group',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _confirmDeleteGroup(
+    BuildContext context,
+    CommunityController ctrl,
+    int groupId,
+  ) {
+    final tc = context.colors;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: tc.bg,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+        title: Text('Delete Group', style: TextStyle(color: tc.textPrimary)),
+        content: Text(
+          'This will delete the group for all members. Continue?',
+          style: TextStyle(color: tc.textSecondary),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: Text('Cancel', style: TextStyle(color: tc.textMuted)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              Navigator.pop(ctx);
+              final ok = await ctrl.deleteGroup(groupId);
+              if (!context.mounted) return;
+
+              final message = ctrl.actionMessage ??
+                  (ok ? 'Group deleted successfully' : 'Failed to delete group');
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text(message)),
+              );
+
+              if (ok) {
+                Navigator.of(context).pop();
+              }
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFFDC2626),
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+              ),
+            ),
+            child: const Text('Delete'),
           ),
         ],
       ),

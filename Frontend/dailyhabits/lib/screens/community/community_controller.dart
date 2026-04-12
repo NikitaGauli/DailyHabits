@@ -340,10 +340,25 @@ class CommunityController extends ChangeNotifier {
 
   /// Creates a new group with the given [name] and [description],
   /// then refreshes [myGroups].
-  Future<void> createGroup(String name, String description) async {
+  Future<void> createGroup(
+    String name,
+    String description, {
+    List<String> initialMembers = const [],
+  }) async {
     try {
-      await _svc.createGroup(name: name, description: description);
+      final result = await _svc.createGroup(
+        name: name,
+        description: description,
+        members: initialMembers,
+      );
+      final addedCount = result['membersAddedCount'] ?? 0;
+      if (addedCount is int && addedCount > 0) {
+        _setAction(true, 'Group created with $addedCount member(s) added');
+      } else {
+        _setAction(true, 'Group created successfully');
+      }
       await loadGroups();
+      notifyListeners();
     } catch (_) {}
   }
 
@@ -361,6 +376,46 @@ class CommunityController extends ChangeNotifier {
       await _svc.leaveGroup(groupId);
       await loadGroups();
     } catch (_) {}
+  }
+
+  /// Adds a member to a group by [email] or [userId] (admin only).
+  Future<bool> addMemberToGroup(
+    int groupId, {
+    String? email,
+    int? userId,
+  }) async {
+    try {
+      final result = await _svc.addMemberToGroup(
+        groupId,
+        email: email,
+        userId: userId,
+      );
+      _setAction(true, result['message'] ?? 'Member added');
+      await loadGroupDetail(groupId);
+      await loadGroups();
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setAction(false, e.toString().replaceFirst('Exception: ', ''));
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Deletes a group (soft delete), then refreshes group lists.
+  Future<bool> deleteGroup(int groupId) async {
+    try {
+      final result = await _svc.deleteGroup(groupId);
+      _setAction(true, result['message'] ?? 'Group deleted');
+      await loadGroups();
+      selectedGroupDetail = null;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setAction(false, e.toString().replaceFirst('Exception: ', ''));
+      notifyListeners();
+      return false;
+    }
   }
 
   /// Fetches publicly discoverable groups for the browse/discover view.
@@ -545,8 +600,9 @@ class CommunityController extends ChangeNotifier {
       final data = await _svc.getGroupDetail(groupId);
       final raw = data['data'] as Map<String, dynamic>? ?? {};
       selectedGroupDetail = EnrichedGroupDetail.fromJson(raw);
-    } catch (_) {
+    } catch (e) {
       selectedGroupDetail = null;
+      _setAction(false, e.toString().replaceFirst('Exception: ', ''));
     }
     isLoadingGroupDetail = false;
     notifyListeners();

@@ -68,6 +68,12 @@ app.conf.beat_schedule = {
         'task': 'notifications.tasks.send_missed_habit_alerts',
         'schedule': crontab(hour=22, minute=0),
     },
+
+    # Run ML-based habit clustering weekly on Monday at 6 AM
+    'run-weekly-habit-analysis': {
+        'task': 'recommendation_engine.tasks.run_weekly_habit_analysis',
+        'schedule': crontab(hour=6, minute=0, day_of_week='monday'),
+    },
 }
 
 app.conf.timezone = 'Asia/Kathmandu'  # type: ignore[assignment]

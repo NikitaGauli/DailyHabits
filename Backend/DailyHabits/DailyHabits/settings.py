@@ -105,6 +105,7 @@ INSTALLED_APPS = [
     'gamification',     # XP engine, challenges, leaderboards, virtual economy
     'grow_together',    # Grow Together — collaborative habit sharing system
     'admin_panel',      # Enterprise admin dashboard, RBAC, audit & moderation
+    'recommendation_engine',  # KMeans-powered habit recommendations and clustering
 ]
 
 # Middleware is processed top-to-bottom on requests, bottom-to-top on responses.
@@ -409,6 +410,78 @@ LOGGING = {
             'level': 'INFO',        # Admin dashboard operations & audit events
             'propagate': False,
         },
+        'recommendation_engine': {
+            'handlers': ['console', 'file'],
+            'level': 'INFO',
+            'propagate': False,
+        },
+    },
+}
+
+# =============================================================================
+# MACHINE LEARNING (KMEANS) CONFIGURATION
+# =============================================================================
+# Place your .pkl models here by default: Backend/DailyHabits/ml_models/
+ML_MODELS_DIR = Path(os.environ.get('ML_MODELS_DIR', str(BASE_DIR / 'ml_models')))
+ML_MODELS_DIR.mkdir(exist_ok=True)
+
+# You can point directly to a .pkl file, or to a folder that contains one.
+ML_KMEANS_MODEL_PATH = os.environ.get(
+    'ML_KMEANS_MODEL_PATH',
+    str(ML_MODELS_DIR / 'kmeans_model.pkl'),
+).strip()
+
+# Keep this list in sync with the exact feature order used during training.
+ML_KMEANS_FEATURE_ORDER = [
+    'frequency',
+    'completion_rate',
+    'streak',
+    'category',
+]
+
+ML_KMEANS_FREQUENCY_MAP = {
+    'daily': 0,
+    'weekly': 1,
+    'custom': 2,
+}
+
+ML_KMEANS_CATEGORY_MAP = {
+    'health': 0,
+    'fitness': 1,
+    'study': 2,
+    'mindfulness': 3,
+    'productivity': 4,
+    'creativity': 5,
+    'social': 6,
+    'general': 7,
+    'custom': 8,
+}
+
+ML_KMEANS_CLUSTER_PROFILES = {
+    0: {
+        'label': 'Highly Consistent Builder',
+        'insight': 'You maintain strong completion patterns and stable streaks.',
+        'recommendations': [
+            'Keep challenge level progressive to avoid plateaus.',
+            'Pair top habits with weekly reflection for long-term growth.',
+        ],
+    },
+    1: {
+        'label': 'Momentum Seeker',
+        'insight': 'You show positive momentum but consistency drops on difficult days.',
+        'recommendations': [
+            'Use short fallback versions for low-energy days.',
+            'Schedule reminders at your highest-completion hour.',
+        ],
+    },
+    2: {
+        'label': 'Needs Stabilization',
+        'insight': 'Your current routine is irregular and benefits from simpler structure.',
+        'recommendations': [
+            'Start with smaller goals and increase slowly.',
+            'Track one priority habit before expanding your routine.',
+            'Enable stronger reminder cadence for critical habits.',
+        ],
     },
 }
 

@@ -8,6 +8,7 @@
 
 import 'package:flutter/material.dart';
 import '../../services/achievement_service.dart';
+import '../../services/community_service.dart';
 import '../../models/achievement.dart';
 
 /// Reactive controller that provides achievement and level data to the UI.
@@ -18,6 +19,7 @@ import '../../models/achievement.dart';
 class AchievementsController extends ChangeNotifier {
   /// Backend service for achievement-related API calls.
   final AchievementService _service = AchievementService();
+  final CommunityService _communityService = CommunityService();
 
   /// Whether the controller is currently fetching data.
   bool isLoading = true;
@@ -27,6 +29,13 @@ class AchievementsController extends ChangeNotifier {
 
   /// The current user’s level, XP, and progression metadata.
   UserLevel? userLevel;
+
+  /// Groups available for sharing achievements.
+  List<Map<String, dynamic>> myGroups = [];
+
+  bool isSharing = false;
+  String? actionMessage;
+  bool actionSuccess = false;
 
   /// Creates the controller and begins loading achievement data immediately.
   AchievementsController() {
@@ -54,6 +63,42 @@ class AchievementsController extends ChangeNotifier {
     } finally {
       isLoading = false;
       notifyListeners();
+    }
+  }
+
+  Future<void> loadGroupsForSharing() async {
+    try {
+      final data = await _communityService.getGroups();
+      myGroups = List<Map<String, dynamic>>.from(data['groups'] ?? []);
+      notifyListeners();
+    } catch (_) {
+      myGroups = [];
+      notifyListeners();
+    }
+  }
+
+  Future<bool> shareAchievementToGroup(Achievement achievement, int groupId) async {
+    isSharing = true;
+    notifyListeners();
+    try {
+      await _communityService.createPost(
+        content: '🏆 I unlocked "${achievement.name}" (+${achievement.points} XP)!',
+        postType: 'achievement',
+        emoji: '🏆',
+        groupId: groupId,
+        isPublic: true,
+      );
+      actionSuccess = true;
+      actionMessage = 'Achievement shared to group successfully';
+      isSharing = false;
+      notifyListeners();
+      return true;
+    } catch (e) {
+      actionSuccess = false;
+      actionMessage = e.toString().replaceFirst('Exception: ', '');
+      isSharing = false;
+      notifyListeners();
+      return false;
     }
   }
 }
