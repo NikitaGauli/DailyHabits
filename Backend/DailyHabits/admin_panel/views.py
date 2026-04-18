@@ -9,6 +9,8 @@ import csv
 import io
 import logging
 from datetime import timedelta
+from reportlab.lib.pagesizes import A4
+from reportlab.pdfgen import canvas
 
 from django.contrib.auth import get_user_model
 from django.db.models import Count, Q
@@ -523,12 +525,67 @@ class AnalyticsSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
 
 
 class AnalyticsExportView(APIView):
-    """GET /admin/analytics/export/?days=30 — CSV download."""
+    """GET /admin/analytics/export/?days=30&format=csv|pdf — analytics export download."""
     permission_classes = [IsAuthenticated, CanExportAnalytics]
 
     def get(self, request):
         days = int(request.query_params.get('days', 30))
-        trends = AnalyticsService.get_growth_trends(min(days, 365))
+        days = min(days, 365)
+        export_format = request.query_params.get('format', 'csv').strip().lower()
+        trends = AnalyticsService.get_growth_trends(days)
+
+        if export_format == 'pdf':
+            buffer = io.BytesIO()
+            pdf = canvas.Canvas(buffer, pagesize=A4)
+            width, height = A4
+
+            y = height - 50
+            pdf.setFont('Helvetica-Bold', 14)
+            pdf.drawString(40, y, f'DailyHabits Admin Analytics Report ({days} days)')
+            y -= 22
+            pdf.setFont('Helvetica', 10)
+            pdf.drawString(40, y, f'Generated: {timezone.now().strftime("%Y-%m-%d %H:%M:%S")}')
+            y -= 24
+
+            headers = ['Date', 'Total Users', 'New Users', 'DAU', 'Completion Rate']
+            col_x = [40, 145, 245, 325, 395]
+
+            pdf.setFont('Helvetica-Bold', 9)
+            for i, h in enumerate(headers):
+                pdf.drawString(col_x[i], y, h)
+            y -= 14
+            pdf.setFont('Helvetica', 9)
+
+            for row in trends:
+                if y < 50:
+                    pdf.showPage()
+                    y = height - 50
+                    pdf.setFont('Helvetica-Bold', 9)
+                    for i, h in enumerate(headers):
+                        pdf.drawString(col_x[i], y, h)
+                    y -= 14
+                    pdf.setFont('Helvetica', 9)
+
+                pdf.drawString(col_x[0], y, str(row['date']))
+                pdf.drawString(col_x[1], y, str(row['total_users']))
+                pdf.drawString(col_x[2], y, str(row['new_users']))
+                pdf.drawString(col_x[3], y, str(row['daily_active_users']))
+                pdf.drawString(col_x[4], y, f"{row['completion_rate']}%")
+                y -= 12
+
+            pdf.save()
+            pdf_bytes = buffer.getvalue()
+            buffer.close()
+
+            response = HttpResponse(pdf_bytes, content_type='application/pdf')
+            response['Content-Disposition'] = f'attachment; filename="analytics_{days}d.pdf"'
+
+            AuditService.log(
+                admin_user=request.user, action='export_data',
+                resource_type='Analytics', description=f'Exported {days}-day analytics PDF',
+                request=request,
+            )
+            return response
 
         output = io.StringIO()
         writer = csv.writer(output)

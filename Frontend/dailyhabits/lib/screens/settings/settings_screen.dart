@@ -17,6 +17,7 @@ import 'pages/privacy_security_page.dart';
 import 'pages/login_sessions_page.dart';
 import 'pages/advanced_settings_page.dart';
 import 'pages/audit_log_page.dart';
+import '../analytics/analytics_screen.dart';
 import 'package:dailyhabits/admin/admin_screen.dart';
 
 /// The root settings screen — entry point for all user preferences.
@@ -111,6 +112,28 @@ class SettingsScreen extends StatelessWidget {
                           ? ' \u2022 '
                           : 'Disabled',
                       onTap: () => _push(context, const MotivationalQuotesPage()),
+                    ),
+                    _SettingsTile(
+                      icon: Icons.calendar_month_outlined,
+                      title: 'Progress Calendar',
+                      subtitle: 'See your monthly completion pattern',
+                      onTap: () => Navigator.of(context).push(
+                        AppPageRoute.slideRight(const AnalyticsScreen()),
+                      ),
+                    ),
+                    _SettingsTile(
+                      icon: Icons.tune_rounded,
+                      title: 'Reminder Customizer',
+                      subtitle: 'Profile > Quick Access > Reminder Customizer',
+                      onTap: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text(
+                              'Open Profile tab and tap Reminder Customizer to edit per-habit reminders.',
+                            ),
+                          ),
+                        );
+                      },
                     ),
 
                     // ── Privacy & Security ────────────────────

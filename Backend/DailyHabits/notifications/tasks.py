@@ -46,8 +46,8 @@ def send_habit_reminders(self):
 
     Respects the user's notification settings (master toggle, quiet hours).
     """
-    from notifications.models import HabitReminder, NotificationSettings
-    from notifications.services import NotificationCreator
+    from notifications.models import HabitReminder
+    from notifications.services import NotificationCreator, NotificationIntelligence
 
     now = timezone.localtime()
     current_time = now.time().replace(second=0, microsecond=0)
@@ -78,12 +78,17 @@ def send_habit_reminders(self):
             continue
 
         # Respect user notification settings
-        if not _can_send_notification(user):
+        if not NotificationIntelligence.should_send_notification(user, category='habit_reminders', current_dt=now):
             continue
 
         # Create in-app notification
         message = reminder.message or f"Time to complete your {habit.title} habit! 💪"
-        notification = NotificationCreator.habit_reminder(user=user, habit=habit)
+        notification = NotificationCreator.habit_reminder(
+            user=user,
+            habit=habit,
+            message=message,
+            title=f'Time for {habit.title}',
+        )
 
         if notification:
             # Mark reminder as sent (notification is auto-broadcast via WebSocket signal)
@@ -107,7 +112,7 @@ def check_streak_risks(self):
 
     Only alerts for streaks >= 3 days to avoid noise for new habits.
     """
-    from habits.models import Habit, HabitLog, Streak
+    from habits.models import HabitLog, Streak
     from notifications.services import NotificationCreator
 
     today = timezone.localtime().date()
@@ -245,11 +250,13 @@ def send_missed_habit_alerts(self):
             if missed_count >= 3:
                 break
 
-            completed = HabitLog.objects.filter(
-                habit=habit, date=today, status='completed'
+            completed_or_accounted = HabitLog.objects.filter(
+                habit=habit,
+                date=today,
+                status__in=['completed', 'skipped', 'partial'],
             ).exists()
 
-            if not completed:
+            if not completed_or_accounted:
                 notification = NotificationCreator.create(
                     user=user,
                     notification_type='missed',
@@ -267,6 +274,76 @@ def send_missed_habit_alerts(self):
 
     logger.info('Sent %d missed habit alerts', alert_count)
     return alert_count
+
+
+# =============================================================================
+#  MISSED HABIT TRACKING TASK — runs daily after midnight
+# =============================================================================
+
+@shared_task(bind=True, max_retries=2, default_retry_delay=60)
+def track_missed_habits(self):
+    """
+    Persist missed-day HabitLog records for yesterday and notify users.
+
+    This task creates source-of-truth ``HabitLog(status='missed')`` rows for
+    scheduled habits that were neither completed nor skipped/partial.
+    """
+    from django.contrib.auth import get_user_model
+    from habits.models import Habit, HabitLog, Streak
+    from notifications.services import NotificationCreator, NotificationIntelligence
+
+    User = get_user_model()
+    yesterday = timezone.localtime().date() - timedelta(days=1)
+    created_logs = 0
+
+    for user in User.objects.filter(is_active=True):
+        active_habits = Habit.objects.filter(user=user, status='active', is_deleted=False)
+        for habit in active_habits:
+            if not _is_habit_scheduled_for_date(habit, yesterday):
+                continue
+
+            already_accounted = HabitLog.objects.filter(
+                habit=habit,
+                date=yesterday,
+                status__in=['completed', 'skipped', 'partial', 'missed'],
+            ).exists()
+            if already_accounted:
+                continue
+
+            HabitLog.objects.create(
+                habit=habit,
+                date=yesterday,
+                status='missed',
+                count=0,
+                notes='Auto-tracked as missed by daily scheduler.',
+                partial_score=0.0,
+            )
+            created_logs += 1
+
+            streak, _ = Streak.objects.get_or_create(habit=habit)
+            streak.total_misses += 1
+            streak.current_streak = 0
+            streak.save(update_fields=['total_misses', 'current_streak', 'updated_at'])
+
+            if NotificationIntelligence.should_send_notification(
+                user,
+                category='missed_habit_alerts',
+                current_dt=timezone.localtime(),
+            ):
+                NotificationCreator.create(
+                    user=user,
+                    notification_type='missed',
+                    title=f'You missed {habit.title} yesterday',
+                    message=f'"{habit.title}" was not completed on {yesterday.isoformat()}. Let\'s restart strong today.',
+                    habit=habit,
+                    icon_code=0xE002,
+                    color_value=0xFFF59E0B,
+                    action_type='habit_detail',
+                    action_data={'habitId': habit.id},
+                )
+
+    logger.info('Tracked %d missed habit logs for %s', created_logs, yesterday)
+    return created_logs
 
 
 # =============================================================================
@@ -336,5 +413,20 @@ def _can_send_notification(user, category=None):
             # Overnight window (e.g. 22:00 – 07:00)
             if current_time >= start or current_time <= end:
                 return False
+
+    return True
+
+
+def _is_habit_scheduled_for_date(habit, target_date):
+    """Return True if a habit should run on the given target date."""
+    if habit.frequency == 'daily':
+        return True
+
+    if habit.frequency == 'custom':
+        return target_date.weekday() in (habit.custom_days or [])
+
+    if habit.frequency == 'weekly':
+        # Weekly habits are considered due on the start-date weekday.
+        return habit.start_date.weekday() == target_date.weekday()
 
     return True

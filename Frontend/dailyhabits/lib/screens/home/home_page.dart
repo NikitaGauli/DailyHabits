@@ -31,8 +31,10 @@ import 'package:dailyhabits/models/habit.dart';
 import 'package:dailyhabits/widgets/home/create_edit_habit_sheet.dart';
 import 'package:dailyhabits/screens/auth/login_screen.dart';
 import 'package:dailyhabits/screens/analytics/analytics_controller.dart';
+import 'package:dailyhabits/screens/analytics/analytics_screen.dart';
 import 'package:dailyhabits/screens/settings/settings_screen.dart';
 import 'package:dailyhabits/screens/settings/settings_controller.dart';
+import 'package:dailyhabits/screens/settings/pages/notifications_page.dart';
 import 'package:dailyhabits/screens/settings/pages/appearance_page.dart';
 import 'package:dailyhabits/screens/settings/pages/privacy_policy_page.dart';
 import 'package:dailyhabits/screens/settings/pages/help_support_page.dart';
@@ -1289,6 +1291,75 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 24),
 
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: tc.primary.withValues(alpha: 0.06),
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: tc.primary.withValues(alpha: 0.18)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Quick Access Controls',
+                    style: TextStyle(
+                      color: tc.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    'Set reminder customization, heat map, and notification scheduling in one place.',
+                    style: TextStyle(color: tc.textSecondary, fontSize: 12.5),
+                  ),
+                  const SizedBox(height: 12),
+                  Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    children: [
+                      _quickAccessChip(
+                        tc,
+                        icon: Icons.tune_rounded,
+                        label: 'Reminder Customizer',
+                        onTap: () => _openReminderCustomizerHub(controller),
+                      ),
+                      _quickAccessChip(
+                        tc,
+                        icon: Icons.calendar_month_rounded,
+                        label: 'Progress Calendar',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            AppPageRoute.slideRight(const AnalyticsScreen()),
+                          );
+                        },
+                      ),
+                      _quickAccessChip(
+                        tc,
+                        icon: Icons.notifications_active_rounded,
+                        label: 'Scheduling Preferences',
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            AppPageRoute.slideRight(
+                              ChangeNotifierProvider(
+                                create: (_) => SettingsController(),
+                                child: const NotificationsPage(),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 16),
+
             _profileOption(Icons.settings_rounded, 'Settings', 'Alerts, reminders, quiet hours', tc, onTap: () {
               Navigator.push(context, AppPageRoute.slideRight(
                 ChangeNotifierProvider(
@@ -1407,6 +1478,137 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ],
         ),
       ),
+    );
+  }
+
+  Widget _quickAccessChip(
+    ThemeColors tc, {
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(999),
+        child: Ink(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+          decoration: BoxDecoration(
+            color: tc.card,
+            borderRadius: BorderRadius.circular(999),
+            border: Border.all(color: tc.border.withValues(alpha: 0.25)),
+          ),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(icon, size: 15, color: tc.primary),
+              const SizedBox(width: 6),
+              Text(
+                label,
+                style: TextStyle(
+                  color: tc.textPrimary,
+                  fontWeight: FontWeight.w700,
+                  fontSize: 12,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _openReminderCustomizerHub(HomeController controller) async {
+    final tc = context.colors;
+    final habits = controller.allHabits.isNotEmpty
+        ? controller.allHabits
+        : controller.todayHabits;
+
+    await showModalBottomSheet(
+      context: context,
+      backgroundColor: tc.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        if (habits.isEmpty) {
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'No habits found',
+                  style: TextStyle(
+                    color: tc.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  'Create a habit first to customize reminders.',
+                  style: TextStyle(color: tc.textMuted),
+                ),
+              ],
+            ),
+          );
+        }
+
+        return ListView.separated(
+          shrinkWrap: true,
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
+          itemCount: habits.length + 1,
+          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          itemBuilder: (ctx, index) {
+            if (index == 0) {
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Text(
+                  'Select a habit to customize reminder settings',
+                  style: TextStyle(
+                    color: tc.textPrimary,
+                    fontSize: 15,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              );
+            }
+
+            final habit = habits[index - 1];
+            return Container(
+              decoration: BoxDecoration(
+                color: tc.card,
+                borderRadius: BorderRadius.circular(14),
+                border: Border.all(color: tc.border.withValues(alpha: 0.22)),
+              ),
+              child: ListTile(
+                leading: Icon(habit.icon, color: habit.color),
+                title: Text(habit.title, style: TextStyle(color: tc.textPrimary)),
+                subtitle: Text(
+                  habit.reminderEnabled && habit.reminderTime != null
+                      ? 'Reminder ${habit.reminderTime!.format(context)}'
+                      : 'No reminder set',
+                  style: TextStyle(color: tc.textMuted),
+                ),
+                trailing: const Icon(Icons.chevron_right_rounded),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(
+                    context,
+                    AppPageRoute.slideRight(
+                      HabitDetailScreen(
+                        habit: habit,
+                        onToggle: controller.loadData,
+                      ),
+                    ),
+                  );
+                },
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

@@ -219,6 +219,21 @@ class GamificationViewSet(viewsets.ViewSet):
             status=status.HTTP_200_OK if success else status.HTTP_400_BAD_REQUEST,
         )
 
+    @action(detail=False, methods=['post'], url_path=r'challenges/(?P<challenge_id>\d+)/mark-done')
+    def mark_challenge_done(self, request, challenge_id=None):
+        """POST /api/gamification/challenges/{id}/mark-done/"""
+        habit_id = request.data.get('habitId')
+        result = GamificationEngine.mark_challenge_done_today(
+            request.user,
+            int(challenge_id) if challenge_id is not None else 0,
+            int(habit_id) if habit_id else None,
+        )
+        success = 'error' not in result
+        return Response(
+            {'success': success, **result},
+            status=status.HTTP_200_OK if success else status.HTTP_400_BAD_REQUEST,
+        )
+
     @action(detail=False, methods=['get'], url_path='community-challenges')
     def community_challenges(self, request):
         """

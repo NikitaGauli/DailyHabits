@@ -391,6 +391,13 @@ class NotificationSettingsViewSet(viewsets.ViewSet):
                 'reminderMinutesBefore': settings_obj.reminder_minutes_before,
                 'maxNotificationsPerDay': settings_obj.max_notifications_per_day,
                 'defaultSnoozeMinutes': settings_obj.default_snooze_minutes,
+                'timezone': settings_obj.timezone,
+                'weekendRemindersEnabled': settings_obj.weekend_reminders_enabled,
+                'reminderWindowStart': settings_obj.reminder_window_start.isoformat() if settings_obj.reminder_window_start else None,
+                'reminderWindowEnd': settings_obj.reminder_window_end.isoformat() if settings_obj.reminder_window_end else None,
+                'deliveryMode': settings_obj.delivery_mode,
+                'digestTime': settings_obj.digest_time.isoformat() if settings_obj.digest_time else None,
+                'cooldownMinutes': settings_obj.cooldown_minutes,
             }
         })
 
@@ -423,6 +430,13 @@ class NotificationSettingsViewSet(viewsets.ViewSet):
             'reminderMinutesBefore': 'reminder_minutes_before',
             'maxNotificationsPerDay': 'max_notifications_per_day',
             'defaultSnoozeMinutes': 'default_snooze_minutes',
+            'timezone': 'timezone',
+            'weekendRemindersEnabled': 'weekend_reminders_enabled',
+            'reminderWindowStart': 'reminder_window_start',
+            'reminderWindowEnd': 'reminder_window_end',
+            'deliveryMode': 'delivery_mode',
+            'digestTime': 'digest_time',
+            'cooldownMinutes': 'cooldown_minutes',
         }
         # Apply only the fields present in the request payload
         for api_field, model_field in field_mapping.items():

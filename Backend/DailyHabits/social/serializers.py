@@ -29,6 +29,7 @@ from .models import (
     SharedHabit, HabitReaction, HabitComment,
     GroupChallenge, Encouragement,
 )
+from gamification.models import ChallengeParticipant
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -193,6 +194,12 @@ class GroupDetailSerializer(serializers.ModelSerializer):
     maxMembers = serializers.IntegerField(source='max_members')
     isActive = serializers.BooleanField(source='is_active')
     myRole = serializers.SerializerMethodField()
+    groupChallengeRating10 = serializers.SerializerMethodField()
+    groupChallengesCompleted = serializers.SerializerMethodField()
+    groupChallengesTotal = serializers.SerializerMethodField()
+    individualChallengeRating10 = serializers.SerializerMethodField()
+    individualChallengesCompleted = serializers.SerializerMethodField()
+    individualChallengesTotal = serializers.SerializerMethodField()
 
     class Meta:
         model = GroupHabit
@@ -200,6 +207,9 @@ class GroupDetailSerializer(serializers.ModelSerializer):
             'id', 'name', 'description', 'inviteCode',
             'memberCount', 'maxMembers', 'isActive',
             'creatorName', 'myRole',
+            'groupChallengeRating10', 'groupChallengesCompleted',
+            'groupChallengesTotal', 'individualChallengeRating10',
+            'individualChallengesCompleted', 'individualChallengesTotal',
             'iconCode', 'colorValue', 'created_at',
         ]
 
@@ -223,6 +233,67 @@ class GroupDetailSerializer(serializers.ModelSerializer):
             except GroupMember.DoesNotExist:
                 return None
         return None
+
+    def _group_challenge_stats(self, obj):
+        cache = getattr(self, '_group_challenge_stats_cache', None)
+        if cache is None:
+            cache = {}
+            self._group_challenge_stats_cache = cache
+        if obj.id in cache:
+            return cache[obj.id]
+
+        total = GroupChallenge.objects.filter(group=obj).count()
+        completed = GroupChallenge.objects.filter(group=obj, status='completed').count()
+        rating = round(completed / total * 10, 1) if total else 0.0
+        stats = {'total': total, 'completed': completed, 'rating': rating}
+        cache[obj.id] = stats
+        return stats
+
+    def _individual_challenge_stats(self):
+        cached = getattr(self, '_individual_challenge_stats_cache', None)
+        if cached is not None:
+            return cached
+
+        request = self.context.get('request')
+        if not request or not request.user.is_authenticated:
+            self._individual_challenge_stats_cache = {
+                'total': 0,
+                'completed': 0,
+                'rating': 0.0,
+            }
+            return self._individual_challenge_stats_cache
+
+        qs = ChallengeParticipant.objects.filter(
+            user=request.user,
+            challenge__scope='personal',
+        )
+        total = qs.count()
+        completed = qs.filter(status='completed').count()
+        rating = round(completed / total * 10, 1) if total else 0.0
+        self._individual_challenge_stats_cache = {
+            'total': total,
+            'completed': completed,
+            'rating': rating,
+        }
+        return self._individual_challenge_stats_cache
+
+    def get_groupChallengeRating10(self, obj):
+        return self._group_challenge_stats(obj)['rating']
+
+    def get_groupChallengesCompleted(self, obj):
+        return self._group_challenge_stats(obj)['completed']
+
+    def get_groupChallengesTotal(self, obj):
+        return self._group_challenge_stats(obj)['total']
+
+    def get_individualChallengeRating10(self, obj):
+        return self._individual_challenge_stats()['rating']
+
+    def get_individualChallengesCompleted(self, obj):
+        return self._individual_challenge_stats()['completed']
+
+    def get_individualChallengesTotal(self, obj):
+        return self._individual_challenge_stats()['total']
 
 
 # ═══════════════════════════════════════════════════════════════════════════

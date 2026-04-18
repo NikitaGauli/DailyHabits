@@ -18,6 +18,7 @@ import 'package:dailyhabits/admin/pages/admin_settings_page.dart';
 import 'package:dailyhabits/admin/pages/admin_feature_flags_page.dart';
 import 'package:dailyhabits/admin/pages/admin_notifications_page.dart';
 import 'package:dailyhabits/admin/pages/admin_audit_logs_page.dart';
+import 'package:dailyhabits/screens/auth/login_screen.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 
 class AdminShell extends StatefulWidget {
@@ -31,6 +32,7 @@ class _AdminShellState extends State<AdminShell>
     with SingleTickerProviderStateMixin {
   bool _sidebarCollapsed = false;
   bool _sidebarHovered = false;
+  bool _loginRedirectTriggered = false;
   late final AnimationController _sidebarAnim;
   late final Animation<double> _sidebarWidth;
 
@@ -67,6 +69,25 @@ class _AdminShellState extends State<AdminShell>
     } else {
       _sidebarAnim.reverse();
     }
+  }
+
+  bool _shouldRedirectToLogin(String? error) {
+    if (error == null) return false;
+    final normalized = error.toLowerCase();
+    return normalized.contains('session expired') ||
+        normalized.contains('log in again') ||
+        normalized.contains('authentication credentials were not provided');
+  }
+
+  void _redirectToLogin() {
+    if (_loginRedirectTriggered) return;
+    _loginRedirectTriggered = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(builder: (_) => const LoginScreen()),
+      );
+    });
   }
 
   @override
@@ -108,6 +129,14 @@ class _AdminShellState extends State<AdminShell>
           );
         }
         if (ctrl.profile == null && ctrl.error != null) {
+          if (_shouldRedirectToLogin(ctrl.error)) {
+            _redirectToLogin();
+            return Scaffold(
+              backgroundColor: _bg(context),
+              body: const Center(child: CircularProgressIndicator()),
+            );
+          }
+
           return Scaffold(
             backgroundColor: _bg(context),
             body: Center(

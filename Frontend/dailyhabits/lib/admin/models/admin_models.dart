@@ -210,6 +210,12 @@ class EngagementMetrics {
   final int skipped;
   final int missed;
   final double completionRate;
+  final double groupChallengeRating10;
+  final int groupChallengesCompleted;
+  final int groupChallengesTotal;
+  final double individualChallengeRating10;
+  final int individualChallengesCompleted;
+  final int individualChallengesTotal;
   final List<Map<String, dynamic>> streakDistribution;
   final List<Map<String, dynamic>> topCategories;
 
@@ -220,6 +226,12 @@ class EngagementMetrics {
     this.skipped = 0,
     this.missed = 0,
     this.completionRate = 0,
+    this.groupChallengeRating10 = 0,
+    this.groupChallengesCompleted = 0,
+    this.groupChallengesTotal = 0,
+    this.individualChallengeRating10 = 0,
+    this.individualChallengesCompleted = 0,
+    this.individualChallengesTotal = 0,
     this.streakDistribution = const [],
     this.topCategories = const [],
   });
@@ -232,6 +244,15 @@ class EngagementMetrics {
         skipped: json['skipped'] ?? 0,
         missed: json['missed'] ?? 0,
         completionRate: (json['completion_rate'] ?? 0).toDouble(),
+        groupChallengeRating10:
+          (json['group_challenge_rating_10'] ?? 0).toDouble(),
+        groupChallengesCompleted: json['group_challenges_completed'] ?? 0,
+        groupChallengesTotal: json['group_challenges_total'] ?? 0,
+        individualChallengeRating10:
+          (json['individual_challenge_rating_10'] ?? 0).toDouble(),
+        individualChallengesCompleted:
+          json['individual_challenges_completed'] ?? 0,
+        individualChallengesTotal: json['individual_challenges_total'] ?? 0,
         streakDistribution: List<Map<String, dynamic>>.from(
             json['streak_distribution'] ?? []),
         topCategories:

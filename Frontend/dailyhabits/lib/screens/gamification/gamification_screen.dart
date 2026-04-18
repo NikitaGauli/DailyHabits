@@ -460,7 +460,29 @@ class _GamificationViewState extends State<_GamificationView>
             ...ctrl.myChallenges.map(
               (c) => Padding(
                 padding: const EdgeInsets.only(bottom: 12),
-                child: ChallengeCard(challenge: c),
+                child: ChallengeCard(
+                  challenge: c,
+                  onMarkToday: () async {
+                    final ok = await ctrl.markChallengeDoneToday(c.id);
+                    if (!mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? 'Marked "${c.title}" as done for today!'
+                              : 'Could not mark "${c.title}" today.',
+                        ),
+                        backgroundColor: ok
+                            ? const Color(0xFF22C55E)
+                            : const Color(0xFFEF4444),
+                        behavior: SnackBarBehavior.floating,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                      ),
+                    );
+                  },
+                ),
               ),
             ),
 

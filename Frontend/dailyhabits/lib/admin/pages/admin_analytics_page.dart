@@ -23,6 +23,8 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage>
     with SingleTickerProviderStateMixin {
   EngagementMetrics? _engagement;
   bool _loadingEngagement = false;
+  bool _exporting = false;
+  int _exportDays = 30;
   late TabController _tabCtrl;
 
   @override
@@ -46,6 +48,28 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage>
     if (mounted) setState(() => _loadingEngagement = false);
   }
 
+  Future<void> _exportReport(String format) async {
+    if (_exporting) return;
+    setState(() => _exporting = true);
+    try {
+      await AdminApiService().exportAnalyticsReport(
+        days: _exportDays,
+        format: format,
+      );
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('${format.toUpperCase()} report downloaded')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Export failed: $e')),
+      );
+    } finally {
+      if (mounted) setState(() => _exporting = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -53,6 +77,60 @@ class _AdminAnalyticsPageState extends State<AdminAnalyticsPage>
       builder: (context, ctrl, _) {
         return Column(
           children: [
+            Container(
+              margin: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: isDark ? AppColors.darkCard : AppColors.lightCard,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: isDark ? AppColors.darkBorder : AppColors.lightBorder,
+                ),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: Wrap(
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        const Text(
+                          'Export range:',
+                          style: TextStyle(fontWeight: FontWeight.w700),
+                        ),
+                        for (final d in const [7, 30, 90])
+                          ChoiceChip(
+                            label: Text('$d days'),
+                            selected: _exportDays == d,
+                            onSelected: (v) {
+                              if (v) setState(() => _exportDays = d);
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  OutlinedButton.icon(
+                    onPressed: _exporting ? null : () => _exportReport('csv'),
+                    icon: const Icon(Icons.table_view_rounded, size: 18),
+                    label: const Text('CSV'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.icon(
+                    onPressed: _exporting ? null : () => _exportReport('pdf'),
+                    icon: _exporting
+                        ? const SizedBox(
+                            width: 14,
+                            height: 14,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.picture_as_pdf_rounded, size: 18),
+                    label: const Text('PDF'),
+                  ),
+                ],
+              ),
+            ),
+
             // ─── Tab Bar ───
             Container(
               margin: const EdgeInsets.fromLTRB(24, 16, 24, 0),

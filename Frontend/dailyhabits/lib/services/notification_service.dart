@@ -7,6 +7,7 @@
 // =============================================================================
 
 import 'dart:convert';
+import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'package:dailyhabits/services/auth_service.dart';
 import 'package:dailyhabits/services/api_config.dart';
@@ -47,6 +48,9 @@ class NotificationService {
 
   /// Base URL for AI-generated smart tips.
   String get _smartTipsUrl => '${ApiConfig.baseUrl}/smart-tips';
+
+  /// Base URL for per-habit reminder records.
+  String get _habitRemindersUrl => '${ApiConfig.baseUrl}/habit-reminders';
 
   /// Builds authenticated HTTP headers with JSON content type.
   Future<Map<String, String>> _getHeaders() async {
@@ -414,8 +418,8 @@ class NotificationService {
   Future<bool> updateSettings(NotificationSettings settings) async {
     try {
       final headers = await _getHeaders();
-      final response = await _client.post(
-        Uri.parse('$_settingsUrl/update/'),
+      final response = await _client.patch(
+        Uri.parse('$_settingsUrl/update_settings/'),
         headers: headers,
         body: jsonEncode(settings.toJson()),
       );
@@ -513,6 +517,71 @@ class NotificationService {
       return {};
     } catch (_) {
       return {};
+    }
+  }
+
+  Future<Map<String, dynamic>?> getReminderForHabit(int habitId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await _client.get(
+        Uri.parse('$_habitRemindersUrl/'),
+        headers: headers,
+      );
+      if (response.statusCode != 200) return null;
+
+      final data = _decodeMap(response.body);
+      final reminders = _normalizeList(data['reminders']);
+      for (final item in reminders) {
+        if (item is Map<String, dynamic>) {
+          final id = int.tryParse('${item['habitId']}');
+          if (id == habitId) return item;
+        }
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<bool> upsertHabitReminderForHabit({
+    required int habitId,
+    required TimeOfDay reminderTime,
+    String repeatType = 'daily',
+    List<int> customDays = const [],
+    bool isEnabled = true,
+    String message = '',
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final hh = reminderTime.hour.toString().padLeft(2, '0');
+      final mm = reminderTime.minute.toString().padLeft(2, '0');
+      final body = {
+        'habit': habitId,
+        'reminder_time': '$hh:$mm:00',
+        'repeat_type': repeatType,
+        'custom_days': customDays,
+        'is_enabled': isEnabled,
+        'message': message,
+      };
+
+      final existing = await getReminderForHabit(habitId);
+      http.Response response;
+      if (existing != null && existing['id'] != null) {
+        response = await _client.patch(
+          Uri.parse('$_habitRemindersUrl/${existing['id']}/'),
+          headers: headers,
+          body: jsonEncode(body),
+        );
+      } else {
+        response = await _client.post(
+          Uri.parse('$_habitRemindersUrl/'),
+          headers: headers,
+          body: jsonEncode(body),
+        );
+      }
+      return response.statusCode >= 200 && response.statusCode < 300;
+    } catch (_) {
+      return false;
     }
   }
 

@@ -14,6 +14,7 @@ class ChallengeCard extends StatelessWidget {
   final bool compact;
   final bool showJoinButton;
   final VoidCallback? onJoin;
+  final VoidCallback? onMarkToday;
 
   const ChallengeCard({
     super.key,
@@ -21,6 +22,7 @@ class ChallengeCard extends StatelessWidget {
     this.compact = false,
     this.showJoinButton = false,
     this.onJoin,
+    this.onMarkToday,
   });
 
   @override
@@ -156,6 +158,15 @@ class ChallengeCard extends StatelessWidget {
                     ),
                   ),
                 ],
+                const SizedBox(width: 8),
+                Text(
+                  '${challenge.rating10.toStringAsFixed(1)}/10',
+                  style: TextStyle(
+                    color: challenge.color,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
                 const Spacer(),
                 // Rewards
                 _rewardChip(Icons.stars_rounded, '+${challenge.xpReward} XP',
@@ -225,6 +236,39 @@ class ChallengeCard extends StatelessWidget {
                   ),
                 ),
               ),
+            ],
+
+            // Mark today button for personal challenge gamification
+            if (!showJoinButton && !challenge.isCompleted) ...[
+              const SizedBox(height: 10),
+              if (challenge.doneToday)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF22C55E).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Center(
+                    child: Text(
+                      'Done Today',
+                      style: TextStyle(
+                        color: Color(0xFF22C55E),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                )
+              else if (challenge.canMarkToday && onMarkToday != null)
+                SizedBox(
+                  width: double.infinity,
+                  child: OutlinedButton.icon(
+                    onPressed: onMarkToday,
+                    icon: const Icon(Icons.task_alt_rounded, size: 16),
+                    label: const Text('Mark Done Today'),
+                  ),
+                ),
             ],
           ] else ...[
             // Compact mode: simple progress row

@@ -10,7 +10,9 @@ import 'package:provider/provider.dart';
 import 'package:dailyhabits/theme/app_theme.dart';
 import 'package:dailyhabits/widgets/common/glass_container.dart';
 import 'package:dailyhabits/models/community_models.dart';
+import 'package:dailyhabits/models/habit.dart';
 import 'package:dailyhabits/screens/community/community_controller.dart';
+import 'package:dailyhabits/services/habit_service.dart';
 
 /// Detailed group view with 4 sub-sections displayed in a scrollable layout:
 /// Header, Active Challenges, Leaderboard, and Members.
@@ -90,6 +92,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
               children: [
                 _buildStatsHeader(context, detail),
                 const SizedBox(height: 20),
+                _buildShareAction(context, ctrl, detail),
+                const SizedBox(height: 20),
                 if (detail.isAdmin) ...[
                   _buildAdminActions(context, ctrl, detail),
                   const SizedBox(height: 20),
@@ -99,6 +103,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                 _buildLeaderboardSection(context, detail),
                 const SizedBox(height: 20),
                 _buildSharedAchievementsSection(context, detail),
+                const SizedBox(height: 20),
+                _buildSharedHabitsCommentsSection(context, ctrl, detail),
                 const SizedBox(height: 20),
                 _buildMembersSection(context, ctrl, detail),
               ],
@@ -234,7 +240,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
 
   Widget _buildAdminActions(BuildContext context, CommunityController ctrl,
       EnrichedGroupDetail detail) {
-    final tc = context.colors;
     return Column(
       children: [
         Row(
@@ -249,21 +254,6 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   backgroundColor: const Color(0xFF8B5CF6),
                   foregroundColor: Colors.white,
                   padding: const EdgeInsets.symmetric(vertical: 12),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                ),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: OutlinedButton.icon(
-                onPressed: () => _showShareToGroupSheet(context, ctrl, detail.id),
-                icon: Icon(Icons.share_rounded, size: 18, color: tc.primary),
-                label: Text('Share Habit', style: TextStyle(color: tc.primary)),
-                style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(vertical: 12),
-                  side: BorderSide(color: tc.primary),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(14),
                   ),
@@ -315,6 +305,29 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     );
   }
 
+  Widget _buildShareAction(BuildContext context, CommunityController ctrl,
+      EnrichedGroupDetail detail) {
+    final tc = context.colors;
+    return SizedBox(
+      width: double.infinity,
+      child: OutlinedButton.icon(
+        onPressed: () => _showShareToGroupSheet(context, ctrl, detail.id),
+        icon: Icon(Icons.share_rounded, size: 18, color: tc.primary),
+        label: Text(
+          'Share Habit With Group Members',
+          style: TextStyle(color: tc.primary, fontWeight: FontWeight.w600),
+        ),
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(vertical: 12),
+          side: BorderSide(color: tc.primary),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+    );
+  }
+
   // ═══════════════════════════════════════════════════════════════
   //  Challenges Section
   // ═══════════════════════════════════════════════════════════════
@@ -341,6 +354,8 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
           ],
         ),
         const SizedBox(height: 10),
+        _buildChallengeTrackingCards(context, detail),
+        const SizedBox(height: 10),
         if (challenges.isEmpty)
           GlassContainer(
             padding: const EdgeInsets.all(20),
@@ -357,13 +372,108 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
             ),
           )
         else
-          ...challenges.map((ch) => _challengeCard(context, ch)),
+          ...challenges.map((ch) => _challengeCard(context, detail.id, ch)),
       ],
     );
   }
 
-  Widget _challengeCard(BuildContext context, GroupChallenge ch) {
+  Widget _buildChallengeTrackingCards(
+    BuildContext context,
+    EnrichedGroupDetail detail,
+  ) {
+    return Row(
+      children: [
+        Expanded(
+          child: _trackingCard(
+            context,
+            title: 'Group Challenge',
+            score: detail.groupChallengeRating10,
+            completed: detail.groupChallengesCompleted,
+            total: detail.groupChallengesTotal,
+            color: const Color(0xFF8B5CF6),
+            icon: Icons.groups_rounded,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: _trackingCard(
+            context,
+            title: 'Individual',
+            score: detail.individualChallengeRating10,
+            completed: detail.individualChallengesCompleted,
+            total: detail.individualChallengesTotal,
+            color: const Color(0xFF0EA5E9),
+            icon: Icons.person_rounded,
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _trackingCard(
+    BuildContext context, {
+    required String title,
+    required double score,
+    required int completed,
+    required int total,
+    required Color color,
+    required IconData icon,
+  }) {
     final tc = context.colors;
+    final progress = (score / 10).clamp(0.0, 1.0);
+    return GlassContainer(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Icon(icon, size: 16, color: color),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(
+                  title,
+                  style: AppTextStyles.caption.copyWith(
+                    color: tc.textSecondary,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            '${score.toStringAsFixed(1)}/10',
+            style: AppTextStyles.bodyLg.copyWith(
+              color: color,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+          const SizedBox(height: 6),
+          ClipRRect(
+            borderRadius: BorderRadius.circular(5),
+            child: LinearProgressIndicator(
+              value: progress,
+              minHeight: 6,
+              backgroundColor: tc.surfaceVariant,
+              valueColor: AlwaysStoppedAnimation(color),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            '$completed/$total completed',
+            style: AppTextStyles.caption.copyWith(color: tc.textMuted),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _challengeCard(BuildContext context, int groupId, GroupChallenge ch) {
+    final tc = context.colors;
+    final ctrl = context.read<CommunityController>();
+    final rating10 = (ch.progressPercentage / 10).clamp(0.0, 10.0);
     return GlassContainer(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
@@ -466,6 +576,71 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
                   ),
                 ],
               ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Text(
+                'Rating: ${rating10.toStringAsFixed(1)}/10',
+                style: AppTextStyles.caption.copyWith(
+                  color: const Color(0xFF8B5CF6),
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              const Spacer(),
+              if (ch.doneToday)
+                Container(
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Text(
+                    'Done Today',
+                    style: TextStyle(
+                      color: Color(0xFF10B981),
+                      fontSize: 11,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                )
+              else if (ch.canMarkToday)
+                SizedBox(
+                  height: 30,
+                  child: ElevatedButton.icon(
+                    onPressed: () async {
+                      final ok = await ctrl.markGroupChallengeDoneToday(
+                        groupId,
+                        ch.id,
+                      );
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            ok
+                                ? (ctrl.actionMessage ?? 'Marked done for today')
+                                : (ctrl.actionMessage ?? 'Could not mark done'),
+                          ),
+                        ),
+                      );
+                    },
+                    icon: const Icon(Icons.check_circle_rounded, size: 14),
+                    label: const Text(
+                      'Mark Today',
+                      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700),
+                    ),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                    ),
+                  ),
+                ),
             ],
           ),
         ],
@@ -604,6 +779,217 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
         const SizedBox(height: 10),
         ...detail.members.map((m) => _memberTile(context, ctrl, m)),
       ],
+    );
+  }
+
+  Widget _buildSharedHabitsCommentsSection(
+    BuildContext context,
+    CommunityController ctrl,
+    EnrichedGroupDetail detail,
+  ) {
+    final tc = context.colors;
+    final posts = detail.sharedGroupHabits;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            const Icon(Icons.forum_rounded,
+                size: 20, color: Color(0xFF0EA5E9)),
+            const SizedBox(width: 8),
+            Text('Shared Habits & Comments',
+                style: AppTextStyles.h3
+                    .copyWith(color: tc.textPrimary, fontSize: 16)),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: const Text(
+                'Visibility 10/10',
+                style: TextStyle(
+                  color: Color(0xFF10B981),
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 10),
+        if (posts.isEmpty)
+          GlassContainer(
+            padding: const EdgeInsets.all(16),
+            child: Text(
+              'No shared habits yet. Share one and comment together.',
+              style: TextStyle(color: tc.textMuted),
+            ),
+          )
+        else
+          ...posts.map((p) => _sharedHabitPostCard(context, ctrl, detail.id, p)),
+      ],
+    );
+  }
+
+  Widget _sharedHabitPostCard(
+    BuildContext context,
+    CommunityController ctrl,
+    int groupId,
+    Map<String, dynamic> post,
+  ) {
+    final tc = context.colors;
+    final postId = post['id'] as int? ?? 0;
+    final comments = List<Map<String, dynamic>>.from(post['recentComments'] ?? []);
+
+    return GlassContainer(
+      margin: const EdgeInsets.only(bottom: 10),
+      padding: const EdgeInsets.all(14),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            '${post['authorName'] ?? 'Member'} shared ${post['habitTitle'] ?? 'a habit'}',
+            style: AppTextStyles.bodyMd.copyWith(
+              color: tc.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            post['content']?.toString() ?? '',
+            style: AppTextStyles.caption.copyWith(color: tc.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Comments (${post['commentCount'] ?? 0})',
+            style: AppTextStyles.caption.copyWith(
+              color: const Color(0xFF0EA5E9),
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          const SizedBox(height: 6),
+          if (comments.isEmpty)
+            Text(
+              'No comments yet',
+              style: AppTextStyles.caption.copyWith(color: tc.textMuted),
+            )
+          else
+            ...comments.map((c) => Padding(
+                  padding: const EdgeInsets.only(bottom: 4),
+                  child: Text(
+                    '${c['authorName'] ?? 'Member'}: ${c['content'] ?? ''}',
+                    style: AppTextStyles.caption.copyWith(color: tc.textSecondary),
+                  ),
+                )),
+          const SizedBox(height: 8),
+          Align(
+            alignment: Alignment.centerRight,
+            child: OutlinedButton.icon(
+              onPressed: postId <= 0
+                  ? null
+                  : () => _showAddGroupPostCommentSheet(
+                        context,
+                        ctrl,
+                        groupId,
+                        postId,
+                      ),
+              icon: const Icon(Icons.add_comment_rounded, size: 16),
+              label: const Text('Add Comment'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showAddGroupPostCommentSheet(
+    BuildContext context,
+    CommunityController ctrl,
+    int groupId,
+    int postId,
+  ) {
+    final tc = context.colors;
+    final commentCtrl = TextEditingController();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: tc.bg,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (ctx) {
+        return Padding(
+          padding: EdgeInsets.fromLTRB(
+            20,
+            20,
+            20,
+            MediaQuery.of(ctx).viewInsets.bottom + 20,
+          ),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                'Comment to Group',
+                style: AppTextStyles.h3.copyWith(color: tc.textPrimary),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: commentCtrl,
+                minLines: 2,
+                maxLines: 4,
+                style: TextStyle(color: tc.textPrimary),
+                decoration: InputDecoration(
+                  hintText: 'Write a comment that everyone in group can see',
+                  hintStyle: TextStyle(color: tc.textMuted),
+                  filled: true,
+                  fillColor: tc.surfaceVariant,
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(14),
+                    borderSide: BorderSide.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 12),
+              SizedBox(
+                width: double.infinity,
+                child: ElevatedButton(
+                  onPressed: () async {
+                    final text = commentCtrl.text.trim();
+                    if (text.isEmpty) return;
+                    final ok = await ctrl.addGroupPostComment(groupId, postId, text);
+                    if (!context.mounted) return;
+                    if (ok) {
+                      Navigator.pop(ctx);
+                    }
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? 'Comment posted. Visible to all group members (10/10).'
+                              : (ctrl.actionMessage ?? 'Could not post comment.'),
+                        ),
+                      ),
+                    );
+                  },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: tc.primary,
+                    foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                  ),
+                  child: const Text('Post Comment'),
+                ),
+              ),
+            ],
+          ),
+        );
+      },
     );
   }
 
@@ -1183,81 +1569,199 @@ class _GroupDetailScreenState extends State<GroupDetailScreen> {
     int groupId,
   ) {
     final tc = context.colors;
+    final habitsFuture = HabitService().getHabits();
+    Habit? selectedHabit;
     showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
       backgroundColor: tc.bg,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
       builder: (ctx) {
-        return Padding(
-          padding: const EdgeInsets.all(20),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Container(
-                width: 40,
-                height: 4,
-                decoration: BoxDecoration(
-                  color: tc.border,
-                  borderRadius: BorderRadius.circular(2),
-                ),
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: EdgeInsets.fromLTRB(
+                20,
+                20,
+                20,
+                MediaQuery.of(ctx).viewInsets.bottom + 20,
               ),
-              const SizedBox(height: 16),
-              Text('Share a Habit',
-                  style: AppTextStyles.h3.copyWith(color: tc.textPrimary)),
-              const SizedBox(height: 8),
-              Text(
-                'Enter the habit ID to share with this group.',
-                style: AppTextStyles.bodyMd.copyWith(color: tc.textMuted),
-              ),
-              const SizedBox(height: 16),
-              Builder(builder: (ctx) {
-                final idCtrl = TextEditingController();
-                return Row(
-                  children: [
-                    Expanded(
-                      child: TextField(
-                        controller: idCtrl,
-                        keyboardType: TextInputType.number,
-                        style: TextStyle(color: tc.textPrimary),
-                        decoration: InputDecoration(
-                          hintText: 'Habit ID',
-                          hintStyle: TextStyle(color: tc.textMuted),
-                          filled: true,
-                          fillColor: tc.surfaceVariant,
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(14),
-                            borderSide: BorderSide.none,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 40,
+                    height: 4,
+                    decoration: BoxDecoration(
+                      color: tc.border,
+                      borderRadius: BorderRadius.circular(2),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Share Habit In Group',
+                    style: AppTextStyles.h3.copyWith(color: tc.textPrimary),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Pick one active habit to share with all community group members.',
+                    style: AppTextStyles.bodyMd.copyWith(color: tc.textMuted),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 12),
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF10B981).withValues(alpha: 0.12),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Text(
+                      'Share Quality: 10/10',
+                      style: TextStyle(
+                        color: Color(0xFF10B981),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  FutureBuilder<List<Habit>>(
+                    future: habitsFuture,
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData && snapshot.connectionState == ConnectionState.waiting) {
+                        return const Padding(
+                          padding: EdgeInsets.symmetric(vertical: 24),
+                          child: CircularProgressIndicator(),
+                        );
+                      }
+
+                      final habits = (snapshot.data ?? const <Habit>[])
+                          .where((h) => h.status == 'active')
+                          .toList();
+
+                      if (habits.isEmpty) {
+                        return Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          child: Text(
+                            'No active habits found to share.',
+                            style: AppTextStyles.bodyMd
+                                .copyWith(color: tc.textMuted),
                           ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    ElevatedButton(
-                      onPressed: () {
-                        final id = int.tryParse(idCtrl.text);
-                        if (id != null) {
-                          Navigator.pop(ctx);
-                          ctrl.shareHabitToGroup(groupId, id);
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: tc.primary,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 20, vertical: 14),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(14),
-                        ),
-                      ),
-                      child: const Text('Share'),
-                    ),
-                  ],
-                );
-              }),
-            ],
-          ),
+                        );
+                      }
+
+                      selectedHabit ??= habits.first;
+
+                      return Column(
+                        children: [
+                          ConstrainedBox(
+                            constraints: const BoxConstraints(maxHeight: 260),
+                            child: ListView.builder(
+                              shrinkWrap: true,
+                              itemCount: habits.length,
+                              itemBuilder: (_, i) {
+                                final h = habits[i];
+                                final isSelected = selectedHabit?.id == h.id;
+                                return InkWell(
+                                  onTap: () => setSheetState(() => selectedHabit = h),
+                                  borderRadius: BorderRadius.circular(12),
+                                  child: Container(
+                                    margin: const EdgeInsets.only(bottom: 8),
+                                    padding: const EdgeInsets.all(12),
+                                    decoration: BoxDecoration(
+                                      color: isSelected
+                                          ? tc.primary.withValues(alpha: 0.1)
+                                          : tc.surfaceVariant,
+                                      borderRadius: BorderRadius.circular(12),
+                                      border: Border.all(
+                                        color: isSelected
+                                            ? tc.primary.withValues(alpha: 0.4)
+                                            : Colors.transparent,
+                                      ),
+                                    ),
+                                    child: Row(
+                                      children: [
+                                        Icon(h.icon, color: h.color, size: 20),
+                                        const SizedBox(width: 10),
+                                        Expanded(
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              Text(
+                                                h.title,
+                                                style: AppTextStyles.bodyMd.copyWith(
+                                                  color: tc.textPrimary,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                              Text(
+                                                h.category,
+                                                style: AppTextStyles.caption
+                                                    .copyWith(color: tc.textMuted),
+                                              ),
+                                            ],
+                                          ),
+                                        ),
+                                        Icon(
+                                          isSelected
+                                              ? Icons.check_circle_rounded
+                                              : Icons.radio_button_unchecked,
+                                          color: isSelected ? tc.primary : tc.textMuted,
+                                          size: 20,
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                          ),
+                          const SizedBox(height: 12),
+                          SizedBox(
+                            width: double.infinity,
+                            child: ElevatedButton.icon(
+                              onPressed: selectedHabit == null
+                                  ? null
+                                  : () async {
+                                      final habitId = int.tryParse(selectedHabit!.id);
+                                      if (habitId == null) return;
+
+                                      final ok = await ctrl.shareHabitToGroup(groupId, habitId);
+                                      if (!context.mounted) return;
+                                      Navigator.pop(ctx);
+                                      ScaffoldMessenger.of(context).showSnackBar(
+                                        SnackBar(
+                                          content: Text(
+                                            ok
+                                                ? (ctrl.actionMessage ?? 'Habit shared successfully')
+                                                : (ctrl.actionMessage ?? 'Could not share habit'),
+                                          ),
+                                        ),
+                                      );
+                                    },
+                              icon: const Icon(Icons.share_rounded, size: 18),
+                              label: const Text('Share With Group Members'),
+                              style: ElevatedButton.styleFrom(
+                                backgroundColor: tc.primary,
+                                foregroundColor: Colors.white,
+                                padding: const EdgeInsets.symmetric(vertical: 14),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(14),
+                                ),
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
+                  ),
+                ],
+              ),
+            );
+          },
         );
       },
     );

@@ -11,6 +11,10 @@ import 'package:dailyhabits/services/api_config.dart';
 import 'package:dailyhabits/services/auth_service.dart';
 import 'package:dailyhabits/admin/models/admin_models.dart';
 
+import '../../services/pdf_file_helper_stub.dart'
+  if (dart.library.html) '../../services/pdf_file_helper_web.dart'
+  if (dart.library.io) '../../services/pdf_file_helper_mobile.dart';
+
 // =============================================================================
 // Admin API Service
 // =============================================================================
@@ -128,6 +132,48 @@ class AdminApiService {
   Future<EngagementMetrics> getEngagementMetrics({int days = 30}) async {
     final data = await _get('/analytics/engagement/', {'days': '$days'});
     return EngagementMetrics.fromJson(data);
+  }
+
+  Future<void> exportAnalyticsReport({
+    int days = 30,
+    String format = 'csv',
+  }) async {
+    final normalized = format.toLowerCase() == 'pdf' ? 'pdf' : 'csv';
+    final headers = await _headers();
+    headers['Accept'] = normalized == 'pdf'
+        ? 'application/pdf, text/csv, application/json;q=0.9'
+        : 'text/csv, application/pdf, application/json;q=0.9';
+
+    final response = await http
+        .get(
+          _uri('/analytics/export/', {
+            'days': '$days',
+            'format': normalized,
+          }),
+          headers: headers,
+        )
+        .timeout(ApiConfig.timeout);
+
+    if (response.statusCode != 200) {
+      throw ApiException(response.statusCode, response.body);
+    }
+
+    final contentType = response.headers['content-type'] ??
+        (normalized == 'pdf' ? 'application/pdf' : 'text/csv');
+    final disposition = response.headers['content-disposition'] ?? '';
+    final fileName = _extractFileName(disposition) ??
+        'analytics_${days}d.${normalized == 'pdf' ? 'pdf' : 'csv'}';
+
+    if (response.bodyBytes.isEmpty) {
+      throw ApiException(500, 'Empty export file received.');
+    }
+
+    await saveExportToDevice(response.bodyBytes, contentType, fileName);
+  }
+
+  String? _extractFileName(String disposition) {
+    final match = RegExp(r'filename="?([^";]+)"?').firstMatch(disposition);
+    return match?.group(1);
   }
 
   // ===========================================================================

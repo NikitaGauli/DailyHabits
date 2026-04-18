@@ -346,6 +346,27 @@ class NotificationSettings {
   /// End of the quiet-hours window (notifications resume).
   final TimeOfDay? quietHoursEnd;
 
+  /// Whether reminders are allowed on Saturdays/Sundays.
+  final bool weekendRemindersEnabled;
+
+  /// Optional reminder delivery window start.
+  final TimeOfDay? reminderWindowStart;
+
+  /// Optional reminder delivery window end.
+  final TimeOfDay? reminderWindowEnd;
+
+  /// Delivery style: instant or digest.
+  final String deliveryMode;
+
+  /// Preferred digest delivery time when delivery mode is digest.
+  final TimeOfDay? digestTime;
+
+  /// Minimum minutes between notifications.
+  final int cooldownMinutes;
+
+  /// IANA timezone identifier used by backend scheduling.
+  final String timezone;
+
   NotificationSettings({
     required this.notificationsEnabled,
     required this.habitReminders,
@@ -356,6 +377,13 @@ class NotificationSettings {
     required this.quietHoursEnabled,
     this.quietHoursStart,
     this.quietHoursEnd,
+    this.weekendRemindersEnabled = true,
+    this.reminderWindowStart,
+    this.reminderWindowEnd,
+    this.deliveryMode = 'instant',
+    this.digestTime,
+    this.cooldownMinutes = 30,
+    this.timezone = 'UTC',
   });
 
   /// Deserializes [NotificationSettings] from a JSON map.
@@ -377,6 +405,21 @@ class NotificationSettings {
       quietHoursEnd: json['quietHoursEnd'] != null
           ? _parseTime(json['quietHoursEnd'])
           : null,
+        weekendRemindersEnabled: json['weekendRemindersEnabled'] ?? true,
+        reminderWindowStart: json['reminderWindowStart'] != null
+          ? _parseTime(json['reminderWindowStart'])
+          : null,
+        reminderWindowEnd: json['reminderWindowEnd'] != null
+          ? _parseTime(json['reminderWindowEnd'])
+          : null,
+        deliveryMode: json['deliveryMode'] ?? 'instant',
+        digestTime: json['digestTime'] != null
+          ? _parseTime(json['digestTime'])
+          : null,
+        cooldownMinutes: (json['cooldownMinutes'] ?? 30) is int
+          ? json['cooldownMinutes']
+          : int.tryParse('${json['cooldownMinutes']}') ?? 30,
+        timezone: json['timezone'] ?? 'UTC',
     );
   }
 
@@ -384,6 +427,13 @@ class NotificationSettings {
   static TimeOfDay _parseTime(String timeStr) {
     final parts = timeStr.split(':');
     return TimeOfDay(hour: int.parse(parts[0]), minute: int.parse(parts[1]));
+  }
+
+  static String? _formatTime(TimeOfDay? time) {
+    if (time == null) return null;
+    final hh = time.hour.toString().padLeft(2, '0');
+    final mm = time.minute.toString().padLeft(2, '0');
+    return '$hh:$mm:00';
   }
 
   /// Serializes the settings to a JSON-compatible map for API requests.
@@ -399,12 +449,15 @@ class NotificationSettings {
       'insightNotifications': insightNotifications,
       'motivationalQuotes': motivationalQuotes,
       'quietHoursEnabled': quietHoursEnabled,
-      'quietHoursStart': quietHoursStart != null
-          ? '${quietHoursStart!.hour}:${quietHoursStart!.minute}'
-          : null,
-      'quietHoursEnd': quietHoursEnd != null
-          ? '${quietHoursEnd!.hour}:${quietHoursEnd!.minute}'
-          : null,
+        'quietHoursStart': _formatTime(quietHoursStart),
+        'quietHoursEnd': _formatTime(quietHoursEnd),
+        'weekendRemindersEnabled': weekendRemindersEnabled,
+        'reminderWindowStart': _formatTime(reminderWindowStart),
+        'reminderWindowEnd': _formatTime(reminderWindowEnd),
+        'deliveryMode': deliveryMode,
+        'digestTime': _formatTime(digestTime),
+        'cooldownMinutes': cooldownMinutes,
+        'timezone': timezone,
     };
   }
 
@@ -419,6 +472,13 @@ class NotificationSettings {
     bool? quietHoursEnabled,
     TimeOfDay? quietHoursStart,
     TimeOfDay? quietHoursEnd,
+    bool? weekendRemindersEnabled,
+    TimeOfDay? reminderWindowStart,
+    TimeOfDay? reminderWindowEnd,
+    String? deliveryMode,
+    TimeOfDay? digestTime,
+    int? cooldownMinutes,
+    String? timezone,
   }) {
     return NotificationSettings(
       notificationsEnabled: notificationsEnabled ?? this.notificationsEnabled,
@@ -431,6 +491,13 @@ class NotificationSettings {
       quietHoursEnabled: quietHoursEnabled ?? this.quietHoursEnabled,
       quietHoursStart: quietHoursStart ?? this.quietHoursStart,
       quietHoursEnd: quietHoursEnd ?? this.quietHoursEnd,
+      weekendRemindersEnabled: weekendRemindersEnabled ?? this.weekendRemindersEnabled,
+      reminderWindowStart: reminderWindowStart ?? this.reminderWindowStart,
+      reminderWindowEnd: reminderWindowEnd ?? this.reminderWindowEnd,
+      deliveryMode: deliveryMode ?? this.deliveryMode,
+      digestTime: digestTime ?? this.digestTime,
+      cooldownMinutes: cooldownMinutes ?? this.cooldownMinutes,
+      timezone: timezone ?? this.timezone,
     );
   }
 }

@@ -13,10 +13,10 @@ from django.db.models.functions import TruncDate
 from django.utils import timezone
 
 from achievements.models import UserAchievement
-from gamification.models import Challenge, XPEvent
+from gamification.models import Challenge, ChallengeParticipant, XPEvent
 from habits.models import Habit, HabitLog, Streak
 from settings_app.models import SupportTicket
-from social.models import FeedPost, GroupHabit
+from social.models import FeedPost, GroupChallenge, GroupHabit
 
 from .models import (
     AuditLog,
@@ -223,6 +223,22 @@ class AnalyticsService:
             .order_by('-count')[:10]
         )
 
+        # Challenge achievement ratings normalized to a 10-point scale.
+        group_challenges = GroupChallenge.objects.filter(created_at__date__gte=start)
+        group_total = group_challenges.count()
+        group_completed = group_challenges.filter(status='completed').count()
+        group_rating_10 = round(group_completed / group_total * 10, 1) if group_total else 0.0
+
+        individual_participants = ChallengeParticipant.objects.filter(
+            challenge__scope='personal', joined_at__date__gte=start,
+        )
+        individual_total = individual_participants.count()
+        individual_completed = individual_participants.filter(status='completed').count()
+        individual_rating_10 = (
+            round(individual_completed / individual_total * 10, 1)
+            if individual_total else 0.0
+        )
+
         return {
             'period_days': days,
             'total_logs': total,
@@ -232,6 +248,12 @@ class AnalyticsService:
             'completion_rate': round(completed / total * 100, 1) if total else 0.0,
             'streak_distribution': list(streak_dist),
             'top_categories': list(category_stats),
+            'group_challenge_rating_10': group_rating_10,
+            'group_challenges_completed': group_completed,
+            'group_challenges_total': group_total,
+            'individual_challenge_rating_10': individual_rating_10,
+            'individual_challenges_completed': individual_completed,
+            'individual_challenges_total': individual_total,
         }
 
     @staticmethod

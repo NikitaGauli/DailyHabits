@@ -319,6 +319,11 @@ class NotificationSettings(models.Model):
     
     id = models.AutoField(primary_key=True)
 
+    DELIVERY_MODE_CHOICES = [
+        ('instant', 'Instant'),
+        ('digest', 'Digest'),
+    ]
+
     # ── Global delivery toggles ───────────────────────────────────────
     notifications_enabled = models.BooleanField(default=True)   # Master on/off switch
     sound_enabled = models.BooleanField(default=True)           # Play sound on delivery
@@ -345,6 +350,15 @@ class NotificationSettings(models.Model):
     
     # ── Snooze preferences ────────────────────────────────────────────
     default_snooze_minutes = models.IntegerField(default=30)     # Default snooze length
+
+    # ── Scheduling preferences ───────────────────────────────────────
+    timezone = models.CharField(max_length=50, default='UTC')
+    weekend_reminders_enabled = models.BooleanField(default=True)
+    reminder_window_start = models.TimeField(null=True, blank=True)  # Optional delivery start window
+    reminder_window_end = models.TimeField(null=True, blank=True)    # Optional delivery end window
+    delivery_mode = models.CharField(max_length=20, choices=DELIVERY_MODE_CHOICES, default='instant')
+    digest_time = models.TimeField(null=True, blank=True)
+    cooldown_minutes = models.IntegerField(default=30)
     
     updated_at = models.DateTimeField(auto_now=True)
 

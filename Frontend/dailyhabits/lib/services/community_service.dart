@@ -72,6 +72,21 @@ class CommunityService {
     throw Exception('Feed failed: ${r.statusCode}');
   }
 
+  /// Fetches feed posts for a single group.
+  Future<Map<String, dynamic>> getGroupFeed(
+    int groupId, {
+    int page = 1,
+    int limit = 20,
+  }) async {
+    final h = await _headers();
+    final r = await http.get(
+      Uri.parse('$_base/social/feed/?groupId=$groupId&page=$page&limit=$limit'),
+      headers: h,
+    );
+    if (r.statusCode == 200) return _decode(r);
+    throw Exception('Group feed failed: ${r.statusCode}');
+  }
+
   /// Creates a new post in the social feed.
   ///
   /// Required: [content] text. Optional: [postType] (defaults to `motivation`),
@@ -542,6 +557,20 @@ class CommunityService {
     );
     if (r.statusCode == 201) return _decode(r);
     throw Exception('Create challenge failed: ${r.statusCode}');
+  }
+
+  /// Marks a group challenge as done for today for the current user.
+  Future<Map<String, dynamic>> markGroupChallengeDoneToday(
+    int groupId,
+    int challengeId,
+  ) async {
+    final h = await _headers();
+    final r = await http.post(
+      Uri.parse('$_base/social/groups/$groupId/challenges/$challengeId/mark-done/'),
+      headers: h,
+    );
+    if (r.statusCode == 200) return _decode(r);
+    throw Exception('Mark group challenge done failed: ${r.statusCode}');
   }
 
   /// Shares a habit with a group.

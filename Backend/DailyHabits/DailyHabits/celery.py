@@ -69,6 +69,12 @@ app.conf.beat_schedule = {
         'schedule': crontab(hour=22, minute=0),
     },
 
+    # Persist missed-day logs shortly after midnight
+    'track-missed-habits': {
+        'task': 'notifications.tasks.track_missed_habits',
+        'schedule': crontab(hour=0, minute=10),
+    },
+
     # Run ML-based habit clustering weekly on Monday at 6 AM
     'run-weekly-habit-analysis': {
         'task': 'recommendation_engine.tasks.run_weekly_habit_analysis',

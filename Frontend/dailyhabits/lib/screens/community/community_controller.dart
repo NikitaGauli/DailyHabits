@@ -646,7 +646,63 @@ class CommunityController extends ChangeNotifier {
   Future<bool> shareHabitToGroup(int groupId, int habitId) async {
     try {
       final result = await _svc.shareHabitToGroup(groupId, habitId);
-      _setAction(true, result['message'] ?? 'Habit shared with group!');
+      final rating = (result['shareRating10'] ?? 10).toString();
+      _setAction(
+        true,
+        '${result['message'] ?? 'Habit shared with group!'} · $rating/10',
+      );
+      await loadFeed(reset: true);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setAction(false, e.toString().replaceFirst('Exception: ', ''));
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Adds a comment to a feed post and refreshes feed.
+  Future<bool> addFeedComment(int postId, String content) async {
+    try {
+      await _svc.addComment(postId, content);
+      _setAction(true, 'Comment posted. Everyone in your group can see it.');
+      await loadFeed(reset: true);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setAction(false, e.toString().replaceFirst('Exception: ', ''));
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Marks a group challenge as done for today for the current user.
+  Future<bool> markGroupChallengeDoneToday(int groupId, int challengeId) async {
+    try {
+      final result = await _svc.markGroupChallengeDoneToday(groupId, challengeId);
+      final alreadyDone = result['alreadyDoneToday'] == true;
+      _setAction(
+        true,
+        alreadyDone
+            ? 'Already marked done for today.'
+            : 'Marked done for today! Great consistency.',
+      );
+      await loadGroupDetail(groupId);
+      notifyListeners();
+      return true;
+    } catch (e) {
+      _setAction(false, e.toString().replaceFirst('Exception: ', ''));
+      notifyListeners();
+      return false;
+    }
+  }
+
+  /// Adds a comment to a group feed post and refreshes group detail.
+  Future<bool> addGroupPostComment(int groupId, int postId, String content) async {
+    try {
+      await _svc.addComment(postId, content);
+      _setAction(true, 'Comment posted for the group.');
+      await loadGroupDetail(groupId);
       notifyListeners();
       return true;
     } catch (e) {

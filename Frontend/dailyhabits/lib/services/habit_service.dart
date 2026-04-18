@@ -195,12 +195,16 @@ class HabitService {
   ///
   /// Sends a `POST` to `/habits/{id}/toggle-complete/`. The backend flips the
   /// current completion state and returns the updated status.
-  Future<Map<String, dynamic>> toggleHabit(String id) async {
+  Future<Map<String, dynamic>> toggleHabit(
+    String id, {
+    Map<String, dynamic>? payload,
+  }) async {
     try {
       final headers = await _getHeaders();
       final response = await _client.post(
         Uri.parse('$baseUrl/$id/toggle-complete/'),
         headers: headers,
+        body: payload != null ? jsonEncode(payload) : null,
       );
 
       if (response.statusCode == 200) {
@@ -326,6 +330,83 @@ class HabitService {
       return {'history': []};
     } catch (e) {
       return {'history': []};
+    }
+  }
+
+  /// Archives a habit while preserving all logs and stats.
+  Future<bool> archiveHabit(String id, {String reason = ''}) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await _client.post(
+        Uri.parse('$baseUrl/$id/archive/'),
+        headers: headers,
+        body: jsonEncode({'reason': reason}),
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Restores an archived habit back to active state.
+  Future<bool> unarchiveHabit(String id) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await _client.post(
+        Uri.parse('$baseUrl/$id/unarchive/'),
+        headers: headers,
+      );
+      return response.statusCode == 200;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Marks a day as missed for a habit. If [date] is omitted, backend uses today.
+  Future<Map<String, dynamic>?> markMissed(
+    String id, {
+    String? date,
+    String notes = '',
+  }) async {
+    try {
+      final headers = await _getHeaders();
+      final payload = <String, dynamic>{
+        'notes': notes,
+      };
+      if (date != null && date.isNotEmpty) {
+        payload['date'] = date;
+      }
+
+      final response = await _client.post(
+        Uri.parse('$baseUrl/$id/mark-missed/'),
+        headers: headers,
+        body: jsonEncode(payload),
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Fetches missed-day summary across habits for a lookback period.
+  Future<Map<String, dynamic>> getMissedDaysSummary({int days = 30}) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await _client.get(
+        Uri.parse('$baseUrl/missed-days/?days=$days'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200) {
+        return jsonDecode(response.body) as Map<String, dynamic>;
+      }
+      return {'success': false, 'totalMissed': 0, 'habits': [], 'records': []};
+    } catch (_) {
+      return {'success': false, 'totalMissed': 0, 'habits': [], 'records': []};
     }
   }
 

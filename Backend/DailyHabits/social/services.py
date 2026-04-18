@@ -30,11 +30,12 @@ from django.db.models import Count, Avg, Q, Sum
 from .models import (
     ShareCard, SharingPrivacy, ReferralLink, Referral,
     GroupHabit, GroupMember, Friendship,
-    FeedPost,
+    FeedPost, PostComment,
     SharedHabit, HabitReaction, HabitComment,
     GroupChallenge, Encouragement,
 )
 from habits.models import Habit, HabitLog, Streak
+from gamification.models import ChallengeParticipant
 
 
 class SocialService:
@@ -819,11 +820,23 @@ class SocialService:
         return challenge
 
     @staticmethod
-    def get_group_challenges(group_id):
+    def get_group_challenges(group_id, user=None):
         """Return all challenges for a group, with progress info."""
         challenges = GroupChallenge.objects.filter(
             group_id=group_id,
         ).order_by('-created_at')
+
+        done_today = False
+        if user is not None and getattr(user, 'is_authenticated', False):
+            membership = GroupMember.objects.filter(
+                group_id=group_id, user=user, is_active=True,
+            ).select_related('habit').first()
+            if membership and membership.habit:
+                done_today = HabitLog.objects.filter(
+                    habit=membership.habit,
+                    date=timezone.now().date(),
+                    status='completed',
+                ).exists()
 
         results = []
         for ch in challenges:
@@ -844,9 +857,82 @@ class SocialService:
                 'colorValue': ch.color_value,
                 'createdBy': ch.created_by.name,
                 'isActive': ch.is_active,
+                'doneToday': done_today,
+                'canMarkToday': ch.is_active and ch.status == 'active' and not done_today,
                 'createdAt': ch.created_at.isoformat(),
             })
         return results
+
+    @staticmethod
+    def mark_group_challenge_done_today(user, group_id, challenge_id):
+        """Mark today's completion for the current user in a group challenge."""
+        try:
+            challenge = GroupChallenge.objects.select_related('group').get(
+                pk=challenge_id, group_id=group_id,
+            )
+        except GroupChallenge.DoesNotExist:
+            raise ValueError('Challenge not found in this group.')
+
+        if challenge.status != 'active' or not challenge.is_active:
+            raise ValueError('This challenge is not active today.')
+
+        try:
+            membership = GroupMember.objects.select_related('habit').get(
+                group_id=group_id, user=user, is_active=True,
+            )
+        except GroupMember.DoesNotExist:
+            raise ValueError('You are not a member of this group.')
+
+        if not membership.habit:
+            raise ValueError('No linked group habit found for your profile.')
+
+        today = timezone.now().date()
+        now = timezone.now()
+        log = HabitLog.objects.filter(habit=membership.habit, date=today).first()
+        if log and log.status == 'completed':
+            SocialService.update_challenge_progress(group_id)
+            challenge.refresh_from_db()
+            rating_10 = round(challenge.progress_percentage / 10, 1)
+            return {
+                'alreadyDoneToday': True,
+                'challengeId': challenge.id,
+                'currentProgress': challenge.current_progress,
+                'progressPercentage': challenge.progress_percentage,
+                'rating10': rating_10,
+            }
+
+        if log:
+            log.status = 'completed'
+            log.completed_at = now
+            if hasattr(log, 'count') and not log.count:
+                log.count = 1
+            log.save()
+        else:
+            HabitLog.objects.create(
+                habit=membership.habit,
+                date=today,
+                status='completed',
+                completed_at=now,
+                count=1,
+            )
+
+        streak, _ = Streak.objects.get_or_create(habit=membership.habit)
+        streak.update_streak(today)
+
+        from gamification.services import GamificationEngine
+        GamificationEngine.award_habit_completion_xp(user, membership.habit)
+
+        SocialService.update_challenge_progress(group_id)
+        challenge.refresh_from_db()
+        rating_10 = round(challenge.progress_percentage / 10, 1)
+
+        return {
+            'markedDoneToday': True,
+            'challengeId': challenge.id,
+            'currentProgress': challenge.current_progress,
+            'progressPercentage': challenge.progress_percentage,
+            'rating10': rating_10,
+        }
 
     @staticmethod
     def update_challenge_progress(group_id):
@@ -881,6 +967,21 @@ class SocialService:
                         progress = max(progress, member.habit.streak.current_streak)
                     except Streak.DoesNotExist:
                         pass
+                elif challenge.target_type == 'all_done':
+                    start = challenge.start_date.date()
+                    end = min(timezone.now().date(), challenge.end_date.date())
+                    active_habits = [m.habit for m in members if m.habit]
+                    if active_habits:
+                        check_date = start
+                        while check_date <= end:
+                            completed = HabitLog.objects.filter(
+                                habit__in=active_habits,
+                                date=check_date,
+                                status='completed',
+                            ).values('habit_id').distinct().count()
+                            if completed >= len(active_habits):
+                                progress += 1
+                            check_date += timedelta(days=1)
 
             challenge.current_progress = progress
             if progress >= challenge.target_value:
@@ -956,8 +1057,17 @@ class SocialService:
 
         group = membership.group
 
+        # Prevent re-sharing the same habit in the same group by the same user.
+        existing = FeedPost.objects.filter(
+            author=user,
+            post_type='group_update',
+            habit=habit,
+            group=group,
+        ).exists()
+        if existing:
+            raise ValueError('This habit has already been shared in this group.')
+
         # Create a feed post about the shared habit
-        from .models import FeedPost
         post = FeedPost.objects.create(
             author=user,
             post_type='group_update',
@@ -975,6 +1085,8 @@ class SocialService:
         return {
             'postId': post.pk,
             'message': f'Habit shared with {group.name}.',
+            'shareRating10': 10.0,
+            'shareQuality': 'Excellent',
         }
 
     # ═══════════════════════════════════════════════════════════════════════
@@ -1085,7 +1197,30 @@ class SocialService:
         leaderboard = SocialService.get_group_leaderboard(group_id)
 
         # Active challenges
-        challenges = SocialService.get_group_challenges(group_id)
+        challenges = SocialService.get_group_challenges(group_id, user)
+
+        # Challenge achievement tracking (10-point scale)
+        group_challenge_total = len(challenges)
+        group_challenge_completed = sum(
+            1 for c in challenges if c.get('status') == 'completed'
+        )
+        group_challenge_rating_10 = (
+            round(group_challenge_completed / group_challenge_total * 10, 1)
+            if group_challenge_total else 0.0
+        )
+
+        individual_participation_qs = ChallengeParticipant.objects.filter(
+            user=user,
+            challenge__scope='personal',
+        )
+        individual_challenge_total = individual_participation_qs.count()
+        individual_challenge_completed = individual_participation_qs.filter(
+            status='completed',
+        ).count()
+        individual_challenge_rating_10 = (
+            round(individual_challenge_completed / individual_challenge_total * 10, 1)
+            if individual_challenge_total else 0.0
+        )
 
         # Shared achievements in this group (newest first)
         shared_achievements = list(
@@ -1093,6 +1228,16 @@ class SocialService:
                 group=group,
                 post_type='achievement',
             ).select_related('author').order_by('-created_at')[:20]
+        )
+
+        # Shared habit posts (group updates) with recent comments.
+        shared_group_habits = list(
+            FeedPost.objects.filter(
+                group=group,
+                post_type='group_update',
+            ).select_related('author', 'habit').prefetch_related(
+                'comments__author',
+            ).order_by('-created_at')[:20]
         )
 
         # Aggregate stats
@@ -1122,6 +1267,12 @@ class SocialService:
             'colorValue': group.color_value,
             'totalCompletions': total_completions,
             'totalStreaks': total_streaks,
+            'groupChallengeRating10': group_challenge_rating_10,
+            'groupChallengesCompleted': group_challenge_completed,
+            'groupChallengesTotal': group_challenge_total,
+            'individualChallengeRating10': individual_challenge_rating_10,
+            'individualChallengesCompleted': individual_challenge_completed,
+            'individualChallengesTotal': individual_challenge_total,
             'leaderboard': leaderboard,
             'challenges': challenges,
             'sharedAchievements': [{
@@ -1133,6 +1284,20 @@ class SocialService:
                 'likeCount': p.like_count,
                 'commentCount': p.comment_count,
             } for p in shared_achievements],
+            'sharedGroupHabits': [{
+                'id': p.id,
+                'authorName': p.author.name,
+                'habitTitle': p.habit.title if p.habit else 'Habit',
+                'content': p.content,
+                'createdAt': p.created_at.isoformat(),
+                'commentCount': p.comment_count,
+                'recentComments': [{
+                    'id': c.pk,
+                    'authorName': c.author.name,
+                    'content': c.content,
+                    'createdAt': c.created_at.isoformat(),
+                } for c in PostComment.objects.filter(post=p).select_related('author').order_by('-created_at')[:3]],
+            } for p in shared_group_habits],
             'members': [{
                 'id': m.user.id,
                 'name': m.user.name,

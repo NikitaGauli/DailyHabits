@@ -28,6 +28,27 @@ import '../settings_controller.dart';
 class NotificationsPage extends StatelessWidget {
   const NotificationsPage({super.key});
 
+  static String _fmtTime(TimeOfDay? time) {
+    if (time == null) return 'Not set';
+    final hh = time.hour.toString().padLeft(2, '0');
+    final mm = time.minute.toString().padLeft(2, '0');
+    return '$hh:$mm';
+  }
+
+  Future<void> _pickTime(
+    BuildContext context,
+    TimeOfDay? current,
+    ValueChanged<TimeOfDay?> onSelected,
+  ) async {
+    final chosen = await showTimePicker(
+      context: context,
+      initialTime: current ?? const TimeOfDay(hour: 8, minute: 0),
+    );
+    if (chosen != null) {
+      onSelected(chosen);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final ctrl = context.watch<SettingsController>();
@@ -35,12 +56,48 @@ class NotificationsPage extends StatelessWidget {
     final ns = ctrl.notifSettings;
 
     final globalEnabled = ns?.notificationsEnabled ?? true;
+    final deliveryMode = (ns?.deliveryMode == 'digest') ? 'digest' : 'instant';
+    final cooldownChoices = [5, 10, 15, 20, 30, 45, 60];
+    final cooldownValue = ns?.cooldownMinutes ?? 30;
+    final effectiveCooldown = cooldownChoices.contains(cooldownValue)
+      ? cooldownValue
+      : 30;
 
     return Scaffold(
       appBar: AppBar(title: const Text('Notifications'), centerTitle: true),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colors.primary.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: colors.primary.withValues(alpha: 0.2)),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    'You are here: Profile > Quick Access > Scheduling Preferences',
+                    style: TextStyle(
+                      color: colors.textSecondary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+                TextButton.icon(
+                  onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+                  icon: const Icon(Icons.home_rounded, size: 16),
+                  label: const Text('Dashboard'),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
           // ── Global Toggle ─────────────────────────────────────
           Card(
             elevation: 0,
@@ -107,7 +164,140 @@ class NotificationsPage extends StatelessWidget {
                       value: ns?.achievementNotifications ?? true,
                       onChanged: ctrl.toggleAchievementNotifications,
                     ),
+                    const Divider(height: 1, indent: 56),
+                    _NotifToggle(
+                      icon: Icons.weekend,
+                      title: 'Weekend Reminders',
+                      subtitle: 'Allow reminders on Saturday and Sunday',
+                      value: ns?.weekendRemindersEnabled ?? true,
+                      onChanged: ctrl.toggleWeekendReminders,
+                    ),
                   ],
+                ),
+              ),
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          AnimatedOpacity(
+            opacity: globalEnabled ? 1.0 : 0.4,
+            duration: const Duration(milliseconds: 250),
+            child: IgnorePointer(
+              ignoring: !globalEnabled,
+              child: Card(
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Scheduling Preferences',
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 15,
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<String>(
+                        key: ValueKey('delivery-$deliveryMode'),
+                        initialValue: deliveryMode,
+                        decoration: const InputDecoration(
+                          labelText: 'Delivery mode',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: const [
+                          DropdownMenuItem(value: 'instant', child: Text('Instant')),
+                          DropdownMenuItem(value: 'digest', child: Text('Digest')),
+                        ],
+                        onChanged: (v) {
+                          if (v != null) ctrl.setDeliveryMode(v);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      DropdownButtonFormField<int>(
+                        key: ValueKey('cooldown-$effectiveCooldown'),
+                        initialValue: effectiveCooldown,
+                        decoration: const InputDecoration(
+                          labelText: 'Cooldown (minutes)',
+                          border: OutlineInputBorder(),
+                        ),
+                        items: cooldownChoices
+                            .map((v) => DropdownMenuItem(value: v, child: Text('$v')))
+                            .toList(),
+                        onChanged: (v) {
+                          if (v != null) ctrl.setCooldownMinutes(v);
+                        },
+                      ),
+                      const SizedBox(height: 12),
+                      TextFormField(
+                        initialValue: ns?.timezone ?? 'UTC',
+                        decoration: const InputDecoration(
+                          labelText: 'Timezone',
+                          hintText: 'e.g. Asia/Kathmandu',
+                          border: OutlineInputBorder(),
+                        ),
+                        onFieldSubmitted: ctrl.setTimezone,
+                      ),
+                      const SizedBox(height: 12),
+                      _TimePickerTile(
+                        title: 'Reminder window start',
+                        valueText: _fmtTime(ns?.reminderWindowStart),
+                        icon: Icons.schedule,
+                        onTap: () => _pickTime(
+                          context,
+                          ns?.reminderWindowStart,
+                          ctrl.setReminderWindowStart,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      _TimePickerTile(
+                        title: 'Reminder window end',
+                        valueText: _fmtTime(ns?.reminderWindowEnd),
+                        icon: Icons.schedule_send,
+                        onTap: () => _pickTime(
+                          context,
+                          ns?.reminderWindowEnd,
+                          ctrl.setReminderWindowEnd,
+                        ),
+                      ),
+                      if ((ns?.deliveryMode ?? 'instant') == 'digest') ...[
+                        const SizedBox(height: 8),
+                        _TimePickerTile(
+                          title: 'Digest time',
+                          valueText: _fmtTime(ns?.digestTime),
+                          icon: Icons.notifications,
+                          onTap: () => _pickTime(
+                            context,
+                            ns?.digestTime,
+                            ctrl.setDigestTime,
+                          ),
+                        ),
+                      ],
+                      const SizedBox(height: 10),
+                      Container(
+                        width: double.infinity,
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: colors.surfaceVariant.withValues(alpha: 0.35),
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          'Optional completion notes and reflections are set when you mark a habit done in Habit Details.',
+                          style: TextStyle(
+                            color: colors.textSecondary,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -176,6 +366,36 @@ class _NotifToggle extends StatelessWidget {
       value: value,
       onChanged: onChanged,
       activeTrackColor: colors.primary,
+    );
+  }
+}
+
+class _TimePickerTile extends StatelessWidget {
+  final String title;
+  final String valueText;
+  final IconData icon;
+  final VoidCallback onTap;
+
+  const _TimePickerTile({
+    required this.title,
+    required this.valueText,
+    required this.icon,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.colors;
+    return ListTile(
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(10),
+        side: BorderSide(color: colors.border.withValues(alpha: 0.4)),
+      ),
+      leading: Icon(icon, color: colors.primary),
+      title: Text(title),
+      subtitle: Text(valueText),
+      trailing: const Icon(Icons.edit_calendar_rounded),
+      onTap: onTap,
     );
   }
 }

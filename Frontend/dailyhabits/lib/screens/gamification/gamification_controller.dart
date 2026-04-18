@@ -273,6 +273,29 @@ class GamificationController extends ChangeNotifier {
     }
   }
 
+  /// Marks a challenge done for today in a gamified way.
+  Future<bool> markChallengeDoneToday(int challengeId) async {
+    if (isActioning) return false;
+    isActioning = true;
+    notifyListeners();
+
+    try {
+      final result = await _service.markChallengeDoneToday(challengeId);
+      final success = result != null && result['success'] == true;
+      if (success) {
+        await loadData();
+        await loadChallenges();
+      }
+      return success;
+    } catch (e) {
+      debugPrint('markChallengeDoneToday error: $e');
+      return false;
+    } finally {
+      isActioning = false;
+      notifyListeners();
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Leaderboard
   // ---------------------------------------------------------------------------

@@ -22,6 +22,7 @@ import 'package:dailyhabits/theme/app_animations.dart';
 import 'package:dailyhabits/widgets/common/shimmer_loading.dart';
 import 'package:dailyhabits/widgets/common/animated_completion.dart';
 import 'package:dailyhabits/services/habit_service.dart';
+import 'package:dailyhabits/services/notification_service.dart';
 import 'package:dailyhabits/widgets/home/create_edit_habit_sheet.dart';
 
 /// Detailed view for a single habit — stats, streak, history, notes.
@@ -53,6 +54,7 @@ class HabitDetailScreen extends StatefulWidget {
 class _HabitDetailScreenState extends State<HabitDetailScreen> {
   /// Service layer for habit CRUD and analytics calls.
   final HabitService _habitService = HabitService();
+  final NotificationService _notificationService = NotificationService();
 
   /// Local mutable copy of the habit (updated after edits/toggles).
   late Habit _habit;
@@ -62,6 +64,9 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
 
   /// Raw history entries for the last 30 days.
   List<Map<String, dynamic>> _history = [];
+  Map<String, dynamic>? _missedSummary;
+  Map<String, dynamic>? _latestReflection;
+  String _reminderMessagePreview = '';
 
   /// Whether the initial data load is in progress.
   bool _isLoading = true;
@@ -80,11 +85,31 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
       final stats = await _habitService.getStats(_habit.id);
       final historyResponse =
           await _habitService.getHistory(_habit.id, days: 30);
+      final missedSummary = await _habitService.getMissedDaysSummary(days: 30);
+      final reminder = await _notificationService.getReminderForHabit(
+        int.tryParse(_habit.id) ?? 0,
+      );
+
+      final historyList = List<Map<String, dynamic>>.from(
+        historyResponse['history'] ?? [],
+      );
+      Map<String, dynamic>? latestReflection;
+      for (final entry in historyList) {
+        final hasNotes = (entry['notes'] as String? ?? '').trim().isNotEmpty;
+        final hasMood = entry['moodRating'] != null;
+        final hasEnergy = entry['energyLevel'] != null;
+        if (entry['status'] == 'completed' && (hasNotes || hasMood || hasEnergy)) {
+          latestReflection = entry;
+          break;
+        }
+      }
+
       setState(() {
         _stats = stats;
-        _history = List<Map<String, dynamic>>.from(
-          historyResponse['history'] ?? [],
-        );
+        _history = historyList;
+        _missedSummary = missedSummary;
+        _latestReflection = latestReflection;
+        _reminderMessagePreview = reminder?['message']?.toString() ?? '';
       });
     } catch (e) {
       debugPrint('Error loading habit detail: $e');
@@ -170,6 +195,70 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
           style: AppTextStyles.h3.copyWith(color: tc.textPrimary),
         ),
         actions: [
+          PopupMenuButton<String>(
+            icon: Icon(Icons.more_vert_rounded, color: tc.textPrimary),
+            onSelected: (action) async {
+              final messenger = ScaffoldMessenger.of(context);
+              if (action == 'archive') {
+                final ok = await _habitService.archiveHabit(_habit.id);
+                if (!mounted) return;
+                if (ok) {
+                  setState(() => _habit = _habit.copyWith(status: 'archived'));
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Habit archived')),
+                  );
+                  widget.onToggle?.call();
+                }
+              }
+              if (action == 'unarchive') {
+                final ok = await _habitService.unarchiveHabit(_habit.id);
+                if (!mounted) return;
+                if (ok) {
+                  setState(() => _habit = _habit.copyWith(status: 'active'));
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Habit restored to active')),
+                  );
+                  widget.onToggle?.call();
+                }
+              }
+              if (action == 'mark_missed') {
+                final result = await _habitService.markMissed(
+                  _habit.id,
+                  notes: 'Marked as missed from habit detail.',
+                );
+                if (!mounted) return;
+                if (result != null && result['success'] == true) {
+                  setState(() {
+                    _habit = _habit.copyWith(
+                      isCompleted: false,
+                      completionState: CompletionState.missed,
+                    );
+                  });
+                  messenger.showSnackBar(
+                    const SnackBar(content: Text('Marked as missed for today')),
+                  );
+                  await _loadData();
+                  widget.onToggle?.call();
+                }
+              }
+            },
+            itemBuilder: (_) => [
+              if (_habit.status == 'archived')
+                const PopupMenuItem(
+                  value: 'unarchive',
+                  child: Text('Unarchive Habit'),
+                )
+              else
+                const PopupMenuItem(
+                  value: 'archive',
+                  child: Text('Archive Habit'),
+                ),
+              const PopupMenuItem(
+                value: 'mark_missed',
+                child: Text('Mark Today as Missed'),
+              ),
+            ],
+          ),
           IconButton(
             icon: Icon(Icons.edit_rounded, color: tc.primary),
             onPressed: _showEditSheet,
@@ -191,9 +280,13 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    _buildBreadcrumbBar(tc),
+                    const SizedBox(height: 16),
                     _buildHabitHeader(tc),
                     const SizedBox(height: 24),
                     _buildCompletionToggle(tc),
+                    const SizedBox(height: 24),
+                    _buildLatestReflection(tc),
                     const SizedBox(height: 24),
                     _buildStreakSection(tc),
                     const SizedBox(height: 24),
@@ -201,12 +294,89 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                     const SizedBox(height: 24),
                     _buildScheduleInfo(tc),
                     const SizedBox(height: 24),
+                    _buildMissedSummary(tc),
+                    const SizedBox(height: 24),
                     _buildRecentHistory(tc),
                     const SizedBox(height: 40),
                   ],
                 ),
               ),
             ),
+    );
+  }
+
+  Widget _buildMissedSummary(ThemeColors tc) {
+    final summary = _missedSummary ?? const <String, dynamic>{};
+    final habits = (summary['habits'] as List?) ?? const [];
+    final habitEntry = habits.cast<Map<String, dynamic>>().where((h) {
+      return '${h['habitId']}' == _habit.id;
+    }).cast<Map<String, dynamic>>().toList();
+    final missedCount = habitEntry.isNotEmpty
+        ? (habitEntry.first['missedCount'] as num?)?.toInt() ?? 0
+        : 0;
+
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tc.border.withValues(alpha: 0.3)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.event_busy_rounded, color: tc.warning, size: 24),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Missed Days (Last 30 Days)',
+                  style: AppTextStyles.bodyMd.copyWith(
+                    color: tc.textPrimary,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  '$missedCount missed day${missedCount == 1 ? '' : 's'}',
+                  style: AppTextStyles.caption.copyWith(color: tc.textSecondary),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBreadcrumbBar(ThemeColors tc) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: tc.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: tc.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'You are here: Profile > Quick Access > Reminder Customizer > Habit Details',
+              style: AppTextStyles.caption.copyWith(
+                color: tc.textSecondary,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+            icon: const Icon(Icons.home_rounded, size: 16),
+            label: const Text('Dashboard'),
+          ),
+        ],
+      ),
     );
   }
 
@@ -305,6 +475,23 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                   _habit.title,
                   style: AppTextStyles.h2.copyWith(color: tc.textPrimary),
                 ),
+                if (_habit.status == 'archived') ...[
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: tc.warning.withValues(alpha: 0.14),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      'Archived',
+                      style: AppTextStyles.caption.copyWith(
+                        color: tc.warning,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ),
+                ],
                 if (_habit.description != null &&
                     _habit.description!.isNotEmpty) ...[
                   const SizedBox(height: 4),
@@ -372,14 +559,34 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     return GestureDetector(
       onTap: () async {
         try {
-          final result = await _habitService.toggleHabit(_habit.id);
+          Map<String, dynamic>? reflectionPayload;
+          if (!isDone) {
+            reflectionPayload = await _showCompletionReflectionDialog(tc);
+            if (reflectionPayload == null) return;
+          }
+
+          final result = await _habitService.toggleHabit(
+            _habit.id,
+            payload: reflectionPayload,
+          );
           if (result['success'] == true) {
             final nowCompleted = result['isCompleted'] == true;
             setState(() {
               _habit = _habit.copyWith(
                 isCompleted: nowCompleted,
+                completionState:
+                    nowCompleted ? CompletionState.completed : CompletionState.pending,
                 currentStreak: result['currentStreak'] ?? _habit.currentStreak,
               );
+              if (nowCompleted && reflectionPayload != null) {
+                _latestReflection = {
+                  'status': 'completed',
+                  'date': DateTime.now().toIso8601String().split('T').first,
+                  'notes': reflectionPayload['notes'] ?? '',
+                  'moodRating': reflectionPayload['moodRating'],
+                  'energyLevel': reflectionPayload['energyLevel'],
+                };
+              }
             });
             // Show celebration animation on completion
             if (nowCompleted && mounted) {
@@ -429,6 +636,92 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
         ),
       ),
     );
+  }
+
+  Future<Map<String, dynamic>?> _showCompletionReflectionDialog(
+    ThemeColors tc,
+  ) async {
+    final notesCtrl = TextEditingController();
+    int mood = 3;
+    int energy = 3;
+
+    final result = await showDialog<Map<String, dynamic>>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocalState) {
+            return AlertDialog(
+              backgroundColor: tc.card,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(18),
+              ),
+              title: Text(
+                'Complete With Reflection',
+                style: TextStyle(
+                  color: tc.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: notesCtrl,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Notes (optional)',
+                        hintText: 'How did this completion feel today?',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Text('Mood: $mood', style: TextStyle(color: tc.textSecondary)),
+                    Slider(
+                      value: mood.toDouble(),
+                      min: 1,
+                      max: 5,
+                      divisions: 4,
+                      onChanged: (v) => setLocalState(() => mood = v.round()),
+                    ),
+                    Text(
+                      'Energy: $energy',
+                      style: TextStyle(color: tc.textSecondary),
+                    ),
+                    Slider(
+                      value: energy.toDouble(),
+                      min: 1,
+                      max: 5,
+                      divisions: 4,
+                      onChanged: (v) => setLocalState(() => energy = v.round()),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, null),
+                  child: Text('Cancel', style: TextStyle(color: tc.textMuted)),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, {
+                    'notes': notesCtrl.text.trim(),
+                    'moodRating': mood,
+                    'energyLevel': energy,
+                    'count': 1,
+                  }),
+                  child: const Text('Complete Habit'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    notesCtrl.dispose();
+    return result;
   }
 
   // ─── STREAK ────────────────────────────────────────────────────────────
@@ -687,8 +980,224 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                 ),
               ],
             ),
+            if (_reminderMessagePreview.trim().isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.chat_bubble_outline_rounded,
+                      size: 18, color: tc.textMuted),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      _reminderMessagePreview,
+                      style:
+                          AppTextStyles.bodyMd.copyWith(color: tc.textSecondary),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: _openReminderCustomizer,
+            icon: const Icon(Icons.tune_rounded),
+            label: const Text('Customize Reminder Notification'),
+          ),
         ],
+      ),
+    );
+  }
+
+  Future<void> _openReminderCustomizer() async {
+    final tc = context.colors;
+    final habitId = int.tryParse(_habit.id);
+    if (habitId == null) return;
+
+    final existing = await _notificationService.getReminderForHabit(habitId);
+    bool isEnabled = existing?['isEnabled'] as bool? ?? _habit.reminderEnabled;
+    TimeOfDay selectedTime = _habit.reminderTime ?? const TimeOfDay(hour: 8, minute: 0);
+    String repeatType = existing?['repeatType']?.toString() ?? 'daily';
+    final messageCtrl = TextEditingController(
+      text: existing?['message']?.toString() ?? _reminderMessagePreview,
+    );
+
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            return AlertDialog(
+              backgroundColor: tc.card,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+              title: Text('Customize Reminder',
+                  style: TextStyle(color: tc.textPrimary, fontWeight: FontWeight.w700)),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    SwitchListTile.adaptive(
+                      title: const Text('Enable reminder'),
+                      value: isEnabled,
+                      onChanged: (v) => setLocal(() => isEnabled = v),
+                    ),
+                    ListTile(
+                      leading: const Icon(Icons.access_time_rounded),
+                      title: const Text('Reminder time'),
+                      subtitle: Text(selectedTime.format(ctx)),
+                      onTap: () async {
+                        final t = await showTimePicker(
+                          context: ctx,
+                          initialTime: selectedTime,
+                        );
+                        if (t != null) {
+                          setLocal(() => selectedTime = t);
+                        }
+                      },
+                    ),
+                    DropdownButtonFormField<String>(
+                      initialValue: repeatType,
+                      decoration: const InputDecoration(
+                        labelText: 'Repeat',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: const [
+                        DropdownMenuItem(value: 'daily', child: Text('Daily')),
+                        DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
+                        DropdownMenuItem(value: 'custom', child: Text('Custom Days')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) setLocal(() => repeatType = v);
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: messageCtrl,
+                      maxLines: 2,
+                      decoration: const InputDecoration(
+                        labelText: 'Custom message',
+                        hintText: 'Example: Your 10-minute walk starts now',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.pop(ctx, false),
+                  child: const Text('Cancel'),
+                ),
+                ElevatedButton(
+                  onPressed: () => Navigator.pop(ctx, true),
+                  child: const Text('Save'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    if (saved == true) {
+      final ok = await _notificationService.upsertHabitReminderForHabit(
+        habitId: habitId,
+        reminderTime: selectedTime,
+        repeatType: repeatType,
+        isEnabled: isEnabled,
+        message: messageCtrl.text.trim(),
+      );
+      if (ok) {
+        setState(() {
+          _habit = _habit.copyWith(
+            reminderEnabled: isEnabled,
+            reminderTime: isEnabled ? selectedTime : null,
+          );
+          _reminderMessagePreview = messageCtrl.text.trim();
+        });
+
+        await _habitService.updateHabit(
+          _habit.copyWith(
+            reminderEnabled: isEnabled,
+            reminderTime: isEnabled ? selectedTime : null,
+          ),
+        );
+
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Reminder customization saved')),
+          );
+        }
+      }
+    }
+    messageCtrl.dispose();
+  }
+
+  Widget _buildLatestReflection(ThemeColors tc) {
+    final reflection = _latestReflection;
+    if (reflection == null) {
+      return const SizedBox.shrink();
+    }
+
+    final notes = reflection['notes']?.toString() ?? '';
+    final mood = reflection['moodRating'];
+    final energy = reflection['energyLevel'];
+    final date = reflection['date']?.toString() ?? '';
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: tc.card,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: tc.border.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Latest Completion Reflection',
+            style: AppTextStyles.bodyMd.copyWith(
+              color: tc.textPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+          if (date.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(date, style: AppTextStyles.caption.copyWith(color: tc.textMuted)),
+          ],
+          if (notes.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            Text(notes, style: AppTextStyles.bodyMd.copyWith(color: tc.textSecondary)),
+          ],
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              _metricChip(tc, 'Mood', mood),
+              const SizedBox(width: 8),
+              _metricChip(tc, 'Energy', energy),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _metricChip(ThemeColors tc, String label, dynamic value) {
+    final text = value == null ? '$label: -' : '$label: $value/5';
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+      decoration: BoxDecoration(
+        color: tc.primary.withValues(alpha: 0.12),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Text(
+        text,
+        style: AppTextStyles.caption.copyWith(
+          color: tc.primary,
+          fontWeight: FontWeight.w700,
+        ),
       ),
     );
   }

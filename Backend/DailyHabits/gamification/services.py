@@ -673,6 +673,15 @@ class GamificationEngine:
     @staticmethod
     def get_active_challenges(user):
         """Get all active challenges the user is participating in."""
+        today = timezone.now().date()
+        done_today = HabitLog.objects.filter(
+            habit__user=user,
+            habit__status='active',
+            habit__is_deleted=False,
+            date=today,
+            status='completed',
+        ).exists()
+
         participations = ChallengeParticipant.objects.filter(
             user=user,
             challenge__status='active',
@@ -695,6 +704,9 @@ class GamificationEngine:
                 'status': p.status,
                 'progress': p.progress,
                 'progressPercentage': p.progress_percentage,
+                'rating10': round(p.progress_percentage / 10, 1),
+                'doneToday': done_today,
+                'canMarkToday': p.status == 'active' and p.challenge.is_active and not done_today,
                 'target': p.challenge.criteria.get('target', 0),
                 'completedAt': p.completed_at.isoformat() if p.completed_at else None,
                 'participantCount': p.challenge.participants.count(),
@@ -703,6 +715,91 @@ class GamificationEngine:
             }
             for p in participations
         ]
+
+    @staticmethod
+    def mark_challenge_done_today(user, challenge_id, habit_id=None):
+        """Mark one completion for today and refresh challenge progress."""
+        today = timezone.now().date()
+        now = timezone.now()
+
+        try:
+            participant = ChallengeParticipant.objects.select_related('challenge').get(
+                user=user,
+                challenge_id=challenge_id,
+                status='active',
+                challenge__status='active',
+            )
+        except ChallengeParticipant.DoesNotExist:
+            return {'error': 'Active challenge participation not found'}
+
+        if not participant.challenge.is_active:
+            return {'error': 'Challenge is not active today'}
+
+        if HabitLog.objects.filter(
+            habit__user=user,
+            habit__status='active',
+            habit__is_deleted=False,
+            date=today,
+            status='completed',
+        ).exists():
+            GamificationEngine.update_challenge_progress(user, 'manual_mark_done')
+            participant.refresh_from_db()
+            return {
+                'success': True,
+                'alreadyDoneToday': True,
+                'progress': participant.progress,
+                'progressPercentage': participant.progress_percentage,
+                'rating10': round(participant.progress_percentage / 10, 1),
+            }
+
+        if habit_id is not None:
+            habit = Habit.objects.filter(
+                id=habit_id,
+                user=user,
+                status='active',
+                is_deleted=False,
+            ).first()
+            if habit is None:
+                return {'error': 'Selected habit not found'}
+        else:
+            habit = Habit.objects.filter(
+                user=user,
+                status='active',
+                is_deleted=False,
+            ).order_by('created_at').first()
+            if habit is None:
+                return {'error': 'No active habit found to mark done'}
+
+        log = HabitLog.objects.filter(habit=habit, date=today).first()
+        if log:
+            log.status = 'completed'
+            log.completed_at = now
+            if hasattr(log, 'count') and not log.count:
+                log.count = 1
+            log.save()
+        else:
+            HabitLog.objects.create(
+                habit=habit,
+                date=today,
+                status='completed',
+                completed_at=now,
+                count=1,
+            )
+
+        streak, _ = Streak.objects.get_or_create(habit=habit)
+        streak.update_streak(today)
+
+        GamificationEngine.award_habit_completion_xp(user, habit)
+        GamificationEngine.update_challenge_progress(user, 'manual_mark_done')
+        participant.refresh_from_db()
+
+        return {
+            'success': True,
+            'markedDoneToday': True,
+            'progress': participant.progress,
+            'progressPercentage': participant.progress_percentage,
+            'rating10': round(participant.progress_percentage / 10, 1),
+        }
 
     @staticmethod
     def get_community_challenges(user=None):

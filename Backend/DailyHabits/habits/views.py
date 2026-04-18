@@ -40,7 +40,7 @@ from django.utils import timezone
 from django.db.models import Count, Q, Prefetch
 
 # === Standard Library Imports ================================================
-from datetime import timedelta
+from datetime import timedelta, datetime
 
 # === Local Imports ===========================================================
 from .models import Habit, HabitLog, Streak, Category
@@ -283,6 +283,16 @@ class HabitViewSet(viewsets.ModelViewSet):
         habit = self.get_object()
         today = timezone.now().date()
         now = timezone.now()
+
+        try:
+            completion_count = int(request.data.get('count', 1))
+        except (TypeError, ValueError):
+            completion_count = 1
+        completion_count = max(1, completion_count)
+
+        notes = request.data.get('notes', '')
+        mood_rating = request.data.get('moodRating')
+        energy_level = request.data.get('energyLevel')
         
         # Check for an existing log entry for today
         log = HabitLog.objects.filter(habit=habit, date=today).first()
@@ -308,6 +318,10 @@ class HabitViewSet(viewsets.ModelViewSet):
                 # Update existing log (e.g. converting 'missed' → 'completed')
                 log.status = 'completed'
                 log.completed_at = now
+                log.notes = notes or log.notes or ''
+                log.mood_rating = mood_rating if mood_rating is not None else log.mood_rating
+                log.energy_level = energy_level if energy_level is not None else log.energy_level
+                log.count = completion_count
                 log.save()
             else:
                 # Create a brand-new completion log
@@ -315,7 +329,11 @@ class HabitViewSet(viewsets.ModelViewSet):
                     habit=habit,
                     date=today,
                     status='completed',
-                    completed_at=now
+                    completed_at=now,
+                    notes=notes,
+                    mood_rating=mood_rating,
+                    energy_level=energy_level,
+                    count=completion_count,
                 )
             
             # Extend the streak cache
@@ -367,6 +385,11 @@ class HabitViewSet(viewsets.ModelViewSet):
                 'status': 'completed',
                 'isCompleted': True,
                 'currentStreak': habit.streak.current_streak if hasattr(habit, 'streak') else 0,
+                'reflection': {
+                    'notes': notes,
+                    'moodRating': mood_rating,
+                    'energyLevel': energy_level,
+                },
                 'newAchievements': [{
                     'id': ua.achievement.id,
                     'name': ua.achievement.name,
@@ -449,6 +472,10 @@ class HabitViewSet(viewsets.ModelViewSet):
                 'status': log.status,
                 'completedAt': log.completed_at.isoformat() if log.completed_at else None,
                 'notes': log.notes,
+                'moodRating': log.mood_rating,
+                'energyLevel': log.energy_level,
+                'count': log.count,
+                'partialScore': log.partial_score,
             } for log in logs],
         })
     
@@ -674,6 +701,64 @@ class HabitViewSet(viewsets.ModelViewSet):
             'pauseReason': reason,
         })
 
+    # --- Archive Endpoint -----------------------------------------------------
+
+    @action(detail=True, methods=['post'])
+    def archive(self, request, pk=None):
+        """
+        POST /api/habits/{id}/archive/
+
+        Archive a habit while keeping all historical logs and streak data.
+        Archived habits are excluded from the default active list and today view.
+        """
+        habit = self.get_object()
+        habit.status = 'archived'
+        habit.pause_reason = request.data.get('reason', habit.pause_reason)
+        habit.save(update_fields=['status', 'pause_reason', 'updated_at'])
+
+        return Response({
+            'success': True,
+            'message': 'Habit archived successfully',
+            'habitId': habit.id,
+        })
+
+    # --- Unarchive Endpoint ---------------------------------------------------
+
+    @action(detail=True, methods=['post'])
+    def unarchive(self, request, pk=None):
+        """
+        POST /api/habits/{id}/unarchive/
+
+        Restore an archived habit back to active tracking.
+        """
+        habit = self.get_object()
+        habit.status = 'active'
+        habit.save(update_fields=['status', 'updated_at'])
+
+        return Response({
+            'success': True,
+            'message': 'Habit unarchived successfully',
+            'habitId': habit.id,
+        })
+
+    # --- Archived List Endpoint ----------------------------------------------
+
+    @action(detail=False, methods=['get'])
+    def archived(self, request):
+        """
+        GET /api/habits/archived/
+
+        Return all archived habits for the authenticated user.
+        """
+        archived_habits = self.get_queryset().filter(status='archived').order_by('-updated_at')
+        serializer = HabitListSerializer(archived_habits, many=True)
+
+        return Response({
+            'success': True,
+            'count': archived_habits.count(),
+            'habits': serializer.data,
+        })
+
     # --- Resume Endpoint ------------------------------------------------------
 
     @action(detail=True, methods=['post'])
@@ -774,6 +859,114 @@ class HabitViewSet(viewsets.ModelViewSet):
             'success': True,
             'status': 'partial',
             'partialScore': score,
+        })
+
+    # --- Mark Missed Endpoint -------------------------------------------------
+
+    @action(detail=True, methods=['post'], url_path='mark-missed')
+    def mark_missed(self, request, pk=None):
+        """
+        POST /api/habits/{id}/mark-missed/
+
+        Explicitly mark a habit day as missed and optionally store a note.
+        Accepts an optional ``date`` in ISO format; defaults to today.
+        """
+        habit = self.get_object()
+        date_str = request.data.get('date')
+        target_date = timezone.now().date()
+
+        if date_str:
+            try:
+                target_date = datetime.strptime(date_str, '%Y-%m-%d').date()
+            except ValueError:
+                return Response({
+                    'success': False,
+                    'message': 'Invalid date format. Use YYYY-MM-DD.',
+                }, status=status.HTTP_400_BAD_REQUEST)
+
+        note = request.data.get('notes', request.data.get('reason', ''))
+
+        HabitLog.objects.update_or_create(
+            habit=habit,
+            date=target_date,
+            defaults={
+                'status': 'missed',
+                'completed_at': None,
+                'count': 0,
+                'notes': note,
+                'partial_score': 0.0,
+            },
+        )
+
+        # Recalculate streak cache and aggregate counters from source-of-truth logs.
+        self._update_streak_on_uncomplete(habit)
+
+        NotificationCreator.create(
+            user=request.user,
+            notification_type='missed',
+            title=f'Missed day logged for {habit.title}',
+            message=f'"{habit.title}" was marked as missed for {target_date.isoformat()}.',
+            habit=habit,
+            icon_code=0xE002,
+            color_value=0xFFF59E0B,
+            action_type='habit_detail',
+            action_data={'habitId': habit.id},
+        )
+
+        return Response({
+            'success': True,
+            'status': 'missed',
+            'date': target_date.isoformat(),
+            'notes': note,
+        })
+
+    # --- Missed Days Summary Endpoint ----------------------------------------
+
+    @action(detail=False, methods=['get'], url_path='missed-days')
+    def missed_days(self, request):
+        """
+        GET /api/habits/missed-days/?days=30
+
+        Return missed-day summary and records for the requested lookback period.
+        """
+        days = int(request.query_params.get('days', 30))
+        days = min(max(days, 1), 365)
+        today = timezone.now().date()
+        start_date = today - timedelta(days=days - 1)
+
+        missed_logs = HabitLog.objects.filter(
+            habit__user=request.user,
+            habit__is_deleted=False,
+            status='missed',
+            date__range=[start_date, today],
+        ).select_related('habit').order_by('-date', 'habit__title')
+
+        by_habit = {}
+        for log in missed_logs:
+            hid = log.habit_id
+            if hid not in by_habit:
+                by_habit[hid] = {
+                    'habitId': log.habit_id,
+                    'habitTitle': log.habit.title,
+                    'missedCount': 0,
+                }
+            by_habit[hid]['missedCount'] += 1
+
+        return Response({
+            'success': True,
+            'range': {
+                'startDate': start_date.isoformat(),
+                'endDate': today.isoformat(),
+                'days': days,
+            },
+            'totalMissed': missed_logs.count(),
+            'habits': list(by_habit.values()),
+            'records': [{
+                'habitId': log.habit_id,
+                'habitTitle': log.habit.title,
+                'date': log.date.isoformat(),
+                'notes': log.notes,
+            } for log in missed_logs],
         })
 
 

@@ -89,6 +89,7 @@ class FeedViewSet(viewsets.ViewSet):
         page = int(request.query_params.get('page', 1))
         per_page = min(int(request.query_params.get('limit', 20)), 50)  # Cap at 50
         offset = (page - 1) * per_page
+        group_id = request.query_params.get('groupId')
 
         # Gather the user's social graph
         friend_ids = SocialService.get_friend_ids(user)
@@ -96,17 +97,31 @@ class FeedViewSet(viewsets.ViewSet):
             user=user, is_active=True
         ).values_list('group_id', flat=True))
 
-        # Build a combined query: own posts + friends + groups + public non-group posts
-        posts = FeedPost.objects.filter(
-            Q(author_id__in=friend_ids) |
-            Q(author=user) |
-            Q(group_id__in=group_ids) |
-            Q(is_public=True, group__isnull=True)
-        ).select_related(
-            'author', 'habit', 'group'
-        ).prefetch_related(
-            'likes', 'comments__author'
-        ).distinct().order_by('-created_at')[offset:offset + per_page]
+        if group_id:
+            if int(group_id) not in group_ids:
+                return Response(
+                    {'success': False, 'message': 'You are not a member of this group'},
+                    status=status.HTTP_403_FORBIDDEN,
+                )
+            posts = FeedPost.objects.filter(
+                group_id=group_id,
+            ).select_related(
+                'author', 'habit', 'group'
+            ).prefetch_related(
+                'likes', 'comments__author'
+            ).order_by('-created_at')[offset:offset + per_page]
+        else:
+            # Build a combined query: own posts + friends + groups + public non-group posts
+            posts = FeedPost.objects.filter(
+                Q(author_id__in=friend_ids) |
+                Q(author=user) |
+                Q(group_id__in=group_ids) |
+                Q(is_public=True, group__isnull=True)
+            ).select_related(
+                'author', 'habit', 'group'
+            ).prefetch_related(
+                'likes', 'comments__author'
+            ).distinct().order_by('-created_at')[offset:offset + per_page]
 
         serializer = FeedPostSerializer(
             posts, many=True, context={'request': request}
@@ -723,7 +738,7 @@ class GroupHabitViewSet(viewsets.ViewSet):
             )
 
         if request.method == 'GET':
-            data = SocialService.get_group_challenges(pk)
+            data = SocialService.get_group_challenges(pk, request.user)
             return Response({'success': True, 'challenges': data})
 
         # POST — create challenge
@@ -784,6 +799,28 @@ class GroupHabitViewSet(viewsets.ViewSet):
                 user=request.user,
                 habit_id=int(habit_id),
                 group_id=int(pk),
+            )
+            return Response({'success': True, **result})
+        except ValueError as e:
+            return Response(
+                {'success': False, 'message': str(e)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+    @action(detail=True, methods=['post'], url_path=r'challenges/(?P<challenge_id>\d+)/mark-done')
+    def mark_challenge_done(self, request, pk=None, challenge_id=None):
+        """POST /api/social/groups/{id}/challenges/{challenge_id}/mark-done/"""
+        if pk is None or challenge_id is None:
+            return Response(
+                {'success': False, 'message': 'Group ID and challenge ID are required.'},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
+        try:
+            result = SocialService.mark_group_challenge_done_today(
+                user=request.user,
+                group_id=int(pk),
+                challenge_id=int(challenge_id),
             )
             return Response({'success': True, **result})
         except ValueError as e:

@@ -169,13 +169,13 @@ class NotificationCreator:
         )
 
     @staticmethod
-    def habit_reminder(user, habit):
-        """Send a scheduled reminder for a specific habit."""
+    def habit_reminder(user, habit, message=None, title=None):
+        """Send a scheduled reminder for a specific habit with optional custom text."""
         return NotificationCreator.create(
             user=user,
             notification_type='reminder',
-            title=f'Time for {habit.title}',
-            message=f"Don't forget to complete your habit today!",
+            title=title or f'Time for {habit.title}',
+            message=message or f"Don't forget to complete your habit today!",
             habit=habit,
             icon_code=0xE855,
             color_value=0xFF6366F1,
@@ -863,7 +863,7 @@ class NotificationIntelligence:
         return nudges
 
     @staticmethod
-    def should_send_notification(user):
+    def should_send_notification(user, category=None, current_dt=None):
         """
         Determine whether a new notification should be delivered to the user.
 
@@ -876,6 +876,8 @@ class NotificationIntelligence:
         Returns:
             bool: ``True`` if the notification may be sent.
         """
+        now_dt = current_dt or timezone.localtime()
+
         try:
             settings = NotificationSettings.objects.get(user=user)
         except NotificationSettings.DoesNotExist:
@@ -884,26 +886,55 @@ class NotificationIntelligence:
         if not settings.notifications_enabled:
             return False  # Master kill-switch is off
 
+        category_map = {
+            'habit_reminders': settings.habit_reminders,
+            'missed_habit_alerts': settings.missed_habit_alerts,
+            'achievement_notifications': settings.achievement_notifications,
+            'streak_alerts': settings.streak_alerts,
+            'social_notifications': settings.social_notifications,
+        }
+        if category and category in category_map and not category_map[category]:
+            return False
+
+        if category == 'habit_reminders' and not settings.weekend_reminders_enabled and now_dt.weekday() >= 5:
+            return False
+
         # Rule 2: Suppress during quiet hours
-        now = timezone.now().time()
+        now = now_dt.time()
         if settings.quiet_hours_enabled:
             if settings.quiet_hours_start and settings.quiet_hours_end:
-                if settings.quiet_hours_start <= now <= settings.quiet_hours_end:
-                    return False  # Currently within quiet-hours window
+                if settings.quiet_hours_start <= settings.quiet_hours_end:
+                    if settings.quiet_hours_start <= now <= settings.quiet_hours_end:
+                        return False  # Same-day quiet window
+                else:
+                    if now >= settings.quiet_hours_start or now <= settings.quiet_hours_end:
+                        return False  # Overnight quiet window
+
+        if category == 'habit_reminders':
+            start = settings.reminder_window_start
+            end = settings.reminder_window_end
+            if start and end:
+                if start <= end:
+                    if not (start <= now <= end):
+                        return False
+                else:
+                    if not (now >= start or now <= end):
+                        return False
 
         # Rule 3: Enforce daily notification cap
-        today = timezone.now().date()
+        today = now_dt.date()
         today_count = Notification.objects.filter(
             user=user, created_at__date=today, status__in=['sent', 'pending']
         ).count()
         if today_count >= settings.max_notifications_per_day:
             return False  # Daily cap reached
 
-        # Rule 4: Enforce 30-minute cooldown between consecutive notifications
+        # Rule 4: Enforce user-defined cooldown between consecutive notifications
         last_notification = Notification.objects.filter(user=user).order_by('-created_at').first()
         if last_notification:
-            time_diff = timezone.now() - last_notification.created_at
-            if time_diff < timedelta(minutes=30):
+            cooldown_minutes = max(settings.cooldown_minutes, 0)
+            time_diff = now_dt - last_notification.created_at
+            if time_diff < timedelta(minutes=cooldown_minutes):
                 return False  # Too soon since last notification
         return True
 

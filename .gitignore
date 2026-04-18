@@ -26,6 +26,9 @@ db.sqlite3.bak
 Backend/DailyHabits/logs/*.log
 Backend/DailyHabits/staticfiles/
 Backend/DailyHabits/media/
+Backend/DailyHabits/celerybeat-schedule
+Backend/DailyHabits/celerybeat-schedule-shm
+Backend/DailyHabits/celerybeat-schedule-wal
 
 # Environment / secrets
 .env

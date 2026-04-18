@@ -47,11 +47,29 @@ class _AnalyticsView extends StatelessWidget {
   Widget build(BuildContext context) {
     final tc = context.colors;
     final controller = Provider.of<AnalyticsController>(context);
+    final canGoBack = Navigator.of(context).canPop();
 
     // Show shimmer skeleton until the initial dashboard payload arrives
     if (controller.isLoading && controller.dashboardData == null) {
       return Scaffold(
         backgroundColor: tc.bg,
+        appBar: AppBar(
+          title: const Text('Progress Calendar'),
+          centerTitle: true,
+          leading: canGoBack
+              ? IconButton(
+                  icon: const Icon(Icons.arrow_back_rounded),
+                  onPressed: () => Navigator.of(context).maybePop(),
+                )
+              : null,
+          actions: [
+            if (canGoBack)
+              TextButton(
+                onPressed: () => Navigator.of(context).maybePop(),
+                child: const Text('Done'),
+              ),
+          ],
+        ),
         body: SafeArea(
           child: SingleChildScrollView(
             padding: const EdgeInsets.fromLTRB(20, 16, 20, 32),
@@ -106,6 +124,23 @@ class _AnalyticsView extends StatelessWidget {
 
     return Scaffold(
       backgroundColor: tc.bg,
+      appBar: AppBar(
+        title: const Text('Progress Calendar'),
+        centerTitle: true,
+        leading: canGoBack
+            ? IconButton(
+                icon: const Icon(Icons.arrow_back_rounded),
+                onPressed: () => Navigator.of(context).maybePop(),
+              )
+            : null,
+        actions: [
+          if (canGoBack)
+            TextButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              child: const Text('Done'),
+            ),
+        ],
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: controller.refresh,
@@ -142,6 +177,8 @@ class _AnalyticsView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                _buildBreadcrumbBar(context),
+                const SizedBox(height: 12),
                 _buildHeader(context),
                 const SizedBox(height: 18),
 
@@ -241,7 +278,7 @@ class _AnalyticsView extends StatelessWidget {
                 Row(
                   children: [
                     Expanded(
-                      child: _sectionTitle(context, 'Monthly View'),
+                      child: _sectionTitle(context, 'Monthly Progress Calendar'),
                     ),
                     IconButton(
                       icon: Icon(Icons.chevron_left_rounded, color: tc.textSecondary),
@@ -282,6 +319,38 @@ class _AnalyticsView extends StatelessWidget {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildBreadcrumbBar(BuildContext context) {
+    final tc = context.colors;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: tc.primary.withValues(alpha: 0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: tc.primary.withValues(alpha: 0.2)),
+      ),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              'You are here: Profile > Quick Access > Progress Calendar',
+              style: TextStyle(
+                color: tc.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+          ),
+          TextButton.icon(
+            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+            icon: const Icon(Icons.home_rounded, size: 16),
+            label: const Text('Dashboard'),
+          ),
+        ],
       ),
     );
   }

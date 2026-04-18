@@ -31,6 +31,8 @@ class GroupChallenge {
   final int colorValue;
   final String createdBy;
   final bool isActive;
+  final bool doneToday;
+  final bool canMarkToday;
   final DateTime createdAt;
 
   GroupChallenge({
@@ -50,6 +52,8 @@ class GroupChallenge {
     this.colorValue = 0xFF4F46E5,
     this.createdBy = '',
     this.isActive = true,
+    this.doneToday = false,
+    this.canMarkToday = false,
     required this.createdAt,
   });
 
@@ -112,6 +116,8 @@ class GroupChallenge {
       colorValue: json['colorValue'] ?? 0xFF4F46E5,
       createdBy: json['createdBy'] ?? '',
       isActive: json['isActive'] ?? true,
+      doneToday: json['doneToday'] ?? false,
+      canMarkToday: json['canMarkToday'] ?? false,
       createdAt: DateTime.parse(
         json['createdAt'] ?? DateTime.now().toIso8601String(),
       ),
@@ -340,9 +346,16 @@ class EnrichedGroupDetail {
   final int colorValue;
   final int totalCompletions;
   final int totalStreaks;
+  final double groupChallengeRating10;
+  final int groupChallengesCompleted;
+  final int groupChallengesTotal;
+  final double individualChallengeRating10;
+  final int individualChallengesCompleted;
+  final int individualChallengesTotal;
   final List<Map<String, dynamic>> leaderboard;
   final List<GroupChallenge> challenges;
   final List<Map<String, dynamic>> sharedAchievements;
+  final List<Map<String, dynamic>> sharedGroupHabits;
   final List<GroupMemberInfo> members;
 
   EnrichedGroupDetail({
@@ -359,9 +372,16 @@ class EnrichedGroupDetail {
     this.colorValue = 0xFF4F46E5,
     this.totalCompletions = 0,
     this.totalStreaks = 0,
+    this.groupChallengeRating10 = 0,
+    this.groupChallengesCompleted = 0,
+    this.groupChallengesTotal = 0,
+    this.individualChallengeRating10 = 0,
+    this.individualChallengesCompleted = 0,
+    this.individualChallengesTotal = 0,
     this.leaderboard = const [],
     this.challenges = const [],
     this.sharedAchievements = const [],
+    this.sharedGroupHabits = const [],
     this.members = const [],
   });
 
@@ -384,12 +404,21 @@ class EnrichedGroupDetail {
       colorValue: json['colorValue'] ?? 0xFF4F46E5,
       totalCompletions: json['totalCompletions'] ?? 0,
       totalStreaks: json['totalStreaks'] ?? 0,
+        groupChallengeRating10: (json['groupChallengeRating10'] ?? 0).toDouble(),
+        groupChallengesCompleted: json['groupChallengesCompleted'] ?? 0,
+        groupChallengesTotal: json['groupChallengesTotal'] ?? 0,
+        individualChallengeRating10:
+          (json['individualChallengeRating10'] ?? 0).toDouble(),
+        individualChallengesCompleted: json['individualChallengesCompleted'] ?? 0,
+        individualChallengesTotal: json['individualChallengesTotal'] ?? 0,
       leaderboard: List<Map<String, dynamic>>.from(json['leaderboard'] ?? []),
       challenges: (json['challenges'] as List? ?? [])
           .map((c) => GroupChallenge.fromJson(c))
           .toList(),
         sharedAchievements:
           List<Map<String, dynamic>>.from(json['sharedAchievements'] ?? []),
+      sharedGroupHabits:
+          List<Map<String, dynamic>>.from(json['sharedGroupHabits'] ?? []),
       members: (json['members'] as List? ?? [])
           .map((m) => GroupMemberInfo.fromJson(m))
           .toList(),

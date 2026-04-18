@@ -50,6 +50,8 @@ class FeedPostCard extends StatelessWidget {
     final postType = post['postType'] ?? '';
     final habitTitle = post['habitTitle'];
     final createdAt = post['createdAt'] ?? '';
+    final recentComments =
+      List<Map<String, dynamic>>.from(post['recentComments'] ?? const []);
 
     return GlassContainer(
       margin: const EdgeInsets.only(bottom: 14),
@@ -160,6 +162,47 @@ class FeedPostCard extends StatelessWidget {
                       ),
                     ),
                   ),
+                ],
+              ),
+            ),
+          ],
+
+          if (recentComments.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: tc.surfaceVariant.withValues(alpha: 0.75),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Recent Comments',
+                    style: AppTextStyles.caption.copyWith(
+                      color: tc.textSecondary,
+                      fontWeight: FontWeight.w700,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  ...recentComments.take(3).map((c) {
+                    final author = (c['author'] as Map<String, dynamic>?)?['name'] ??
+                        'Member';
+                    final text = (c['content'] ?? '').toString();
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 4),
+                      child: Text(
+                        '$author: $text',
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.caption.copyWith(
+                          color: tc.textSecondary,
+                        ),
+                      ),
+                    );
+                  }),
                 ],
               ),
             ),

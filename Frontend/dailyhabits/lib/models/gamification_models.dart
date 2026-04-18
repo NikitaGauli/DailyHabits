@@ -229,6 +229,9 @@ class Challenge {
   final String status;
   final int progress;
   final double progressPercentage;
+  final double rating10;
+  final bool doneToday;
+  final bool canMarkToday;
   final int target;
   final DateTime? completedAt;
   final int participantCount;
@@ -251,6 +254,9 @@ class Challenge {
     required this.status,
     required this.progress,
     required this.progressPercentage,
+    this.rating10 = 0,
+    this.doneToday = false,
+    this.canMarkToday = false,
     required this.target,
     this.completedAt,
     required this.participantCount,
@@ -275,6 +281,11 @@ class Challenge {
       status: json['status'] ?? 'active',
       progress: json['progress'] ?? 0,
       progressPercentage: (json['progressPercentage'] ?? 0).toDouble(),
+        rating10: (json['rating10'] ??
+            ((json['progressPercentage'] ?? 0).toDouble() / 10))
+          .toDouble(),
+        doneToday: json['doneToday'] ?? false,
+        canMarkToday: json['canMarkToday'] ?? false,
       target: json['target'] ?? 0,
       completedAt: json['completedAt'] != null
           ? DateTime.parse(json['completedAt'])

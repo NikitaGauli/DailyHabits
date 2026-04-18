@@ -51,6 +51,13 @@ class GroupCard extends StatelessWidget {
     final myRole = group['myRole'] ?? 'member';
     final inviteCode = group['inviteCode'] ?? '';
     final isAdmin = myRole == 'admin';
+    final groupRating10 = (group['groupChallengeRating10'] ?? 0).toDouble();
+    final groupCompleted = group['groupChallengesCompleted'] ?? 0;
+    final groupTotal = group['groupChallengesTotal'] ?? 0;
+    final individualRating10 =
+      (group['individualChallengeRating10'] ?? 0).toDouble();
+    final individualCompleted = group['individualChallengesCompleted'] ?? 0;
+    final individualTotal = group['individualChallengesTotal'] ?? 0;
 
     return GlassContainer(
       margin: const EdgeInsets.only(bottom: 12),
@@ -162,9 +169,82 @@ class GroupCard extends StatelessWidget {
                   valueColor: AlwaysStoppedAnimation(tc.primary),
                 ),
               ),
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  Expanded(
+                    child: _ratingBadge(
+                      context,
+                      icon: Icons.groups_rounded,
+                      color: const Color(0xFF8B5CF6),
+                      title: 'Group',
+                      score: groupRating10,
+                      detail: '$groupCompleted/$groupTotal',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: _ratingBadge(
+                      context,
+                      icon: Icons.person_rounded,
+                      color: const Color(0xFF0EA5E9),
+                      title: 'Individual',
+                      score: individualRating10,
+                      detail: '$individualCompleted/$individualTotal',
+                    ),
+                  ),
+                ],
+              ),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _ratingBadge(
+    BuildContext context, {
+    required IconData icon,
+    required Color color,
+    required String title,
+    required double score,
+    required String detail,
+  }) {
+    final tc = context.colors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withValues(alpha: 0.1),
+        borderRadius: BorderRadius.circular(10),
+      ),
+      child: Row(
+        children: [
+          Icon(icon, size: 14, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '$title ${score.toStringAsFixed(1)}/10',
+                  style: AppTextStyles.caption.copyWith(
+                    color: tc.textPrimary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 10,
+                  ),
+                  overflow: TextOverflow.ellipsis,
+                ),
+                Text(
+                  detail,
+                  style: AppTextStyles.caption.copyWith(
+                    color: tc.textMuted,
+                    fontSize: 9,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

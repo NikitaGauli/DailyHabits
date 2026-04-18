@@ -133,6 +133,48 @@ class SettingsController extends ChangeNotifier {
     }
   }
 
+  void toggleWeekendReminders(bool v) {
+    if (notifSettings != null) {
+      _updateNotifSettings(notifSettings!.copyWith(weekendRemindersEnabled: v));
+    }
+  }
+
+  void setDeliveryMode(String mode) {
+    if (notifSettings != null) {
+      _updateNotifSettings(notifSettings!.copyWith(deliveryMode: mode));
+    }
+  }
+
+  void setCooldownMinutes(int minutes) {
+    if (notifSettings != null) {
+      _updateNotifSettings(notifSettings!.copyWith(cooldownMinutes: minutes));
+    }
+  }
+
+  void setTimezone(String timezone) {
+    if (notifSettings != null) {
+      _updateNotifSettings(notifSettings!.copyWith(timezone: timezone));
+    }
+  }
+
+  void setDigestTime(TimeOfDay? time) {
+    if (notifSettings != null) {
+      _updateNotifSettings(notifSettings!.copyWith(digestTime: time));
+    }
+  }
+
+  void setReminderWindowStart(TimeOfDay? time) {
+    if (notifSettings != null) {
+      _updateNotifSettings(notifSettings!.copyWith(reminderWindowStart: time));
+    }
+  }
+
+  void setReminderWindowEnd(TimeOfDay? time) {
+    if (notifSettings != null) {
+      _updateNotifSettings(notifSettings!.copyWith(reminderWindowEnd: time));
+    }
+  }
+
   // ═══════════════════════════════════════════════════════════════
   //  APP SETTINGS (appearance, quotes, daily summary, quiet hours, advanced)
   // ═══════════════════════════════════════════════════════════════

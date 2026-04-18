@@ -306,6 +306,24 @@ class GamificationService {
     }
   }
 
+  /// Marks an individual challenge as done for today.
+  Future<Map<String, dynamic>?> markChallengeDoneToday(int challengeId) async {
+    try {
+      final headers = await _getHeaders();
+      final response = await http.post(
+        Uri.parse('$_baseUrl/challenges/$challengeId/mark-done/'),
+        headers: headers,
+      );
+
+      if (response.statusCode == 200 || response.statusCode == 400) {
+        return jsonDecode(response.body);
+      }
+      return null;
+    } catch (e) {
+      return null;
+    }
+  }
+
   // ---------------------------------------------------------------------------
   // Leaderboard
   // ---------------------------------------------------------------------------

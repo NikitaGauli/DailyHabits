@@ -342,12 +342,21 @@ class _FeedTab extends StatelessWidget {
                 width: double.infinity,
                 height: 48,
                 child: ElevatedButton(
-                  onPressed: () {
-                    if (textCtrl.text.trim().isNotEmpty) {
-                      Navigator.pop(ctx);
-                      // Fire and forget — controller refreshes feed
-                      ctrl.loadFeed(reset: true);
-                    }
+                  onPressed: () async {
+                    final text = textCtrl.text.trim();
+                    if (text.isEmpty) return;
+                    Navigator.pop(ctx);
+                    final ok = await ctrl.addFeedComment(postId, text);
+                    if (!context.mounted) return;
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(
+                          ok
+                              ? (ctrl.actionMessage ?? 'Comment posted')
+                              : (ctrl.actionMessage ?? 'Could not post comment'),
+                        ),
+                      ),
+                    );
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: tc.primary,
