@@ -506,6 +506,26 @@ class RetentionMetricsView(APIView):
         return Response(retention)
 
 
+class ComprehensiveAnalyticsView(APIView):
+    """GET /admin/analytics/comprehensive/ — full analytics reporting payload."""
+    permission_classes = [IsAuthenticated, CanViewAnalytics]
+
+    def get(self, request):
+        days = min(int(request.query_params.get('days', 30)), 365)
+        compare_days_param = request.query_params.get('compare_days')
+        compare_days = min(int(compare_days_param), 365) if compare_days_param else None
+        category = request.query_params.get('category', 'all')
+        segment = request.query_params.get('segment', 'all')
+
+        data = AnalyticsService.get_comprehensive_analytics(
+            days=days,
+            compare_days=compare_days,
+            category=category,
+            segment=segment,
+        )
+        return Response(data)
+
+
 class AnalyticsSnapshotViewSet(viewsets.ReadOnlyModelViewSet):
     """Historical daily snapshots for charting."""
     queryset = PlatformAnalyticsSnapshot.objects.all()
@@ -532,7 +552,19 @@ class AnalyticsExportView(APIView):
         days = int(request.query_params.get('days', 30))
         days = min(days, 365)
         export_format = request.query_params.get('format', 'csv').strip().lower()
-        trends = AnalyticsService.get_growth_trends(days)
+        compare_days_param = request.query_params.get('compare_days')
+        compare_days = min(int(compare_days_param), 365) if compare_days_param else None
+        category = request.query_params.get('category', 'all')
+        segment = request.query_params.get('segment', 'all')
+
+        report = AnalyticsService.get_comprehensive_analytics(
+            days=days,
+            compare_days=compare_days,
+            category=category,
+            segment=segment,
+        )
+        growth_rows = report['user_growth_engagement']['registrations_over_time']
+        comparison = report['advanced_reporting']['comparison']
 
         if export_format == 'pdf':
             buffer = io.BytesIO()
@@ -545,7 +577,22 @@ class AnalyticsExportView(APIView):
             y -= 22
             pdf.setFont('Helvetica', 10)
             pdf.drawString(40, y, f'Generated: {timezone.now().strftime("%Y-%m-%d %H:%M:%S")}')
+            y -= 14
+            pdf.drawString(40, y, f'Filters: segment={segment}, category={category}')
             y -= 24
+
+            pdf.setFont('Helvetica-Bold', 10)
+            pdf.drawString(40, y, 'Period Comparison')
+            y -= 14
+            pdf.setFont('Helvetica', 9)
+            pdf.drawString(
+                40,
+                y,
+                f"Completion Rate: {comparison['current_period']['completion_rate']}% vs "
+                f"{comparison['previous_period']['completion_rate']}% "
+                f"(delta {comparison['delta']['completion_rate']}%)",
+            )
+            y -= 20
 
             headers = ['Date', 'Total Users', 'New Users', 'DAU', 'Completion Rate']
             col_x = [40, 145, 245, 325, 395]
@@ -556,7 +603,7 @@ class AnalyticsExportView(APIView):
             y -= 14
             pdf.setFont('Helvetica', 9)
 
-            for row in trends:
+            for row in growth_rows:
                 if y < 50:
                     pdf.showPage()
                     y = height - 50
@@ -569,8 +616,16 @@ class AnalyticsExportView(APIView):
                 pdf.drawString(col_x[0], y, str(row['date']))
                 pdf.drawString(col_x[1], y, str(row['total_users']))
                 pdf.drawString(col_x[2], y, str(row['new_users']))
-                pdf.drawString(col_x[3], y, str(row['daily_active_users']))
-                pdf.drawString(col_x[4], y, f"{row['completion_rate']}%")
+                pdf.drawString(col_x[3], y, str(report['user_growth_engagement']['active_users']['dau']))
+                completion_rate = next(
+                    (
+                        t['rate']
+                        for t in report['habit_performance']['completion_trend']
+                        if t['date'] == row['date']
+                    ),
+                    0.0,
+                )
+                pdf.drawString(col_x[4], y, f"{completion_rate}%")
                 y -= 12
 
             pdf.save()
@@ -589,11 +644,35 @@ class AnalyticsExportView(APIView):
 
         output = io.StringIO()
         writer = csv.writer(output)
+        writer.writerow(['Report', 'DailyHabits Admin Analytics'])
+        writer.writerow(['Generated At', timezone.now().strftime('%Y-%m-%d %H:%M:%S')])
+        writer.writerow(['Segment', segment])
+        writer.writerow(['Category', category])
+        writer.writerow([])
+        writer.writerow(['Metric', 'Current Period', 'Previous Period', 'Delta'])
+        writer.writerow([
+            'Completion Rate',
+            f"{comparison['current_period']['completion_rate']}%",
+            f"{comparison['previous_period']['completion_rate']}%",
+            f"{comparison['delta']['completion_rate']}%",
+        ])
+        writer.writerow([
+            'Completed Logs',
+            comparison['current_period']['completed_logs'],
+            comparison['previous_period']['completed_logs'],
+            comparison['delta']['completed_logs'],
+        ])
+        writer.writerow([])
         writer.writerow(['Date', 'Total Users', 'New Users', 'DAU', 'Completion Rate'])
-        for row in trends:
+        dau_value = report['user_growth_engagement']['active_users']['dau']
+        trend_map = {
+            row['date']: row['rate']
+            for row in report['habit_performance']['completion_trend']
+        }
+        for row in growth_rows:
             writer.writerow([
                 row['date'], row['total_users'], row['new_users'],
-                row['daily_active_users'], row['completion_rate'],
+                dau_value, trend_map.get(row['date'], 0.0),
             ])
 
         response = HttpResponse(output.getvalue(), content_type='text/csv')

@@ -11,6 +11,7 @@ from habits.models import Habit, HabitLog, Streak
 class HabitLifecycleAndReflectionTests(APITestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(
+            username='habit-tester',
             email='habit-tests@example.com',
             name='Habit Tester',
             password='StrongPass123!'

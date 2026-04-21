@@ -83,8 +83,10 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     setState(() => _isLoading = true);
     try {
       final stats = await _habitService.getStats(_habit.id);
-      final historyResponse =
-          await _habitService.getHistory(_habit.id, days: 30);
+      final historyResponse = await _habitService.getHistory(
+        _habit.id,
+        days: 30,
+      );
       final missedSummary = await _habitService.getMissedDaysSummary(days: 30);
       final reminder = await _notificationService.getReminderForHabit(
         int.tryParse(_habit.id) ?? 0,
@@ -98,7 +100,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
         final hasNotes = (entry['notes'] as String? ?? '').trim().isNotEmpty;
         final hasMood = entry['moodRating'] != null;
         final hasEnergy = entry['energyLevel'] != null;
-        if (entry['status'] == 'completed' && (hasNotes || hasMood || hasEnergy)) {
+        if (entry['status'] == 'completed' &&
+            (hasNotes || hasMood || hasEnergy)) {
           latestReflection = entry;
           break;
         }
@@ -148,10 +151,10 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
         final tc = ctx.colors;
         return AlertDialog(
           backgroundColor: tc.card,
-          shape:
-              RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-          title:
-              Text('Remove habit?', style: TextStyle(color: tc.textPrimary)),
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          title: Text('Remove habit?', style: TextStyle(color: tc.textPrimary)),
           content: Text(
             'Delete "${_habit.title}" and all its history? This can\'t be undone.',
             style: TextStyle(color: tc.textSecondary),
@@ -308,9 +311,13 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
   Widget _buildMissedSummary(ThemeColors tc) {
     final summary = _missedSummary ?? const <String, dynamic>{};
     final habits = (summary['habits'] as List?) ?? const [];
-    final habitEntry = habits.cast<Map<String, dynamic>>().where((h) {
-      return '${h['habitId']}' == _habit.id;
-    }).cast<Map<String, dynamic>>().toList();
+    final habitEntry = habits
+        .cast<Map<String, dynamic>>()
+        .where((h) {
+          return '${h['habitId']}' == _habit.id;
+        })
+        .cast<Map<String, dynamic>>()
+        .toList();
     final missedCount = habitEntry.isNotEmpty
         ? (habitEntry.first['missedCount'] as num?)?.toInt() ?? 0
         : 0;
@@ -340,7 +347,9 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                 const SizedBox(height: 4),
                 Text(
                   '$missedCount missed day${missedCount == 1 ? '' : 's'}',
-                  style: AppTextStyles.caption.copyWith(color: tc.textSecondary),
+                  style: AppTextStyles.caption.copyWith(
+                    color: tc.textSecondary,
+                  ),
                 ),
               ],
             ),
@@ -371,7 +380,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             ),
           ),
           TextButton.icon(
-            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+            onPressed: () =>
+                Navigator.of(context).popUntil((route) => route.isFirst),
             icon: const Icon(Icons.home_rounded, size: 16),
             label: const Text('Dashboard'),
           ),
@@ -410,24 +420,52 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
           ),
           const SizedBox(height: 24),
           // Toggle skeleton
-          const ShimmerBox(width: double.infinity, height: 56, borderRadius: 18),
+          const ShimmerBox(
+            width: double.infinity,
+            height: 56,
+            borderRadius: 18,
+          ),
           const SizedBox(height: 24),
           // Stats skeleton
           const ShimmerBox(width: 140, height: 18, borderRadius: 6),
           const SizedBox(height: 14),
           Row(
             children: const [
-              Expanded(child: ShimmerBox(width: double.infinity, height: 90, borderRadius: 16)),
+              Expanded(
+                child: ShimmerBox(
+                  width: double.infinity,
+                  height: 90,
+                  borderRadius: 16,
+                ),
+              ),
               SizedBox(width: 12),
-              Expanded(child: ShimmerBox(width: double.infinity, height: 90, borderRadius: 16)),
+              Expanded(
+                child: ShimmerBox(
+                  width: double.infinity,
+                  height: 90,
+                  borderRadius: 16,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 12),
           Row(
             children: const [
-              Expanded(child: ShimmerBox(width: double.infinity, height: 90, borderRadius: 16)),
+              Expanded(
+                child: ShimmerBox(
+                  width: double.infinity,
+                  height: 90,
+                  borderRadius: 16,
+                ),
+              ),
               SizedBox(width: 12),
-              Expanded(child: ShimmerBox(width: double.infinity, height: 90, borderRadius: 16)),
+              Expanded(
+                child: ShimmerBox(
+                  width: double.infinity,
+                  height: 90,
+                  borderRadius: 16,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 24),
@@ -435,7 +473,11 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
           const ShimmerBox(width: 120, height: 18, borderRadius: 6),
           const SizedBox(height: 14),
           for (int i = 0; i < 3; i++) ...[
-            const ShimmerBox(width: double.infinity, height: 44, borderRadius: 14),
+            const ShimmerBox(
+              width: double.infinity,
+              height: 44,
+              borderRadius: 14,
+            ),
             if (i < 2) const SizedBox(height: 12),
           ],
         ],
@@ -478,7 +520,10 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                 if (_habit.status == 'archived') ...[
                   const SizedBox(height: 6),
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: tc.warning.withValues(alpha: 0.14),
                       borderRadius: BorderRadius.circular(8),
@@ -574,8 +619,9 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             setState(() {
               _habit = _habit.copyWith(
                 isCompleted: nowCompleted,
-                completionState:
-                    nowCompleted ? CompletionState.completed : CompletionState.pending,
+                completionState: nowCompleted
+                    ? CompletionState.completed
+                    : CompletionState.pending,
                 currentStreak: result['currentStreak'] ?? _habit.currentStreak,
               );
               if (nowCompleted && reflectionPayload != null) {
@@ -677,7 +723,10 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       ),
                     ),
                     const SizedBox(height: 12),
-                    Text('Mood: $mood', style: TextStyle(color: tc.textSecondary)),
+                    Text(
+                      'Mood: $mood',
+                      style: TextStyle(color: tc.textSecondary),
+                    ),
                     Slider(
                       value: mood.toDouble(),
                       min: 1,
@@ -866,8 +915,8 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
     final barColor = pct >= 80
         ? tc.success
         : pct >= 50
-            ? tc.secondary
-            : tc.warning;
+        ? tc.secondary
+        : tc.warning;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -961,7 +1010,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                 _habit.frequency == 'custom' && _habit.customDays.isNotEmpty
                     ? _habit.customDays.map((d) => dayNames[d]).join(', ')
                     : _habit.frequency[0].toUpperCase() +
-                        _habit.frequency.substring(1),
+                          _habit.frequency.substring(1),
                 style: AppTextStyles.bodyMd.copyWith(color: tc.textSecondary),
               ),
             ],
@@ -970,13 +1019,15 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
             const SizedBox(height: 8),
             Row(
               children: [
-                Icon(Icons.notifications_active_rounded,
-                    size: 18, color: tc.secondary),
+                Icon(
+                  Icons.notifications_active_rounded,
+                  size: 18,
+                  color: tc.secondary,
+                ),
                 const SizedBox(width: 8),
                 Text(
                   'Reminder at ${_habit.reminderTime!.format(context)}',
-                  style:
-                      AppTextStyles.bodyMd.copyWith(color: tc.textSecondary),
+                  style: AppTextStyles.bodyMd.copyWith(color: tc.textSecondary),
                 ),
               ],
             ),
@@ -985,14 +1036,18 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
               Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Icon(Icons.chat_bubble_outline_rounded,
-                      size: 18, color: tc.textMuted),
+                  Icon(
+                    Icons.chat_bubble_outline_rounded,
+                    size: 18,
+                    color: tc.textMuted,
+                  ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _reminderMessagePreview,
-                      style:
-                          AppTextStyles.bodyMd.copyWith(color: tc.textSecondary),
+                      style: AppTextStyles.bodyMd.copyWith(
+                        color: tc.textSecondary,
+                      ),
                     ),
                   ),
                 ],
@@ -1017,11 +1072,17 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
 
     final existing = await _notificationService.getReminderForHabit(habitId);
     bool isEnabled = existing?['isEnabled'] as bool? ?? _habit.reminderEnabled;
-    TimeOfDay selectedTime = _habit.reminderTime ?? const TimeOfDay(hour: 8, minute: 0);
+    TimeOfDay selectedTime =
+        _habit.reminderTime ?? const TimeOfDay(hour: 8, minute: 0);
     String repeatType = existing?['repeatType']?.toString() ?? 'daily';
     final messageCtrl = TextEditingController(
       text: existing?['message']?.toString() ?? _reminderMessagePreview,
     );
+
+    if (!mounted) {
+      messageCtrl.dispose();
+      return;
+    }
 
     final saved = await showDialog<bool>(
       context: context,
@@ -1030,9 +1091,16 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
           builder: (ctx, setLocal) {
             return AlertDialog(
               backgroundColor: tc.card,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-              title: Text('Customize Reminder',
-                  style: TextStyle(color: tc.textPrimary, fontWeight: FontWeight.w700)),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              title: Text(
+                'Customize Reminder',
+                style: TextStyle(
+                  color: tc.textPrimary,
+                  fontWeight: FontWeight.w700,
+                ),
+              ),
               content: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -1064,8 +1132,14 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                       ),
                       items: const [
                         DropdownMenuItem(value: 'daily', child: Text('Daily')),
-                        DropdownMenuItem(value: 'weekly', child: Text('Weekly')),
-                        DropdownMenuItem(value: 'custom', child: Text('Custom Days')),
+                        DropdownMenuItem(
+                          value: 'weekly',
+                          child: Text('Weekly'),
+                        ),
+                        DropdownMenuItem(
+                          value: 'custom',
+                          child: Text('Custom Days'),
+                        ),
                       ],
                       onChanged: (v) {
                         if (v != null) setLocal(() => repeatType = v);
@@ -1165,11 +1239,17 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
           ),
           if (date.isNotEmpty) ...[
             const SizedBox(height: 4),
-            Text(date, style: AppTextStyles.caption.copyWith(color: tc.textMuted)),
+            Text(
+              date,
+              style: AppTextStyles.caption.copyWith(color: tc.textMuted),
+            ),
           ],
           if (notes.isNotEmpty) ...[
             const SizedBox(height: 8),
-            Text(notes, style: AppTextStyles.bodyMd.copyWith(color: tc.textSecondary)),
+            Text(
+              notes,
+              style: AppTextStyles.bodyMd.copyWith(color: tc.textSecondary),
+            ),
           ],
           const SizedBox(height: 8),
           Row(
@@ -1297,9 +1377,7 @@ class _HabitDetailScreenState extends State<HabitDetailScreen> {
                 if (notes.isNotEmpty)
                   Text(
                     notes,
-                    style: AppTextStyles.caption.copyWith(
-                      color: tc.textMuted,
-                    ),
+                    style: AppTextStyles.caption.copyWith(color: tc.textMuted),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),

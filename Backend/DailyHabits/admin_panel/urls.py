@@ -58,6 +58,7 @@ urlpatterns = [
     path('analytics/growth/', views.GrowthTrendsView.as_view(), name='admin-analytics-growth'),
     path('analytics/engagement/', views.EngagementMetricsView.as_view(), name='admin-analytics-engagement'),
     path('analytics/retention/', views.RetentionMetricsView.as_view(), name='admin-analytics-retention'),
+    path('analytics/comprehensive/', views.ComprehensiveAnalyticsView.as_view(), name='admin-analytics-comprehensive'),
     path('analytics/export/', views.AnalyticsExportView.as_view(), name='admin-analytics-export'),
 
     # Router-registered endpoints

@@ -82,20 +82,36 @@ class _AnalyticsView extends StatelessWidget {
                 const ShimmerBox(width: 200, height: 14, borderRadius: 6),
                 const SizedBox(height: 24),
                 // Overview card shimmer
-                const ShimmerBox(width: double.infinity, height: 150, borderRadius: 24),
+                const ShimmerBox(
+                  width: double.infinity,
+                  height: 150,
+                  borderRadius: 24,
+                ),
                 const SizedBox(height: 20),
                 // Streak card shimmer
-                const ShimmerBox(width: double.infinity, height: 100, borderRadius: 20),
+                const ShimmerBox(
+                  width: double.infinity,
+                  height: 100,
+                  borderRadius: 20,
+                ),
                 const SizedBox(height: 24),
                 // Category shimmer
                 const ShimmerBox(width: 120, height: 18, borderRadius: 6),
                 const SizedBox(height: 12),
-                const ShimmerBox(width: double.infinity, height: 140, borderRadius: 20),
+                const ShimmerBox(
+                  width: double.infinity,
+                  height: 140,
+                  borderRadius: 20,
+                ),
                 const SizedBox(height: 24),
                 // Chart shimmer
                 const ShimmerBox(width: 120, height: 18, borderRadius: 6),
                 const SizedBox(height: 12),
-                const ShimmerBox(width: double.infinity, height: 200, borderRadius: 20),
+                const ShimmerBox(
+                  width: double.infinity,
+                  height: 200,
+                  borderRadius: 20,
+                ),
               ],
             ),
           ),
@@ -177,142 +193,174 @@ class _AnalyticsView extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                _buildBreadcrumbBar(context),
-                const SizedBox(height: 12),
-                _buildHeader(context),
-                const SizedBox(height: 18),
+                    _buildBreadcrumbBar(context),
+                    const SizedBox(height: 12),
+                    _buildHeader(context),
+                    const SizedBox(height: 18),
 
-                _buildHeroSpotlight(
-                  context,
-                  consistency: consistency,
-                  completions: completions,
-                  totalHabits: totalHabits,
-                  weeklyCompletions: weeklyCompletions,
-                ),
-                const SizedBox(height: 18),
-
-                _buildKpiGrid(
-                  context,
-                  avgConsistency: avgConsistency,
-                  currentStreak: currentStreak,
-                  bestStreak: bestStreak,
-                  thisWeekDaily: thisWeekDaily,
-                ),
-                const SizedBox(height: 22),
-
-                _buildOverviewCard(
-                  context,
-                  consistency: consistency,
-                  completions: completions,
-                  totalHabits: totalHabits,
-                  weeklyCompletions: weeklyCompletions,
-                  avgConsistency: avgConsistency,
-                ),
-                const SizedBox(height: 20),
-
-                StreakCard(
-                  currentStreak: currentStreak,
-                  bestStreak: bestStreak,
-                ),
-                const SizedBox(height: 24),
-
-                _sectionTitle(context, 'Week-over-Week Momentum'),
-                const SizedBox(height: 12),
-                _buildWeekComparisonCard(
-                  context,
-                  thisWeekDaily: thisWeekDaily,
-                  lastWeekDaily: lastWeekDaily,
-                  delta: wowDelta,
-                  trend: wowTrend,
-                ),
-                const SizedBox(height: 24),
-
-                if (controller.categoryBreakdown.isNotEmpty) ...[
-                  _sectionTitle(context, 'By Category'),
-                  const SizedBox(height: 12),
-                  _buildCategoryBreakdown(context, controller.categoryBreakdown),
-                  const SizedBox(height: 24),
-                ],
-
-                if (controller.categorySuccess.isNotEmpty) ...[
-                  _sectionTitle(context, 'Category Success League'),
-                  const SizedBox(height: 12),
-                  _buildCategorySuccessCard(context, controller.categorySuccess),
-                  const SizedBox(height: 24),
-                ],
-
-                _sectionTitle(context, 'Weekly Trend'),
-                const SizedBox(height: 12),
-                if (controller.weeklyData.isNotEmpty)
-                  Container(
-                    decoration: BoxDecoration(
-                      color: tc.card,
-                      borderRadius: BorderRadius.circular(20),
-                      border: Border.all(color: tc.border.withValues(alpha: 0.15)),
+                    _buildHeroSpotlight(
+                      context,
+                      consistency: consistency,
+                      completions: completions,
+                      totalHabits: totalHabits,
+                      weeklyCompletions: weeklyCompletions,
                     ),
-                    child: TrendChart(weeklyData: controller.weeklyData),
-                  )
-                else
-                  _buildEmptyCard(context, 'Complete a habit to see trends here'),
-                const SizedBox(height: 24),
+                    const SizedBox(height: 18),
 
-                _sectionTitle(context, 'Performance Pulse'),
-                const SizedBox(height: 10),
-                _buildTrendWindowSelector(context, controller, trendDays),
-                const SizedBox(height: 10),
-                if (controller.isTrendLoading)
-                  const ShimmerBox(width: double.infinity, height: 220, borderRadius: 20)
-                else if (trendData.isNotEmpty)
-                  _buildPerformanceTrendCard(context, trendData)
-                else
-                  _buildEmptyCard(context, 'No trend data available for this range yet'),
-                const SizedBox(height: 24),
+                    _buildKpiGrid(
+                      context,
+                      avgConsistency: avgConsistency,
+                      currentStreak: currentStreak,
+                      bestStreak: bestStreak,
+                      thisWeekDaily: thisWeekDaily,
+                    ),
+                    const SizedBox(height: 22),
 
-                if (controller.longTermTrends.isNotEmpty) ...[
-                  _sectionTitle(context, '6-Month Performance'),
-                  const SizedBox(height: 12),
-                  _buildLongTermTrendCard(context, controller.longTermTrends),
-                  const SizedBox(height: 24),
-                ],
+                    _buildOverviewCard(
+                      context,
+                      consistency: consistency,
+                      completions: completions,
+                      totalHabits: totalHabits,
+                      weeklyCompletions: weeklyCompletions,
+                      avgConsistency: avgConsistency,
+                    ),
+                    const SizedBox(height: 20),
 
-                Row(
-                  children: [
-                    Expanded(
-                      child: _sectionTitle(context, 'Monthly Progress Calendar'),
+                    StreakCard(
+                      currentStreak: currentStreak,
+                      bestStreak: bestStreak,
                     ),
-                    IconButton(
-                      icon: Icon(Icons.chevron_left_rounded, color: tc.textSecondary),
-                      onPressed: () => controller.changeMonth(-1),
-                      visualDensity: VisualDensity.compact,
+                    const SizedBox(height: 24),
+
+                    _sectionTitle(context, 'Week-over-Week Momentum'),
+                    const SizedBox(height: 12),
+                    _buildWeekComparisonCard(
+                      context,
+                      thisWeekDaily: thisWeekDaily,
+                      lastWeekDaily: lastWeekDaily,
+                      delta: wowDelta,
+                      trend: wowTrend,
                     ),
-                    IconButton(
-                      icon: Icon(Icons.chevron_right_rounded, color: tc.textSecondary),
-                      onPressed: () => controller.changeMonth(1),
-                      visualDensity: VisualDensity.compact,
+                    const SizedBox(height: 24),
+
+                    if (controller.categoryBreakdown.isNotEmpty) ...[
+                      _sectionTitle(context, 'By Category'),
+                      const SizedBox(height: 12),
+                      _buildCategoryBreakdown(
+                        context,
+                        controller.categoryBreakdown,
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    if (controller.categorySuccess.isNotEmpty) ...[
+                      _sectionTitle(context, 'Category Success League'),
+                      const SizedBox(height: 12),
+                      _buildCategorySuccessCard(
+                        context,
+                        controller.categorySuccess,
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    _sectionTitle(context, 'Weekly Trend'),
+                    const SizedBox(height: 12),
+                    if (controller.weeklyData.isNotEmpty)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: tc.card,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: tc.border.withValues(alpha: 0.15),
+                          ),
+                        ),
+                        child: TrendChart(weeklyData: controller.weeklyData),
+                      )
+                    else
+                      _buildEmptyCard(
+                        context,
+                        'Complete a habit to see trends here',
+                      ),
+                    const SizedBox(height: 24),
+
+                    _sectionTitle(context, 'Performance Pulse'),
+                    const SizedBox(height: 10),
+                    _buildTrendWindowSelector(context, controller, trendDays),
+                    const SizedBox(height: 10),
+                    if (controller.isTrendLoading)
+                      const ShimmerBox(
+                        width: double.infinity,
+                        height: 220,
+                        borderRadius: 20,
+                      )
+                    else if (trendData.isNotEmpty)
+                      _buildPerformanceTrendCard(context, trendData)
+                    else
+                      _buildEmptyCard(
+                        context,
+                        'No trend data available for this range yet',
+                      ),
+                    const SizedBox(height: 24),
+
+                    if (controller.longTermTrends.isNotEmpty) ...[
+                      _sectionTitle(context, '6-Month Performance'),
+                      const SizedBox(height: 12),
+                      _buildLongTermTrendCard(
+                        context,
+                        controller.longTermTrends,
+                      ),
+                      const SizedBox(height: 24),
+                    ],
+
+                    Row(
+                      children: [
+                        Expanded(
+                          child: _sectionTitle(
+                            context,
+                            'Monthly Progress Calendar',
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.chevron_left_rounded,
+                            color: tc.textSecondary,
+                          ),
+                          onPressed: () => controller.changeMonth(-1),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            Icons.chevron_right_rounded,
+                            color: tc.textSecondary,
+                          ),
+                          onPressed: () => controller.changeMonth(1),
+                          visualDensity: VisualDensity.compact,
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: tc.card,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: tc.border.withValues(alpha: 0.15)),
-                  ),
-                  child: CalendarHeatmap(
-                    data: controller.monthlyHeatmap,
-                    monthDate: controller.currentMonth,
-                  ),
-                ),
-                if (controller.errorMessage != null) ...[
-                  const SizedBox(height: 18),
-                  Text(
-                    controller.errorMessage!,
-                    style: TextStyle(color: tc.warning, fontSize: 12),
-                  ),
-                ],
-                const SizedBox(height: 32),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: tc.card,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: tc.border.withValues(alpha: 0.15),
+                        ),
+                      ),
+                      child: CalendarHeatmap(
+                        data: controller.monthlyHeatmap,
+                        monthDate: controller.currentMonth,
+                      ),
+                    ),
+                    if (controller.errorMessage != null) ...[
+                      const SizedBox(height: 18),
+                      Text(
+                        controller.errorMessage!,
+                        style: TextStyle(color: tc.warning, fontSize: 12),
+                      ),
+                    ],
+                    const SizedBox(height: 32),
                   ],
                 ),
               ),
@@ -346,7 +394,8 @@ class _AnalyticsView extends StatelessWidget {
             ),
           ),
           TextButton.icon(
-            onPressed: () => Navigator.of(context).popUntil((route) => route.isFirst),
+            onPressed: () =>
+                Navigator.of(context).popUntil((route) => route.isFirst),
             icon: const Icon(Icons.home_rounded, size: 16),
             label: const Text('Dashboard'),
           ),
@@ -391,10 +440,7 @@ class _AnalyticsView extends StatelessWidget {
       decoration: BoxDecoration(
         borderRadius: BorderRadius.circular(24),
         gradient: LinearGradient(
-          colors: [
-            tc.primary,
-            tc.secondary.withValues(alpha: 0.92),
-          ],
+          colors: [tc.primary, tc.secondary.withValues(alpha: 0.92)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
@@ -485,10 +531,30 @@ class _AnalyticsView extends StatelessWidget {
     required double thisWeekDaily,
   }) {
     final cards = [
-      _KpiData('30-day Avg', '${avgConsistency.toStringAsFixed(1)}%', Icons.analytics_rounded, AppColors.info),
-      _KpiData('Current Streak', '$currentStreak days', Icons.local_fire_department_rounded, AppColors.warning),
-      _KpiData('Best Streak', '$bestStreak days', Icons.emoji_events_rounded, AppColors.success),
-      _KpiData('Daily Avg', thisWeekDaily.toStringAsFixed(1), Icons.timeline_rounded, AppColors.secondary),
+      _KpiData(
+        '30-day Avg',
+        '${avgConsistency.toStringAsFixed(1)}%',
+        Icons.analytics_rounded,
+        AppColors.info,
+      ),
+      _KpiData(
+        'Current Streak',
+        '$currentStreak days',
+        Icons.local_fire_department_rounded,
+        AppColors.warning,
+      ),
+      _KpiData(
+        'Best Streak',
+        '$bestStreak days',
+        Icons.emoji_events_rounded,
+        AppColors.success,
+      ),
+      _KpiData(
+        'Daily Avg',
+        thisWeekDaily.toStringAsFixed(1),
+        Icons.timeline_rounded,
+        AppColors.secondary,
+      ),
     ];
 
     return GridView.builder(
@@ -536,10 +602,7 @@ class _AnalyticsView extends StatelessWidget {
             ),
           ),
           const SizedBox(height: 2),
-          Text(
-            data.label,
-            style: TextStyle(color: tc.textMuted, fontSize: 11),
-          ),
+          Text(data.label, style: TextStyle(color: tc.textMuted, fontSize: 11)),
         ],
       ),
     );
@@ -625,7 +688,10 @@ class _AnalyticsView extends StatelessWidget {
                 const SizedBox(height: 10),
                 // Status badge
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
                   decoration: BoxDecoration(
                     color: _statusColor(consistency).withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(12),
@@ -649,8 +715,12 @@ class _AnalyticsView extends StatelessWidget {
 
   /// Renders a small inline stat row used inside the overview card
   /// (e.g. weekly completions, average percentage).
-  Widget _miniStat(BuildContext context,
-      {required IconData icon, required String value, required String label}) {
+  Widget _miniStat(
+    BuildContext context, {
+    required IconData icon,
+    required String value,
+    required String label,
+  }) {
     final tc = context.colors;
     return Row(
       children: [
@@ -659,7 +729,14 @@ class _AnalyticsView extends StatelessWidget {
         Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text(value, style: TextStyle(color: tc.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+            Text(
+              value,
+              style: TextStyle(
+                color: tc.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
             Text(label, style: TextStyle(color: tc.textMuted, fontSize: 10)),
           ],
         ),
@@ -740,9 +817,13 @@ class _AnalyticsView extends StatelessWidget {
           const SizedBox(height: 14),
           Row(
             children: [
-              Expanded(child: _comparisonMetric(context, 'This week', thisWeekDaily)),
+              Expanded(
+                child: _comparisonMetric(context, 'This week', thisWeekDaily),
+              ),
               const SizedBox(width: 10),
-              Expanded(child: _comparisonMetric(context, 'Last week', lastWeekDaily)),
+              Expanded(
+                child: _comparisonMetric(context, 'Last week', lastWeekDaily),
+              ),
             ],
           ),
         ],
@@ -771,7 +852,10 @@ class _AnalyticsView extends StatelessWidget {
               fontSize: 18,
             ),
           ),
-          Text('daily completions', style: TextStyle(color: tc.textSecondary, fontSize: 11)),
+          Text(
+            'daily completions',
+            style: TextStyle(color: tc.textSecondary, fontSize: 11),
+          ),
         ],
       ),
     );
@@ -815,7 +899,9 @@ class _AnalyticsView extends StatelessWidget {
           final color = categoryColors[i % categoryColors.length];
 
           return Padding(
-            padding: EdgeInsets.only(bottom: i < categories.length - 1 ? 14 : 0),
+            padding: EdgeInsets.only(
+              bottom: i < categories.length - 1 ? 14 : 0,
+            ),
             child: Row(
               children: [
                 // Color dot
@@ -888,7 +974,10 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
-  Widget _buildCategorySuccessCard(BuildContext context, List<Map<String, dynamic>> categories) {
+  Widget _buildCategorySuccessCard(
+    BuildContext context,
+    List<Map<String, dynamic>> categories,
+  ) {
     final tc = context.colors;
     final top = categories.take(4).toList();
 
@@ -932,8 +1021,17 @@ class _AnalyticsView extends StatelessWidget {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(category, style: TextStyle(color: tc.textPrimary, fontWeight: FontWeight.w700)),
-                      Text('$habits habits', style: TextStyle(color: tc.textMuted, fontSize: 11)),
+                      Text(
+                        category,
+                        style: TextStyle(
+                          color: tc.textPrimary,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Text(
+                        '$habits habits',
+                        style: TextStyle(color: tc.textMuted, fontSize: 11),
+                      ),
                     ],
                   ),
                 ),
@@ -1006,7 +1104,10 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
-  Widget _buildPerformanceTrendCard(BuildContext context, List<Map<String, dynamic>> trendData) {
+  Widget _buildPerformanceTrendCard(
+    BuildContext context,
+    List<Map<String, dynamic>> trendData,
+  ) {
     final tc = context.colors;
     final spots = <FlSpot>[];
     for (int i = 0; i < trendData.length; i++) {
@@ -1045,12 +1146,17 @@ class _AnalyticsView extends StatelessWidget {
                   show: true,
                   drawVerticalLine: false,
                   horizontalInterval: 20,
-                  getDrawingHorizontalLine: (_) => FlLine(color: tc.surfaceVariant),
+                  getDrawingHorizontalLine: (_) =>
+                      FlLine(color: tc.surfaceVariant),
                 ),
                 borderData: FlBorderData(show: false),
                 titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -1068,7 +1174,8 @@ class _AnalyticsView extends StatelessWidget {
                       interval: _xIntervalForTrend(trendData.length),
                       getTitlesWidget: (value, _) {
                         final idx = value.toInt();
-                        if (idx < 0 || idx >= trendData.length) return const SizedBox.shrink();
+                        if (idx < 0 || idx >= trendData.length)
+                          return const SizedBox.shrink();
                         return Padding(
                           padding: const EdgeInsets.only(top: 6),
                           child: Text(
@@ -1088,7 +1195,11 @@ class _AnalyticsView extends StatelessWidget {
                         .map(
                           (spot) => LineTooltipItem(
                             '${spot.y.toStringAsFixed(1)}%',
-                            const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 11),
+                            const TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.w700,
+                              fontSize: 11,
+                            ),
                           ),
                         )
                         .toList(),
@@ -1103,7 +1214,7 @@ class _AnalyticsView extends StatelessWidget {
                     color: tc.primary,
                     dotData: FlDotData(
                       show: trendData.length <= 14,
-                      getDotPainter: (_, __, ___, ____) => FlDotCirclePainter(
+                      getDotPainter: (_, _, _, _) => FlDotCirclePainter(
                         radius: 3.2,
                         color: tc.primary,
                         strokeColor: tc.card,
@@ -1131,7 +1242,10 @@ class _AnalyticsView extends StatelessWidget {
     );
   }
 
-  Widget _buildLongTermTrendCard(BuildContext context, List<Map<String, dynamic>> trends) {
+  Widget _buildLongTermTrendCard(
+    BuildContext context,
+    List<Map<String, dynamic>> trends,
+  ) {
     final tc = context.colors;
     final maxRate = trends
         .map((e) => _toDouble(e['completionRate']))
@@ -1155,12 +1269,17 @@ class _AnalyticsView extends StatelessWidget {
                 gridData: FlGridData(
                   show: true,
                   horizontalInterval: 20,
-                  getDrawingHorizontalLine: (_) => FlLine(color: tc.surfaceVariant),
+                  getDrawingHorizontalLine: (_) =>
+                      FlLine(color: tc.surfaceVariant),
                   drawVerticalLine: false,
                 ),
                 titlesData: FlTitlesData(
-                  topTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
-                  rightTitles: const AxisTitles(sideTitles: SideTitles(showTitles: false)),
+                  topTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
+                  rightTitles: const AxisTitles(
+                    sideTitles: SideTitles(showTitles: false),
+                  ),
                   leftTitles: AxisTitles(
                     sideTitles: SideTitles(
                       showTitles: true,
@@ -1177,12 +1296,21 @@ class _AnalyticsView extends StatelessWidget {
                       showTitles: true,
                       getTitlesWidget: (value, _) {
                         final i = value.toInt();
-                        if (i < 0 || i >= trends.length) return const SizedBox.shrink();
+                        if (i < 0 || i >= trends.length)
+                          return const SizedBox.shrink();
                         final label = (trends[i]['month'] ?? '').toString();
-                        final short = label.isNotEmpty ? label.split(' ').first : '';
+                        final short = label.isNotEmpty
+                            ? label.split(' ').first
+                            : '';
                         return Padding(
                           padding: const EdgeInsets.only(top: 6),
-                          child: Text(short, style: TextStyle(fontSize: 10, color: tc.textSecondary)),
+                          child: Text(
+                            short,
+                            style: TextStyle(
+                              fontSize: 10,
+                              color: tc.textSecondary,
+                            ),
+                          ),
                         );
                       },
                     ),
@@ -1199,7 +1327,9 @@ class _AnalyticsView extends StatelessWidget {
                       BarChartRodData(
                         toY: rate,
                         width: 18,
-                        borderRadius: const BorderRadius.vertical(top: Radius.circular(6)),
+                        borderRadius: const BorderRadius.vertical(
+                          top: Radius.circular(6),
+                        ),
                         gradient: LinearGradient(
                           colors: [tc.primary, tc.secondary],
                           begin: Alignment.bottomCenter,
@@ -1253,7 +1383,11 @@ class _AnalyticsView extends StatelessWidget {
       ),
       child: Column(
         children: [
-          Icon(Icons.insights_rounded, size: 36, color: tc.textMuted.withValues(alpha: 0.5)),
+          Icon(
+            Icons.insights_rounded,
+            size: 36,
+            color: tc.textMuted.withValues(alpha: 0.5),
+          ),
           const SizedBox(height: 12),
           Text(message, style: TextStyle(color: tc.textMuted, fontSize: 14)),
         ],
@@ -1265,7 +1399,8 @@ class _AnalyticsView extends StatelessWidget {
   static int _toInt(dynamic v) => v is int ? v : (v is num ? v.toInt() : 0);
 
   /// Safely casts a dynamic value to [double], defaulting to `0.0`.
-  static double _toDouble(dynamic v) => v is double ? v : (v is num ? v.toDouble() : 0.0);
+  static double _toDouble(dynamic v) =>
+      v is double ? v : (v is num ? v.toDouble() : 0.0);
 
   /// Safely casts a dynamic value to [Map<String, dynamic>].
   static Map<String, dynamic> _toMap(dynamic v) {

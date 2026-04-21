@@ -92,7 +92,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       vsync: this,
       duration: const Duration(milliseconds: 800),
     );
-    _greetingFade = CurvedAnimation(parent: _greetingAnim, curve: Curves.easeOut);
+    _greetingFade = CurvedAnimation(
+      parent: _greetingAnim,
+      curve: Curves.easeOut,
+    );
     _greetingAnim.forward();
 
     // Always reload data with the CURRENT user's token.
@@ -103,7 +106,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       context.read<HomeController>().loadData();
       final notifCtrl = context.read<NotificationController>();
       notifCtrl.refreshBadge();
-      notifCtrl.connectWebSocket();  // Establish real-time WebSocket connection
+      notifCtrl.connectWebSocket(); // Establish real-time WebSocket connection
 
       // Show an in-app banner whenever a real-time notification arrives
       notifCtrl.onNewRealtimeNotification = (notification) {
@@ -209,22 +212,19 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ),
                     const SizedBox(height: 24),
                     // Shimmer progress card
-                    const ShimmerBox(
-                      height: 120,
-                      borderRadius: 24,
-                    ),
+                    const ShimmerBox(height: 120, borderRadius: 24),
                     const SizedBox(height: 20),
                     // Shimmer stats row
                     Row(
-                      children: List.generate(4, (_) => const Expanded(
-                        child: Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 4),
-                          child: ShimmerBox(
-                            height: 80,
-                            borderRadius: 16,
+                      children: List.generate(
+                        4,
+                        (_) => const Expanded(
+                          child: Padding(
+                            padding: EdgeInsets.symmetric(horizontal: 4),
+                            child: ShimmerBox(height: 80, borderRadius: 16),
                           ),
                         ),
-                      )),
+                      ),
                     ),
                     const SizedBox(height: 24),
                     // Shimmer habit cards
@@ -254,7 +254,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                   onPressed: () => _showForm(controller: controller),
                   backgroundColor: tc.primary,
                   elevation: 4,
-                  child: const Icon(Icons.add_rounded, color: Colors.white, size: 28),
+                  child: const Icon(
+                    Icons.add_rounded,
+                    color: Colors.white,
+                    size: 28,
+                  ),
                 )
               : null,
           bottomNavigationBar: _buildBottomNav(controller),
@@ -310,8 +314,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               // ── 4. Category Filter Chips ───────────────
               if (controller.todayHabits.length > 1)
                 _buildCategoryChips(controller),
-              if (controller.todayHabits.length > 1)
-                const SizedBox(height: 20),
+              if (controller.todayHabits.length > 1) const SizedBox(height: 20),
 
               // ── 5. Section Header ──────────────────────
               _buildSectionHeader(
@@ -429,7 +432,8 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
   Widget _buildHeroProgressCard(HomeController controller) {
     final tc = context.colors;
     final pct = (controller.todayProgress * 100).toInt();
-    final allDone = controller.completedHabits == controller.totalHabits &&
+    final allDone =
+        controller.completedHabits == controller.totalHabits &&
         controller.totalHabits > 0;
 
     return Container(
@@ -446,8 +450,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
         borderRadius: BorderRadius.circular(24),
         boxShadow: [
           BoxShadow(
-            color: (allDone ? AppColors.success : tc.primary)
-                .withValues(alpha: 0.3),
+            color: (allDone ? AppColors.success : tc.primary).withValues(
+              alpha: 0.3,
+            ),
             blurRadius: 20,
             offset: const Offset(0, 8),
           ),
@@ -706,7 +711,9 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 color: isActive ? tc.primary : tc.card,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
-                  color: isActive ? tc.primary : tc.border.withValues(alpha: 0.3),
+                  color: isActive
+                      ? tc.primary
+                      : tc.border.withValues(alpha: 0.3),
                 ),
               ),
               child: Text(
@@ -742,10 +749,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
       children: [
         Text(
           title,
-          style: AppTextStyles.h3.copyWith(
-            color: tc.textPrimary,
-            fontSize: 18,
-          ),
+          style: AppTextStyles.h3.copyWith(color: tc.textPrimary, fontSize: 18),
         ),
         if (count != null) ...[
           const SizedBox(width: 8),
@@ -807,7 +811,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           color: AppColors.error.withValues(alpha: 0.12),
           borderRadius: BorderRadius.circular(18),
         ),
-        child: const Icon(Icons.delete_sweep_rounded, color: AppColors.error, size: 26),
+        child: const Icon(
+          Icons.delete_sweep_rounded,
+          color: AppColors.error,
+          size: 26,
+        ),
       ),
       confirmDismiss: (_) async {
         return await showDialog<bool>(
@@ -816,10 +824,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             title: const Text('Delete Habit?'),
             content: Text('Remove "${habit.title}" permanently?'),
             actions: [
-              TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Cancel'),
+              ),
               TextButton(
                 onPressed: () => Navigator.pop(ctx, true),
-                child: const Text('Delete', style: TextStyle(color: AppColors.error)),
+                child: const Text(
+                  'Delete',
+                  style: TextStyle(color: AppColors.error),
+                ),
               ),
             ],
           ),
@@ -831,14 +845,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           final analyticsCtrl = context.read<AnalyticsController>();
           Navigator.push(
             context,
-            AppPageRoute.slideRight(HabitDetailScreen(
-              habit: habit,
-              onToggle: () {
-                controller.loadData();
-                analyticsCtrl.refresh();
-              },
-              onDelete: () => controller.loadData(),
-            )),
+            AppPageRoute.slideRight(
+              HabitDetailScreen(
+                habit: habit,
+                onToggle: () {
+                  controller.loadData();
+                  analyticsCtrl.refresh();
+                },
+                onDelete: () => controller.loadData(),
+              ),
+            ),
           ).then((_) {
             controller.loadData();
             analyticsCtrl.refresh();
@@ -903,7 +919,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                       children: [
                         // Category pill
                         Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 6,
+                            vertical: 2,
+                          ),
                           decoration: BoxDecoration(
                             color: habit.color.withValues(alpha: 0.08),
                             borderRadius: BorderRadius.circular(6),
@@ -919,7 +938,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                         ),
                         if (habit.time.isNotEmpty) ...[
                           const SizedBox(width: 8),
-                          Icon(Icons.schedule_rounded, size: 12, color: tc.textMuted),
+                          Icon(
+                            Icons.schedule_rounded,
+                            size: 12,
+                            color: tc.textMuted,
+                          ),
                           const SizedBox(width: 3),
                           Text(
                             habit.time,
@@ -984,10 +1007,14 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                                 ? '${habit.title} — done ✓'
                                 : '${habit.title} — unmarked',
                           ),
-                          backgroundColor: isNowDone ? AppColors.success : tc.textMuted,
+                          backgroundColor: isNowDone
+                              ? AppColors.success
+                              : tc.textMuted,
                           duration: const Duration(seconds: 1),
                           behavior: SnackBarBehavior.floating,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(10),
+                          ),
                         ),
                       );
                     }
@@ -1007,7 +1034,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                     ),
                   ),
                   child: isDone
-                      ? const Icon(Icons.check_rounded, size: 20, color: Colors.white)
+                      ? const Icon(
+                          Icons.check_rounded,
+                          size: 20,
+                          color: Colors.white,
+                        )
                       : null,
                 ),
               ),
@@ -1038,7 +1069,11 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           ),
           child: Row(
             children: [
-              Icon(Icons.notifications_active_rounded, color: tc.primary, size: 20),
+              Icon(
+                Icons.notifications_active_rounded,
+                color: tc.primary,
+                size: 20,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Text(
@@ -1187,11 +1222,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 ),
               )
             else
-              Icon(
-                icon,
-                color: active ? tc.primary : tc.textMuted,
-                size: 22,
-              ),
+              Icon(icon, color: active ? tc.primary : tc.textMuted, size: 22),
             const SizedBox(height: 2),
             AnimatedDefaultTextStyle(
               duration: AppDurations.short,
@@ -1282,9 +1313,17 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                 children: [
                   _profileStat('${controller.totalHabits}', 'Habits', tc),
-                  Container(width: 1, height: 30, color: tc.border.withValues(alpha: 0.2)),
+                  Container(
+                    width: 1,
+                    height: 30,
+                    color: tc.border.withValues(alpha: 0.2),
+                  ),
                   _profileStat('${controller.currentStreak}', 'Streak', tc),
-                  Container(width: 1, height: 30, color: tc.border.withValues(alpha: 0.2)),
+                  Container(
+                    width: 1,
+                    height: 30,
+                    color: tc.border.withValues(alpha: 0.2),
+                  ),
                   _profileStat('${controller.bestStreak}', 'Record', tc),
                 ],
               ),
@@ -1360,38 +1399,74 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
             ),
             const SizedBox(height: 16),
 
-            _profileOption(Icons.settings_rounded, 'Settings', 'Alerts, reminders, quiet hours', tc, onTap: () {
-              Navigator.push(context, AppPageRoute.slideRight(
-                ChangeNotifierProvider(
-                  create: (_) => SettingsController(),
-                  child: const SettingsScreen(),
-                ),
-              ));
-            }),
-            _profileOption(Icons.palette_outlined, 'Appearance', 'Light, dark, or system theme', tc, onTap: () {
-              Navigator.push(context, AppPageRoute.slideRight(
-                ChangeNotifierProvider(
-                  create: (_) => SettingsController(),
-                  child: const AppearancePage(),
-                ),
-              ));
-            }),
-            _profileOption(Icons.shield_outlined, 'Privacy', 'Manage your data', tc, onTap: () {
-              Navigator.push(context, AppPageRoute.slideRight(
-                ChangeNotifierProvider(
-                  create: (_) => SettingsController(),
-                  child: const PrivacyPolicyPage(),
-                ),
-              ));
-            }),
-            _profileOption(Icons.help_outline_rounded, 'Help & Support', 'FAQs and contact', tc, onTap: () {
-              Navigator.push(context, AppPageRoute.slideRight(
-                ChangeNotifierProvider(
-                  create: (_) => SettingsController(),
-                  child: const HelpSupportPage(),
-                ),
-              ));
-            }),
+            _profileOption(
+              Icons.settings_rounded,
+              'Settings',
+              'Alerts, reminders, quiet hours',
+              tc,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  AppPageRoute.slideRight(
+                    ChangeNotifierProvider(
+                      create: (_) => SettingsController(),
+                      child: const SettingsScreen(),
+                    ),
+                  ),
+                );
+              },
+            ),
+            _profileOption(
+              Icons.palette_outlined,
+              'Appearance',
+              'Light, dark, or system theme',
+              tc,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  AppPageRoute.slideRight(
+                    ChangeNotifierProvider(
+                      create: (_) => SettingsController(),
+                      child: const AppearancePage(),
+                    ),
+                  ),
+                );
+              },
+            ),
+            _profileOption(
+              Icons.shield_outlined,
+              'Privacy',
+              'Manage your data',
+              tc,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  AppPageRoute.slideRight(
+                    ChangeNotifierProvider(
+                      create: (_) => SettingsController(),
+                      child: const PrivacyPolicyPage(),
+                    ),
+                  ),
+                );
+              },
+            ),
+            _profileOption(
+              Icons.help_outline_rounded,
+              'Help & Support',
+              'FAQs and contact',
+              tc,
+              onTap: () {
+                Navigator.push(
+                  context,
+                  AppPageRoute.slideRight(
+                    ChangeNotifierProvider(
+                      create: (_) => SettingsController(),
+                      child: const HelpSupportPage(),
+                    ),
+                  ),
+                );
+              },
+            ),
             const SizedBox(height: 24),
 
             SizedBox(
@@ -1400,11 +1475,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               child: OutlinedButton.icon(
                 onPressed: () => _logout(controller),
                 icon: const Icon(Icons.logout_rounded),
-                label: const Text('Log Out', style: TextStyle(fontWeight: FontWeight.w600)),
+                label: const Text(
+                  'Log Out',
+                  style: TextStyle(fontWeight: FontWeight.w600),
+                ),
                 style: OutlinedButton.styleFrom(
                   foregroundColor: AppColors.error,
                   side: const BorderSide(color: AppColors.error),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(14),
+                  ),
                 ),
               ),
             ),
@@ -1468,9 +1548,16 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
                 children: [
                   Text(
                     title,
-                    style: TextStyle(color: tc.textPrimary, fontSize: 15, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: tc.textPrimary,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
-                  Text(subtitle, style: AppTextStyles.caption.copyWith(color: tc.textMuted)),
+                  Text(
+                    subtitle,
+                    style: AppTextStyles.caption.copyWith(color: tc.textMuted),
+                  ),
                 ],
               ),
             ),
@@ -1559,7 +1646,7 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
           shrinkWrap: true,
           padding: const EdgeInsets.fromLTRB(16, 16, 16, 24),
           itemCount: habits.length + 1,
-          separatorBuilder: (_, __) => const SizedBox(height: 8),
+          separatorBuilder: (_, _) => const SizedBox(height: 8),
           itemBuilder: (ctx, index) {
             if (index == 0) {
               return Padding(
@@ -1584,7 +1671,10 @@ class _HomePageState extends State<HomePage> with TickerProviderStateMixin {
               ),
               child: ListTile(
                 leading: Icon(habit.icon, color: habit.color),
-                title: Text(habit.title, style: TextStyle(color: tc.textPrimary)),
+                title: Text(
+                  habit.title,
+                  style: TextStyle(color: tc.textPrimary),
+                ),
                 subtitle: Text(
                   habit.reminderEnabled && habit.reminderTime != null
                       ? 'Reminder ${habit.reminderTime!.format(context)}'

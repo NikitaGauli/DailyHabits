@@ -2,8 +2,6 @@
 //
 // Mirrors the Django admin_panel models for type-safe API consumption.
 
-
-
 // ═══════════════════════════════════════════════════════════════════════════════
 //  RBAC
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -26,13 +24,13 @@ class AdminRole {
   });
 
   factory AdminRole.fromJson(Map<String, dynamic> json) => AdminRole(
-        id: json['id'] ?? '',
-        name: json['name'] ?? '',
-        displayName: json['display_name'] ?? '',
-        description: json['description'] ?? '',
-        permissions: List<String>.from(json['permissions'] ?? []),
-        isActive: json['is_active'] ?? true,
-      );
+    id: json['id'] ?? '',
+    name: json['name'] ?? '',
+    displayName: json['display_name'] ?? '',
+    description: json['description'] ?? '',
+    permissions: List<String>.from(json['permissions'] ?? []),
+    isActive: json['is_active'] ?? true,
+  );
 }
 
 class AdminProfile {
@@ -59,16 +57,16 @@ class AdminProfile {
   });
 
   factory AdminProfile.fromJson(Map<String, dynamic> json) => AdminProfile(
-        id: json['id'] ?? '',
-        userEmail: json['user_email'] ?? '',
-        userName: json['user_name'] ?? '',
-        roleName: json['role_name'] ?? '',
-        roleId: json['role']?.toString() ?? '',
-        isActive: json['is_active'] ?? true,
-        twoFactorEnabled: json['two_factor_enabled'] ?? false,
-        lastAdminLogin: json['last_admin_login'],
-        permissions: List<String>.from(json['permissions'] ?? []),
-      );
+    id: json['id'] ?? '',
+    userEmail: json['user_email'] ?? '',
+    userName: json['user_name'] ?? '',
+    roleName: json['role_name'] ?? '',
+    roleId: json['role']?.toString() ?? '',
+    isActive: json['is_active'] ?? true,
+    twoFactorEnabled: json['two_factor_enabled'] ?? false,
+    lastAdminLogin: json['last_admin_login'],
+    permissions: List<String>.from(json['permissions'] ?? []),
+  );
 
   bool hasPermission(String perm) {
     if (permissions.contains('*')) return true;
@@ -111,19 +109,19 @@ class AdminUser {
   });
 
   factory AdminUser.fromJson(Map<String, dynamic> json) => AdminUser(
-        id: json['id'] ?? 0,
-        email: json['email'] ?? '',
-        name: json['name'] ?? '',
-        profileImage: json['profile_image'],
-        isActive: json['is_active'] ?? true,
-        isStaff: json['is_staff'] ?? false,
-        currentStreak: json['current_streak'] ?? 0,
-        totalHabitsCompleted: json['total_habits_completed'] ?? 0,
-        createdAt: json['created_at'],
-        lastLogin: json['last_login'],
-        habitsCount: json['habits_count'] ?? 0,
-        isSuspended: json['is_suspended'] ?? false,
-      );
+    id: json['id'] ?? 0,
+    email: json['email'] ?? '',
+    name: json['name'] ?? '',
+    profileImage: json['profile_image'],
+    isActive: json['is_active'] ?? true,
+    isStaff: json['is_staff'] ?? false,
+    currentStreak: json['current_streak'] ?? 0,
+    totalHabitsCompleted: json['total_habits_completed'] ?? 0,
+    createdAt: json['created_at'],
+    lastLogin: json['last_login'],
+    habitsCount: json['habits_count'] ?? 0,
+    isSuspended: json['is_suspended'] ?? false,
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -162,20 +160,20 @@ class OverviewStats {
   });
 
   factory OverviewStats.fromJson(Map<String, dynamic> json) => OverviewStats(
-        totalUsers: json['total_users'] ?? 0,
-        activeUsersToday: json['active_users_today'] ?? 0,
-        newUsersToday: json['new_users_today'] ?? 0,
-        newUsersThisWeek: json['new_users_this_week'] ?? 0,
-        totalHabits: json['total_habits'] ?? 0,
-        habitsCompletedToday: json['habits_completed_today'] ?? 0,
-        averageCompletionRate: (json['average_completion_rate'] ?? 0).toDouble(),
-        activeStreaks: json['active_streaks'] ?? 0,
-        totalGroups: json['total_groups'] ?? 0,
-        totalChallengesActive: json['total_challenges_active'] ?? 0,
-        pendingReports: json['pending_reports'] ?? 0,
-        openSupportTickets: json['open_support_tickets'] ?? 0,
-        totalXpToday: json['total_xp_today'] ?? 0,
-      );
+    totalUsers: json['total_users'] ?? 0,
+    activeUsersToday: json['active_users_today'] ?? 0,
+    newUsersToday: json['new_users_today'] ?? 0,
+    newUsersThisWeek: json['new_users_this_week'] ?? 0,
+    totalHabits: json['total_habits'] ?? 0,
+    habitsCompletedToday: json['habits_completed_today'] ?? 0,
+    averageCompletionRate: (json['average_completion_rate'] ?? 0).toDouble(),
+    activeStreaks: json['active_streaks'] ?? 0,
+    totalGroups: json['total_groups'] ?? 0,
+    totalChallengesActive: json['total_challenges_active'] ?? 0,
+    pendingReports: json['pending_reports'] ?? 0,
+    openSupportTickets: json['open_support_tickets'] ?? 0,
+    totalXpToday: json['total_xp_today'] ?? 0,
+  );
 }
 
 class GrowthDataPoint {
@@ -236,28 +234,104 @@ class EngagementMetrics {
     this.topCategories = const [],
   });
 
-  factory EngagementMetrics.fromJson(Map<String, dynamic> json) =>
-      EngagementMetrics(
-        periodDays: json['period_days'] ?? 30,
-        totalLogs: json['total_logs'] ?? 0,
-        completed: json['completed'] ?? 0,
-        skipped: json['skipped'] ?? 0,
-        missed: json['missed'] ?? 0,
-        completionRate: (json['completion_rate'] ?? 0).toDouble(),
-        groupChallengeRating10:
-          (json['group_challenge_rating_10'] ?? 0).toDouble(),
-        groupChallengesCompleted: json['group_challenges_completed'] ?? 0,
-        groupChallengesTotal: json['group_challenges_total'] ?? 0,
-        individualChallengeRating10:
-          (json['individual_challenge_rating_10'] ?? 0).toDouble(),
-        individualChallengesCompleted:
-          json['individual_challenges_completed'] ?? 0,
-        individualChallengesTotal: json['individual_challenges_total'] ?? 0,
-        streakDistribution: List<Map<String, dynamic>>.from(
-            json['streak_distribution'] ?? []),
-        topCategories:
-            List<Map<String, dynamic>>.from(json['top_categories'] ?? []),
+  factory EngagementMetrics.fromJson(
+    Map<String, dynamic> json,
+  ) => EngagementMetrics(
+    periodDays: json['period_days'] ?? 30,
+    totalLogs: json['total_logs'] ?? 0,
+    completed: json['completed'] ?? 0,
+    skipped: json['skipped'] ?? 0,
+    missed: json['missed'] ?? 0,
+    completionRate: (json['completion_rate'] ?? 0).toDouble(),
+    groupChallengeRating10: (json['group_challenge_rating_10'] ?? 0).toDouble(),
+    groupChallengesCompleted: json['group_challenges_completed'] ?? 0,
+    groupChallengesTotal: json['group_challenges_total'] ?? 0,
+    individualChallengeRating10: (json['individual_challenge_rating_10'] ?? 0)
+        .toDouble(),
+    individualChallengesCompleted: json['individual_challenges_completed'] ?? 0,
+    individualChallengesTotal: json['individual_challenges_total'] ?? 0,
+    streakDistribution: List<Map<String, dynamic>>.from(
+      json['streak_distribution'] ?? [],
+    ),
+    topCategories: List<Map<String, dynamic>>.from(
+      json['top_categories'] ?? [],
+    ),
+  );
+}
+
+class AnalyticsFilters {
+  final int days;
+  final int compareDays;
+  final String category;
+  final String segment;
+  final String dateFrom;
+  final String dateTo;
+
+  AnalyticsFilters({
+    this.days = 30,
+    this.compareDays = 30,
+    this.category = 'all',
+    this.segment = 'all',
+    this.dateFrom = '',
+    this.dateTo = '',
+  });
+
+  factory AnalyticsFilters.fromJson(Map<String, dynamic> json) =>
+      AnalyticsFilters(
+        days: json['days'] ?? 30,
+        compareDays: json['compare_days'] ?? 30,
+        category: json['category'] ?? 'all',
+        segment: json['segment'] ?? 'all',
+        dateFrom: json['date_from'] ?? '',
+        dateTo: json['date_to'] ?? '',
       );
+}
+
+class ComprehensiveAnalyticsReport {
+  final AnalyticsFilters filters;
+  final Map<String, dynamic> userGrowthEngagement;
+  final Map<String, dynamic> habitPerformance;
+  final Map<String, dynamic> behavioralInsights;
+  final Map<String, dynamic> notificationEffectiveness;
+  final Map<String, dynamic> systemUsage;
+  final Map<String, dynamic> advancedReporting;
+  final Map<String, dynamic> aiInsights;
+
+  ComprehensiveAnalyticsReport({
+    required this.filters,
+    this.userGrowthEngagement = const {},
+    this.habitPerformance = const {},
+    this.behavioralInsights = const {},
+    this.notificationEffectiveness = const {},
+    this.systemUsage = const {},
+    this.advancedReporting = const {},
+    this.aiInsights = const {},
+  });
+
+  factory ComprehensiveAnalyticsReport.fromJson(Map<String, dynamic> json) {
+    return ComprehensiveAnalyticsReport(
+      filters: AnalyticsFilters.fromJson(
+        Map<String, dynamic>.from(json['filters'] ?? {}),
+      ),
+      userGrowthEngagement: Map<String, dynamic>.from(
+        json['user_growth_engagement'] ?? {},
+      ),
+      habitPerformance: Map<String, dynamic>.from(
+        json['habit_performance'] ?? {},
+      ),
+      behavioralInsights: Map<String, dynamic>.from(
+        json['behavioral_insights'] ?? {},
+      ),
+      notificationEffectiveness: Map<String, dynamic>.from(
+        json['notification_effectiveness'] ?? {},
+      ),
+      systemUsage: Map<String, dynamic>.from(json['system_usage'] ?? {}),
+      advancedReporting: Map<String, dynamic>.from(
+        json['advanced_reporting'] ?? {},
+      ),
+      aiInsights: Map<String, dynamic>.from(json['ai_insights'] ?? {}),
+    );
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -298,21 +372,21 @@ class Report {
   });
 
   factory Report.fromJson(Map<String, dynamic> json) => Report(
-        id: json['id'] ?? '',
-        reporterEmail: json['reporter_email'] ?? '',
-        reportedUserEmail: json['reported_user_email'] ?? '',
-        contentType: json['content_type'] ?? '',
-        contentId: json['content_id'] ?? '',
-        category: json['category'] ?? '',
-        description: json['description'] ?? '',
-        status: json['status'] ?? 'pending',
-        priority: json['priority'] ?? 'medium',
-        assignedToEmail: json['assigned_to_email'],
-        resolution: json['resolution'],
-        resolutionAction: json['resolution_action'],
-        resolvedAt: json['resolved_at'],
-        createdAt: json['created_at'] ?? '',
-      );
+    id: json['id'] ?? '',
+    reporterEmail: json['reporter_email'] ?? '',
+    reportedUserEmail: json['reported_user_email'] ?? '',
+    contentType: json['content_type'] ?? '',
+    contentId: json['content_id'] ?? '',
+    category: json['category'] ?? '',
+    description: json['description'] ?? '',
+    status: json['status'] ?? 'pending',
+    priority: json['priority'] ?? 'medium',
+    assignedToEmail: json['assigned_to_email'],
+    resolution: json['resolution'],
+    resolutionAction: json['resolution_action'],
+    resolvedAt: json['resolved_at'],
+    createdAt: json['created_at'] ?? '',
+  );
 }
 
 class ModerationItem {
@@ -341,17 +415,17 @@ class ModerationItem {
   });
 
   factory ModerationItem.fromJson(Map<String, dynamic> json) => ModerationItem(
-        id: json['id'] ?? '',
-        contentType: json['content_type'] ?? '',
-        contentId: json['content_id'] ?? '',
-        contentPreview: json['content_preview'] ?? '',
-        authorEmail: json['author_email'] ?? '',
-        status: json['status'] ?? 'pending',
-        flagReason: json['flag_reason'] ?? '',
-        autoFlagScore: (json['auto_flag_score'] ?? 0).toDouble(),
-        reviewerNotes: json['reviewer_notes'],
-        createdAt: json['created_at'] ?? '',
-      );
+    id: json['id'] ?? '',
+    contentType: json['content_type'] ?? '',
+    contentId: json['content_id'] ?? '',
+    contentPreview: json['content_preview'] ?? '',
+    authorEmail: json['author_email'] ?? '',
+    status: json['status'] ?? 'pending',
+    flagReason: json['flag_reason'] ?? '',
+    autoFlagScore: (json['auto_flag_score'] ?? 0).toDouble(),
+    reviewerNotes: json['reviewer_notes'],
+    createdAt: json['created_at'] ?? '',
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -382,16 +456,16 @@ class AuditLogEntry {
   });
 
   factory AuditLogEntry.fromJson(Map<String, dynamic> json) => AuditLogEntry(
-        id: json['id'] ?? '',
-        adminEmail: json['admin_email'] ?? '',
-        action: json['action'] ?? '',
-        resourceType: json['resource_type'] ?? '',
-        resourceId: json['resource_id'] ?? '',
-        description: json['description'] ?? '',
-        severity: json['severity'] ?? 'info',
-        ipAddress: json['ip_address'],
-        createdAt: json['created_at'] ?? '',
-      );
+    id: json['id'] ?? '',
+    adminEmail: json['admin_email'] ?? '',
+    action: json['action'] ?? '',
+    resourceType: json['resource_type'] ?? '',
+    resourceId: json['resource_id'] ?? '',
+    description: json['description'] ?? '',
+    severity: json['severity'] ?? 'info',
+    ipAddress: json['ip_address'],
+    createdAt: json['created_at'] ?? '',
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -420,15 +494,15 @@ class SystemSetting {
   });
 
   factory SystemSetting.fromJson(Map<String, dynamic> json) => SystemSetting(
-        id: json['id'] ?? '',
-        key: json['key'] ?? '',
-        value: json['value'] ?? '',
-        valueType: json['value_type'] ?? 'string',
-        typedValue: json['typed_value'],
-        description: json['description'] ?? '',
-        category: json['category'] ?? 'general',
-        isPublic: json['is_public'] ?? false,
-      );
+    id: json['id'] ?? '',
+    key: json['key'] ?? '',
+    value: json['value'] ?? '',
+    valueType: json['value_type'] ?? 'string',
+    typedValue: json['typed_value'],
+    description: json['description'] ?? '',
+    category: json['category'] ?? 'general',
+    isPublic: json['is_public'] ?? false,
+  );
 }
 
 class FeatureFlag {
@@ -451,14 +525,14 @@ class FeatureFlag {
   });
 
   factory FeatureFlag.fromJson(Map<String, dynamic> json) => FeatureFlag(
-        id: json['id'] ?? '',
-        key: json['key'] ?? '',
-        name: json['name'] ?? '',
-        description: json['description'] ?? '',
-        isEnabled: json['is_enabled'] ?? false,
-        rolloutStrategy: json['rollout_strategy'] ?? 'off',
-        rolloutPercentage: json['rollout_percentage'] ?? 0,
-      );
+    id: json['id'] ?? '',
+    key: json['key'] ?? '',
+    name: json['name'] ?? '',
+    description: json['description'] ?? '',
+    isEnabled: json['is_enabled'] ?? false,
+    rolloutStrategy: json['rollout_strategy'] ?? 'off',
+    rolloutPercentage: json['rollout_percentage'] ?? 0,
+  );
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -540,14 +614,14 @@ class PaginatedResponse<T> {
   factory PaginatedResponse.fromJson(
     Map<String, dynamic> json,
     T Function(Map<String, dynamic>) fromJson,
-  ) =>
-      PaginatedResponse(
-        count: json['count'] ?? 0,
-        next: json['next'],
-        previous: json['previous'],
-        results: (json['results'] as List<dynamic>?)
-                ?.map((e) => fromJson(e as Map<String, dynamic>))
-                .toList() ??
-            [],
-      );
+  ) => PaginatedResponse(
+    count: json['count'] ?? 0,
+    next: json['next'],
+    previous: json['previous'],
+    results:
+        (json['results'] as List<dynamic>?)
+            ?.map((e) => fromJson(e as Map<String, dynamic>))
+            .toList() ??
+        [],
+  );
 }

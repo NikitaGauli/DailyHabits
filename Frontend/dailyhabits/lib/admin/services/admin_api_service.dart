@@ -12,8 +12,8 @@ import 'package:dailyhabits/services/auth_service.dart';
 import 'package:dailyhabits/admin/models/admin_models.dart';
 
 import '../../services/pdf_file_helper_stub.dart'
-  if (dart.library.html) '../../services/pdf_file_helper_web.dart'
-  if (dart.library.io) '../../services/pdf_file_helper_mobile.dart';
+    if (dart.library.html) '../../services/pdf_file_helper_web.dart'
+    if (dart.library.io) '../../services/pdf_file_helper_mobile.dart';
 
 // =============================================================================
 // Admin API Service
@@ -70,7 +70,11 @@ class AdminApiService {
   Future<dynamic> _post(String path, [Map<String, dynamic>? body]) async {
     final headers = await _headers();
     final response = await http
-        .post(_uri(path), headers: headers, body: body != null ? jsonEncode(body) : null)
+        .post(
+          _uri(path),
+          headers: headers,
+          body: body != null ? jsonEncode(body) : null,
+        )
         .timeout(ApiConfig.timeout);
     if (response.statusCode >= 200 && response.statusCode < 300) {
       if (response.body.isEmpty) return {};
@@ -134,11 +138,32 @@ class AdminApiService {
     return EngagementMetrics.fromJson(data);
   }
 
+  Future<ComprehensiveAnalyticsReport> getComprehensiveAnalytics({
+    int days = 30,
+    int? compareDays,
+    String category = 'all',
+    String segment = 'all',
+  }) async {
+    final query = <String, String>{
+      'days': '$days',
+      'category': category,
+      'segment': segment,
+    };
+    if (compareDays != null) query['compare_days'] = '$compareDays';
+
+    final data = await _get('/analytics/comprehensive/', query);
+    return ComprehensiveAnalyticsReport.fromJson(data as Map<String, dynamic>);
+  }
+
   Future<void> exportAnalyticsReport({
     int days = 30,
+    int? compareDays,
+    String category = 'all',
+    String segment = 'all',
     String format = 'csv',
+    bool openAfterSave = false,
   }) async {
-    final normalized = format.toLowerCase() == 'pdf' ? 'pdf' : 'csv';
+    final normalized = _normalizeExportFormat(format);
     final headers = await _headers();
     headers['Accept'] = normalized == 'pdf'
         ? 'application/pdf, text/csv, application/json;q=0.9'
@@ -148,6 +173,9 @@ class AdminApiService {
         .get(
           _uri('/analytics/export/', {
             'days': '$days',
+            if (compareDays != null) 'compare_days': '$compareDays',
+            'category': category,
+            'segment': segment,
             'format': normalized,
           }),
           headers: headers,
@@ -158,21 +186,46 @@ class AdminApiService {
       throw ApiException(response.statusCode, response.body);
     }
 
-    final contentType = response.headers['content-type'] ??
+    final contentType =
+        response.headers['content-type'] ??
         (normalized == 'pdf' ? 'application/pdf' : 'text/csv');
     final disposition = response.headers['content-disposition'] ?? '';
-    final fileName = _extractFileName(disposition) ??
+    final fileName =
+      _extractFileName(disposition) ??
         'analytics_${days}d.${normalized == 'pdf' ? 'pdf' : 'csv'}';
 
     if (response.bodyBytes.isEmpty) {
       throw ApiException(500, 'Empty export file received.');
     }
 
-    await saveExportToDevice(response.bodyBytes, contentType, fileName);
+    final savedPath = await saveExportToDevice(
+      response.bodyBytes,
+      contentType,
+      fileName,
+    );
+
+    if (openAfterSave && normalized == 'pdf' && savedPath != null) {
+      await openPdfFile(savedPath);
+    }
+  }
+
+  String _normalizeExportFormat(String format) {
+    final value = format.trim().toLowerCase();
+    if (value == 'pdf') return 'pdf';
+    // Accept common typo alias "cvs" as CSV.
+    if (value == 'csv' || value == 'cvs') return 'csv';
+    return 'csv';
   }
 
   String? _extractFileName(String disposition) {
-    final match = RegExp(r'filename="?([^";]+)"?').firstMatch(disposition);
+    final utf8Match = RegExp(r"filename\*=UTF-8''([^;]+)", caseSensitive: false)
+        .firstMatch(disposition);
+    if (utf8Match != null) {
+      return Uri.decodeFull(utf8Match.group(1) ?? '');
+    }
+
+    final match = RegExp(r'filename="?([^";]+)"?', caseSensitive: false)
+        .firstMatch(disposition);
     return match?.group(1);
   }
 
@@ -198,7 +251,10 @@ class AdminApiService {
   }
 
   Future<void> suspendUser(int id, {String? reason}) async {
-    await _post('/users/$id/suspend/', reason != null ? {'reason': reason} : {});
+    await _post(
+      '/users/$id/suspend/',
+      reason != null ? {'reason': reason} : {},
+    );
   }
 
   Future<void> activateUser(int id) async {
@@ -319,8 +375,7 @@ class AdminApiService {
     return PaginatedResponse.fromJson(data, NotificationCampaign.fromJson);
   }
 
-  Future<NotificationCampaign> createCampaign(
-      Map<String, dynamic> body) async {
+  Future<NotificationCampaign> createCampaign(Map<String, dynamic> body) async {
     final data = await _post('/campaigns/', body);
     return NotificationCampaign.fromJson(data);
   }
