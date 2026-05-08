@@ -54,6 +54,7 @@ except (ImportError, AttributeError):
     pass
 # ────────────────────────────────────────────────────────────────────────────
 
+from django.views.generic.base import RedirectView
 from .api_router import router  # Centralised DRF DefaultRouter instance
 
 
@@ -91,6 +92,9 @@ def api_root(request):
 # Django matches top-down, so the explicit ``api_root`` view is tried first;
 # unmatched paths fall through to the router-generated URL patterns.
 urlpatterns = [
+    # --- Root Redirect ---
+    path('', RedirectView.as_view(url='/api/', permanent=False), name='root-redirect'),
+    
     # --- API Discovery / Health Check ---
     path('api/', api_root, name='api-root'),
     
