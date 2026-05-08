@@ -212,9 +212,10 @@ USE_TZ = True                   # Store datetimes in UTC; convert to TIME_ZONE f
 # =============================================================================
 STATIC_URL = '/static/'                   # URL prefix for static assets
 STATIC_ROOT = BASE_DIR / 'staticfiles'     # Destination for collectstatic output
-# WhiteNoise serves static files with far-future Cache-Control headers and
-# content-hash filenames for cache-busting in production.
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# WhiteNoise serves static files with far-future Cache-Control headers.
+# Use CompressedStaticFilesStorage to avoid Manifest post-processing errors
+# caused by missing source-map files in vendor packages during collectstatic.
+STATICFILES_STORAGE = 'whitenoise.storage.CompressedStaticFilesStorage'
 
 # =============================================================================
 # MEDIA FILES
@@ -304,8 +305,11 @@ SIMPLE_JWT = {
 # CORS CONFIGURATION
 # =============================================================================
 # NOTE: CORS_ALLOW_ALL_ORIGINS should be False in production — restrict to
-# the Flutter web domain (e.g., CORS_ALLOWED_ORIGINS list).
+# the Flutter web domain (e.g., CORS_ALLOWED_ORIGINS list). Configure via
+# environment variables: CORS_ALLOW_ALL_ORIGINS and CORS_ALLOWED_ORIGINS.
 CORS_ALLOW_ALL_ORIGINS = os.environ.get('CORS_ALLOW_ALL_ORIGINS', 'True').lower() == 'true'
+# When provided, `CORS_ALLOWED_ORIGINS` is a comma-separated list.
+CORS_ALLOWED_ORIGINS = [o.strip() for o in os.environ.get('CORS_ALLOWED_ORIGINS', '').split(',') if o.strip()]
 CORS_ALLOW_CREDENTIALS = True   # Required for cookie / Authorization-header flows
 CORS_ALLOW_METHODS = ['DELETE', 'GET', 'OPTIONS', 'PATCH', 'POST', 'PUT']
 CORS_ALLOW_HEADERS = [
@@ -487,6 +491,10 @@ ML_KMEANS_CLUSTER_PROFILES = {
 
 # Ensure the logs directory exists so the file handler doesn't raise on startup.
 (BASE_DIR / 'logs').mkdir(exist_ok=True)
+
+# Ensure static and media directories exist so collectstatic and media uploads do not fail.
+STATIC_ROOT.mkdir(parents=True, exist_ok=True)
+MEDIA_ROOT.mkdir(parents=True, exist_ok=True)
 
 # =============================================================================
 # JAZZMIN — ADMIN THEME CONFIGURATION
